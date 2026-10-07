@@ -516,29 +516,31 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     >
                       {t('admin.photos.showSelected', 'Show')}
                     </Button>
-                    {canModerate && selectionUnderReview && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleModerate('approve')}
-                          disabled={isModerating}
-                          leftIcon={<Check className="w-4 h-4" />}
-                        >
-                          {t('photos.review.approve', 'Approve')}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleModerate('reject')}
-                          disabled={isModerating}
-                          leftIcon={<X className="w-4 h-4" />}
-                        >
-                          {t('photos.review.reject', 'Reject')}
-                        </Button>
-                      </>
-                    )}
                   </PermissionGate>
+                  {/* The owner (photos.edit) or a reviewer (photos.review); canModerate
+                      is the server's per-gallery answer (issue 743). */}
+                  {canModerate && selectionUnderReview && (
+                    <PermissionGate permissions={['photos.edit', 'photos.review']}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleModerate('approve')}
+                        disabled={isModerating}
+                        leftIcon={<Check className="w-4 h-4" />}
+                      >
+                        {t('photos.review.approve', 'Approve')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleModerate('reject')}
+                        disabled={isModerating}
+                        leftIcon={<X className="w-4 h-4" />}
+                      >
+                        {t('photos.review.reject', 'Reject')}
+                      </Button>
+                    </PermissionGate>
+                  )}
                   <PermissionGate permission="photos.delete">
                     <button
                       onClick={handleDeleteSelected}

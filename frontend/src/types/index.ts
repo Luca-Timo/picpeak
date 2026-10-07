@@ -115,12 +115,14 @@ export interface Event {
   // event but cannot act on it (another owner's gallery).
   share_secrets_hidden?: boolean;
   // Team members (issue 743): admin accounts assigned to the gallery, from
-  // the event details. Only the owner changes them (can_manage_assignments)
-  // and only the owner reviews the uploads held by review_contributor_uploads.
+  // the event details. Only the owner changes them (can_manage_assignments);
+  // the owner or a photos.review holder reviews the uploads held by
+  // review_contributor_uploads (can_review_uploads).
   assigned_admins?: AssignedAdmin[];
   // The owner's admin id; null for a legacy ownerless gallery.
   created_by?: number | null;
   can_manage_assignments?: boolean;
+  can_review_uploads?: boolean;
   review_contributor_uploads?: boolean | number;
   // Live Slideshow / "Diashow" (migration 138). Token-only fullscreen kiosk
   // link minted on demand; null token = disabled. Settings drive the running

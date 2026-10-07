@@ -510,7 +510,7 @@ router.post(
       if (rawReplacesId !== undefined && rawReplacesId !== null && rawReplacesId !== '') {
         // A team member whose uploads the owner reviews (issue 743) cannot
         // swap a photo underneath it.
-        if (holdsForReview(req.admin, event)) {
+        if (await holdsForReview(req.admin, event)) {
           await fs.unlink(tempPath).catch(() => {});
           tempPath = null;
           return res.status(403).json({
@@ -643,7 +643,7 @@ router.post(
         uploaded_by: 'admin',
         // The token owner's account, and hidden + pending for a team member
         // whose uploads the owner reviews (issue 743).
-        ...adminUploadColumns(req.admin, event),
+        ...(await adminUploadColumns(req.admin, event)),
         ...credit
       }).returning('id');
       const id = insertResult[0]?.id || insertResult[0];

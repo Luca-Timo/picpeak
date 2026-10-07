@@ -7,28 +7,42 @@
  * owner approves it (visible, no longer under review) or rejects it (stays
  * hidden as 'rejected', can still be approved or deleted later). Visibility
  * routes leave photos under review alone; this is the only way out.
+ *
+ * A role holding photos.review (a project lead) reviews too, on every gallery
+ * it reaches, and its own uploads are not held.
  */
 
 const { db } = require('../database/db');
 const { ownsEvent } = require('../middleware/ownership');
+const { roleHasPermission } = require('../middleware/permissions');
 const { parseBooleanInput } = require('../utils/parsers');
 
 const MODERATION_STATUSES = ['pending', 'rejected'];
 const MAX_MODERATION_IDS = 500;
 
-/** Whether an upload by `admin` to `event` waits for the owner's review. */
-function holdsForReview(admin, event) {
-  return parseBooleanInput(event?.review_contributor_uploads, false) && !ownsEvent(admin, event);
+/**
+ * Whether `admin` approves and rejects uploads on `event`, which it is known
+ * to reach: its owner with photos.edit, or any holder of photos.review.
+ */
+async function mayReviewUploads(admin, event) {
+  if (await roleHasPermission(admin?.roleName, 'photos.review')) return true;
+  return ownsEvent(admin, event) && roleHasPermission(admin?.roleName, 'photos.edit');
+}
+
+/** Whether an upload by `admin` to `event` waits for review. */
+async function holdsForReview(admin, event) {
+  if (!parseBooleanInput(event?.review_contributor_uploads, false) || ownsEvent(admin, event)) return false;
+  return !(await roleHasPermission(admin?.roleName, 'photos.review'));
 }
 
 /**
  * The photo columns an admin upload is inserted with: which account ran it,
  * and, for a contributor under review, hidden + pending.
  */
-function adminUploadColumns(admin, event) {
+async function adminUploadColumns(admin, event) {
   return {
     uploaded_by_admin_id: admin.id,
-    ...(holdsForReview(admin, event) ? { visibility: 'hidden', moderation_status: 'pending' } : {}),
+    ...(await holdsForReview(admin, event) ? { visibility: 'hidden', moderation_status: 'pending' } : {}),
   };
 }
 
@@ -67,6 +81,7 @@ async function moderationCounts(eventId) {
 module.exports = {
   MODERATION_STATUSES,
   MAX_MODERATION_IDS,
+  mayReviewUploads,
   holdsForReview,
   adminUploadColumns,
   moderatePhotos,

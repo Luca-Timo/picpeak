@@ -49,6 +49,7 @@ jest.mock('../../src/middleware/permissions', () => ({
       : perms.includes('customers.events') ? mockCanAssignCustomers : true;
   },
   userHasAllPermissions: async (_id, perms) => (perms.includes('customers.events') ? mockCanAssignCustomers : true),
+  roleHasPermission: async () => true,
 }));
 jest.mock('../../src/middleware/ownership', () => ({
   requireEventOwnership: (_req, _res, next) => next(),

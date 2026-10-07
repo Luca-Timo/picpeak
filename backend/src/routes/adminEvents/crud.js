@@ -27,6 +27,7 @@ const { normaliseEventTimeTriple } = require('../../services/eventService');
 const { hasColumnCached } = require('../../utils/schemaCache');
 const { requireEventOwnership, scopeEventsListQuery, withoutForeignEventSecrets, scopeEventsQuery, ownsEvent } = require('../../middleware/ownership');
 const eventAdminAssignments = require('../../services/eventAdminAssignmentsService');
+const { mayReviewUploads } = require('../../services/uploadReviewService');
 const { applyEventListSort } = require('./listSort');
 const { VIDEO_COUNT_SQL, VIDEO_DURATION_SQL } = require('../../utils/mediaTypeSql');
 
@@ -499,14 +500,15 @@ module.exports = (router) => {
         logger.warn('Failed to resolve gallery notice recipients', { eventId: id, error: e.message });
       }
 
-      // The gallery's team (issue 743). Only the owner changes it, and only
-      // the owner publishes the uploads it holds for review.
+      // The gallery's team (issue 743). Only the owner changes it; the owner
+      // or a holder of photos.review publishes the uploads it holds for review.
       const assignedAdmins = await eventAdminAssignments.listAssignedAdmins(event.id);
 
       res.json(withoutForeignEventSecrets(mapEventForApi({
         ...event,
         assigned_admins: assignedAdmins,
         can_manage_assignments: ownsEvent(req.admin, event),
+        can_review_uploads: await mayReviewUploads(req.admin, event),
         gallery_notice: galleryNotice,
         photo_count: parseInt(photoCount) || 0,
         video_count: Number(videoCount) || 0,

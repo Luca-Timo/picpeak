@@ -334,5 +334,53 @@ describe('gallery team members and upload review (issue 743)', () => {
         .send({ photoIds: ['1'], action: 'approve' });
       expect(badIds.status).toBe(400);
     });
+
+    it('lets a project lead holding photos.review review, and does not hold its own uploads', async () => {
+      // Migration 269 projects photos.review onto the roles holding both
+      // photos.edit and events.edit; Team Photographer holds only photos.edit.
+      const holds = async (roleName) => Boolean(await db('role_permissions')
+        .join('roles', 'roles.id', 'role_permissions.role_id')
+        .join('permissions', 'permissions.id', 'role_permissions.permission_id')
+        .where({ 'roles.name': roleName, 'permissions.name': 'photos.review' }).first());
+      expect(await holds('editor')).toBe(true);
+      expect(await holds('super_admin')).toBe(true);
+      expect(await holds('team_photographer')).toBe(false);
+
+      // A custom role with photos.review and no photos.edit.
+      const [roleRow] = await db('roles').insert({
+        name: 'project_lead', display_name: 'Project lead', is_system: false, priority: 45,
+        created_at: now(), updated_at: now(),
+      }).returning('id');
+      const roleId = roleRow?.id ?? roleRow;
+      const perms = await db('permissions')
+        .whereIn('name', ['events.view', 'photos.view', 'photos.upload', 'photos.review']).select('id');
+      await db('role_permissions').insert(perms.map((p) => ({ role_id: roleId, permission_id: p.id })));
+      require('../../src/middleware/permissions').clearPermissionCache();
+      id.lead = await mkAdmin('lead', 'project_lead');
+      await db('event_admin_assignments').insert({ event_id: id.event, admin_user_id: id.lead, assigned_by: id.owner });
+      await db('events').where({ id: id.event }).update({ review_contributor_uploads: true });
+
+      const detail = await as(request(app).get(`/api/admin/events/${id.event}`), 'lead');
+      expect(detail.body.can_review_uploads).toBe(true);
+      expect(detail.body.can_manage_assignments).toBe(false);
+
+      const own = await upload('lead', id.event);
+      expect(own.status).toBe(202);
+      expect((await db('photos').where({ id: own.body.photo_ids[0] }).first()).moderation_status).toBeNull();
+
+      const team = await upload('team', id.event);
+      const heldId = team.body.photo_ids[0];
+      expect((await db('photos').where({ id: heldId }).first()).moderation_status).toBe('pending');
+      const approve = await as(request(app).post(`/api/admin/photos/${id.event}/photos/moderation`), 'lead')
+        .send({ photoIds: [heldId], action: 'approve' });
+      expect(approve.status).toBe(200);
+      expect(approve.body.updated).toBe(1);
+
+      // Not on a gallery it does not reach.
+      const other = await mkEvent('lead-not-assigned', id.owner);
+      const foreign = await as(request(app).post(`/api/admin/photos/${other}/photos/moderation`), 'lead')
+        .send({ photoIds: [heldId], action: 'approve' });
+      expect(foreign.status).toBe(403);
+    });
   });
 });

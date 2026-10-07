@@ -91,9 +91,10 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
   const showFolderBar = folders.length > 0 || folderRequests.length > 0 || folderFilter !== undefined || folderBarOpened;
   const pendingPhotoCount = folderRequests.reduce((sum, r) => sum + r.photo_count, 0);
 
-  // Review of team members' uploads (issue 743). Only the owner approves or
-  // rejects; a team member sees that their uploads are waiting.
-  const canModerate = event.can_manage_assignments === true;
+  // Review of team members' uploads (issue 743). The owner or a holder of
+  // photos.review approves or rejects; a team member sees that their uploads
+  // are waiting.
+  const canModerate = event.can_review_uploads === true;
   const { data: moderation } = useQuery({
     queryKey: ['admin-event-photos', id, 'moderation'],
     queryFn: () => photosService.getModerationCounts(eventId),

@@ -53,7 +53,7 @@ router.post('/events/:id/import-external', adminAuth, requirePermission('photos.
   // An import publishes every file it finds at once, so a team member whose
   // uploads the owner reviews (issue 743) uploads through the uploader
   // instead, where each photo waits for that review.
-  if (holdsForReview(req.admin, event)) {
+  if (await holdsForReview(req.admin, event)) {
     return res.status(403).json({
       error: 'Uploads to this event wait for the owner\'s review; importing a folder is not available',
       code: 'UPLOAD_REVIEW_REQUIRED',

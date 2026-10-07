@@ -38,8 +38,8 @@ const chunkedUpload = require('../services/chunkedUploadService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
 const downloadZipService = require('../services/downloadZipService');
 const { findReplacementCandidate, replacePhoto } = require('../services/photoReplacementService');
-const { requireEventOwnership, canAccessEvent, ownsEvent } = require('../middleware/ownership');
-const { holdsForReview, adminUploadColumns, moderatePhotos, moderationCounts, MODERATION_STATUSES, MAX_MODERATION_IDS } = require('../services/uploadReviewService');
+const { requireEventOwnership, canAccessEvent } = require('../middleware/ownership');
+const { mayReviewUploads, adminUploadColumns, moderatePhotos, moderationCounts, MODERATION_STATUSES, MAX_MODERATION_IDS } = require('../services/uploadReviewService');
 const { getStorage } = require('../services/storage');
 const { errorResponse } = require('../utils/routeHelpers');
 const logger = require('../utils/logger');
@@ -295,10 +295,12 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
       logger.error('Event not found:', eventId);
       return res.status(404).json({ error: 'Event not found' });
     }
-    // A team member's upload held for review (issue 743) never replaces a
-    // photo: that would change a published photo without the owner's review.
+    // The uploading account, and hidden + pending for a team member whose
+    // uploads are reviewed (issue 743). Such an upload never replaces a
+    // photo: that would change a published photo without the review.
     // Matching files are uploaded as new photos and wait like the rest.
-    if (holdsForReview(req.admin, event)) replaceByName = false;
+    const uploadColumns = await adminUploadColumns(req.admin, event);
+    if (uploadColumns.moderation_status) replaceByName = false;
 
     // Enforce photo cap if set (replacements don't count as new)
     if (event.photo_cap && event.photo_cap > 0) {
@@ -510,9 +512,9 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
             // Explicit rather than the column default (#1561); the worker
             // reads the EXIF credit for admin rows.
             uploaded_by: 'admin',
-            // The uploading account, and hidden + pending for a team member
-            // whose uploads the owner reviews (issue 743).
-            ...adminUploadColumns(req.admin, event),
+            // The uploading account, and hidden + pending under review
+            // (issue 743), resolved once above.
+            ...uploadColumns,
           })
           .returning('id');
         const photoId = inserted[0]?.id || inserted[0];
@@ -1288,9 +1290,10 @@ router.get('/:eventId/photos/moderation', adminAuth, requirePermission('photos.v
 
 // Review of team members' uploads (issue 743): approve publishes the photos,
 // reject keeps them hidden as 'rejected'. Only photos under review move. The
-// owner decides; an assigned admin reaches the event through
-// requireEventOwnership but not past ownsEvent.
-router.post('/:eventId/photos/moderation', adminAuth, requirePermission('photos.edit'), requireEventOwnership, async (req, res) => {
+// owner decides, or a holder of photos.review (a project lead) on a gallery it
+// reaches; a team member without it reaches the event through
+// requireEventOwnership but not past mayReviewUploads.
+router.post('/:eventId/photos/moderation', adminAuth, requirePermission(['photos.edit', 'photos.review']), requireEventOwnership, async (req, res) => {
   try {
     const { eventId } = req.params;
     const { photoIds, action } = req.body || {};
@@ -1309,8 +1312,8 @@ router.post('/:eventId/photos/moderation', adminAuth, requirePermission('photos.
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
-    if (!ownsEvent(req.admin, event)) {
-      return res.status(403).json({ error: 'Only the gallery owner can review uploads', code: 'EVENT_OWNER_REQUIRED' });
+    if (!(await mayReviewUploads(req.admin, event))) {
+      return res.status(403).json({ error: 'Only the gallery owner or a reviewer can review uploads', code: 'REVIEWER_REQUIRED' });
     }
 
     const updated = await moderatePhotos(event.id, photoIds, action);
@@ -2126,7 +2129,7 @@ router.post('/:eventId/chunked-upload/:uploadId/complete', adminAuth, requirePer
       'admin',
       category_id || null,
       // Same uploader + review columns as the batch route (issue 743).
-      { ...placementColumns(placement), ...adminUploadColumns(req.admin, event) }
+      { ...placementColumns(placement), ...(await adminUploadColumns(req.admin, event)) }
     );
     await afterUploadPlacement(mergedFile.eventId, placement, uploadedPhotos.length,
       { type: 'admin', id: req.admin.id, name: req.admin.username });
