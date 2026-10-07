@@ -25,7 +25,8 @@ const { parseBooleanInput } = require('../../utils/parsers');
 const eventTypeService = require('../../services/eventTypeService');
 const { normaliseEventTimeTriple } = require('../../services/eventService');
 const { hasColumnCached } = require('../../utils/schemaCache');
-const { requireEventOwnership, scopeEventsListQuery, withoutForeignEventSecrets, scopeEventsQuery } = require('../../middleware/ownership');
+const { requireEventOwnership, scopeEventsListQuery, withoutForeignEventSecrets, scopeEventsQuery, ownsEvent } = require('../../middleware/ownership');
+const eventAdminAssignments = require('../../services/eventAdminAssignmentsService');
 const { applyEventListSort } = require('./listSort');
 const { VIDEO_COUNT_SQL, VIDEO_DURATION_SQL } = require('../../utils/mediaTypeSql');
 
@@ -228,6 +229,10 @@ module.exports = (router) => {
     // customer_accounts.id — many-to-many via event_customer_assignments.
     body('customer_account_ids').optional().isArray(),
     body('customer_account_ids.*').optional().isInt({ min: 1 }),
+    // Team members and the review of their uploads (issue 743).
+    body('assigned_admin_ids').optional().isArray(),
+    body('assigned_admin_ids.*').optional().isInt({ min: 1 }),
+    body('review_contributor_uploads').optional().isBoolean(),
     // Custom styling switch (services/galleryTheme) and the photo source,
     // so a gallery is complete from the create form alone.
     body('custom_theme_enabled').optional().isBoolean(),
@@ -395,6 +400,16 @@ module.exports = (router) => {
     }
   });
 
+  // Admin accounts a gallery's team can be picked from (issue 743): id,
+  // username and role only. Registered before /:id, which would match it.
+  router.get('/assignable-admins', adminAuth, requirePermission('events.edit'), async (req, res) => {
+    try {
+      res.json({ admins: await eventAdminAssignments.listAssignableAdmins() });
+    } catch (error) {
+      errorResponse(res, error, 500, 'Failed to fetch admin accounts');
+    }
+  });
+
   // Get single event details
   router.get('/:id', adminAuth, requirePermission('events.view'), async (req, res) => {
     try {
@@ -483,8 +498,14 @@ module.exports = (router) => {
         logger.warn('Failed to resolve gallery notice recipients', { eventId: id, error: e.message });
       }
 
+      // The gallery's team (issue 743). Only the owner changes it, and only
+      // the owner publishes the uploads it holds for review.
+      const assignedAdmins = await eventAdminAssignments.listAssignedAdmins(event.id);
+
       res.json(withoutForeignEventSecrets(mapEventForApi({
         ...event,
+        assigned_admins: assignedAdmins,
+        can_manage_assignments: ownsEvent(req.admin, event),
         gallery_notice: galleryNotice,
         photo_count: parseInt(photoCount) || 0,
         video_count: Number(videoCount) || 0,
@@ -1202,6 +1223,10 @@ module.exports = (router) => {
     // customer_accounts.id — many-to-many via event_customer_assignments.
     body('customer_account_ids').optional().isArray(),
     body('customer_account_ids.*').optional().isInt({ min: 1 }),
+    // Team members and the review of their uploads (issue 743), the owner's.
+    body('assigned_admin_ids').optional().isArray(),
+    body('assigned_admin_ids.*').optional().isInt({ min: 1 }),
+    body('review_contributor_uploads').optional().isBoolean(),
     // Custom styling switch (services/galleryTheme). Off keeps color_theme
     // and css_template_id stored, so switching it on again restores them.
     body('custom_theme_enabled').optional().isBoolean()
@@ -1251,10 +1276,10 @@ module.exports = (router) => {
       // insert error, and `[false]` coerced to true by formatBoolean.
       //
       // Guarded here rather than per field because it applies to all 44
-      // validated fields, not to a chosen few. `customer_account_ids` is the
-      // only field that is legitimately an array, and it is deleted from
-      // `updates` below before the write (#1296).
-      const ARRAY_VALUED_FIELDS = new Set(['customer_account_ids']);
+      // validated fields, not to a chosen few. `customer_account_ids` and
+      // `assigned_admin_ids` are the only fields that are legitimately arrays,
+      // and both are deleted from `updates` below before the write (#1296).
+      const ARRAY_VALUED_FIELDS = new Set(['customer_account_ids', 'assigned_admin_ids']);
       const arrayValued = Object.keys(updates)
         .filter((key) => Array.isArray(updates[key]) && !ARRAY_VALUED_FIELDS.has(key));
       if (arrayValued.length > 0) {
@@ -1262,6 +1287,41 @@ module.exports = (router) => {
           error: `Array values are not accepted for: ${arrayValued.join(', ')}`,
         });
       }
+
+      // Who works on the gallery and whether their uploads wait for review
+      // (issue 743) are the owner's to decide: an assigned admin holding
+      // events.edit edits the gallery, not its team. A non-owner's echo of the
+      // stored values (the settings form sends the whole draft) changes
+      // nothing and is let through.
+      let assignedAdminIds = null;
+      const touchesTeam = Array.isArray(req.body.assigned_admin_ids)
+        || Object.prototype.hasOwnProperty.call(updates, 'review_contributor_uploads');
+      if (touchesTeam) {
+        const stored = await db('events').where('id', id).first('id', 'created_by', 'review_contributor_uploads');
+        if (!stored) return res.status(404).json({ error: 'Event not found' });
+        const previousAdminIds = (await db('event_admin_assignments').where('event_id', id).pluck('admin_user_id')).map(Number);
+        const isOwner = ownsEvent(req.admin, stored);
+        if (Array.isArray(req.body.assigned_admin_ids)) {
+          const submitted = await eventAdminAssignments.resolveAssignableIds(
+            req.body.assigned_admin_ids, stored.created_by, previousAdminIds);
+          const same = submitted.length === previousAdminIds.length && submitted.every((v) => previousAdminIds.includes(v));
+          if (!same && !isOwner) {
+            return res.status(403).json({ error: 'Only the gallery owner can change its team', code: 'EVENT_OWNER_REQUIRED' });
+          }
+          if (!same) assignedAdminIds = submitted;
+        }
+        if (Object.prototype.hasOwnProperty.call(updates, 'review_contributor_uploads')) {
+          const next = parseBooleanInput(updates.review_contributor_uploads, false);
+          if (next === parseBooleanInput(stored.review_contributor_uploads, false)) {
+            delete updates.review_contributor_uploads;
+          } else if (!isOwner) {
+            return res.status(403).json({ error: 'Only the gallery owner can change upload review', code: 'EVENT_OWNER_REQUIRED' });
+          } else {
+            updates.review_contributor_uploads = formatBoolean(next);
+          }
+        }
+      }
+      delete updates.assigned_admin_ids;
 
       // Strip identity/provenance/secret columns from the mass-assigned
       // body (GHSA-3rqx). The handler spreads req.body straight into the
@@ -1827,12 +1887,26 @@ module.exports = (router) => {
         }
       }
 
+      // Team members (issue 743): replaced as one set, validated above.
+      let teamChange = null;
+      if (assignedAdminIds) {
+        teamChange = await db.transaction((trx) => eventAdminAssignments.setAssignedAdmins(
+          parseInt(id, 10), assignedAdminIds, req.admin.id, trx));
+      }
+
       // Log activity
       await logActivity('event_updated',
         { changes: Object.keys(updates), eventName: event.event_name },
         id,
         { type: 'admin', id: req.admin.id, name: req.admin.username }
       );
+      if (teamChange && (teamChange.added.length > 0 || teamChange.removed.length > 0)) {
+        await logActivity('event_team_changed',
+          { ...teamChange, eventName: event.event_name },
+          id,
+          { type: 'admin', id: req.admin.id, name: req.admin.username }
+        );
+      }
 
       // Invalidate download zip if watermark settings changed
       const changeKeys = Object.keys(req.body);
@@ -1842,6 +1916,7 @@ module.exports = (router) => {
 
       res.json({ message: 'Event updated successfully' });
     } catch (error) {
+      if (error.isOperational) return res.status(error.statusCode).json({ error: error.message, code: error.code });
       errorResponse(res, error, 500, 'Failed to update event');
     }
   });

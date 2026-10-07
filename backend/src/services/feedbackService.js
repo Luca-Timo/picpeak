@@ -4,7 +4,7 @@ const { formatBoolean } = require('../utils/dbCompat');
 const { REACTION_EMOJIS } = require('../constants/reactions');
 const { isValidColorLabel, SHARED_COLOR_LABEL_IDENTITY } = require('../constants/colorLabels');
 const { resolveEventFeedbackDefaults, DEFAULT_KEYBIND_MODE, KEYBIND_MODES } = require('./feedbackDefaults');
-const { applyPhotoVisibilityFilter, canSeeHiddenPhotos } = require('../utils/photoVisibility');
+const { applyPhotoVisibilityFilter } = require('../utils/photoVisibility');
 
 // The camera-original name, for the feedback exports (#1224). Both exports
 // used to carry only `photos.filename` — the sanitized stored name
@@ -809,7 +809,7 @@ class FeedbackService {
     try {
       const photos = await db('photos')
         .where('event_id', eventId)
-        .select('id', 'filename', 'visibility', 'feedback_count', 'like_count', 'average_rating', 'favorite_count', 'reaction_count', 'color_label_count')
+        .select('id', 'filename', 'visibility', 'moderation_status', 'feedback_count', 'like_count', 'average_rating', 'favorite_count', 'reaction_count', 'color_label_count')
         .orderBy('average_rating', 'desc')
         .orderBy('like_count', 'desc');
 
@@ -821,7 +821,7 @@ class FeedbackService {
         // disagreed, and a hidden row preserved beside its replacement (#1150)
         // is counted twice.
         .where('photo_feedback.is_hidden', false);
-      if (viewerAccessLevel !== undefined && !canSeeHiddenPhotos(viewerAccessLevel)) {
+      if (viewerAccessLevel !== undefined) {
         statsQuery = applyPhotoVisibilityFilter(
           statsQuery.join('photos', 'photo_feedback.photo_id', 'photos.id'),
           viewerAccessLevel

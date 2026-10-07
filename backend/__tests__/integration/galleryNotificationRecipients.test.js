@@ -55,6 +55,7 @@ jest.mock('../../src/middleware/ownership', () => ({
   scopeEventsQuery: (query) => query,
   scopeEventsListQuery: (query) => query,
   withoutForeignEventSecrets: (event) => event,
+  ownsEvent: () => true,
 }));
 
 const { bootCrmDb, seedMinimal } = require('./helpers/crmDb');

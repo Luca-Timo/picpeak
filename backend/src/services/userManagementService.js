@@ -605,8 +605,17 @@ async function deleteAdminUser(id, deletedById) {
   // PostgreSQL, explicit for SQLite, which runs without PRAGMA foreign_keys —
   // in the same transaction as the account, so a refused delete (a NO ACTION
   // FK still pointing at the user) leaves their bell state intact.
+  // Their gallery assignments (migration 269) the same way: CASCADE, SET NULL
+  // on assigned_by and on the photos they uploaded.
   await db.transaction(async (trx) => {
     await trx('notification_dismissals').where('admin_id', id).del();
+    if (await trx.schema.hasTable('event_admin_assignments')) {
+      await trx('event_admin_assignments').where('admin_user_id', id).del();
+      await trx('event_admin_assignments').where('assigned_by', id).update({ assigned_by: null });
+    }
+    if (await trx.schema.hasColumn('photos', 'uploaded_by_admin_id')) {
+      await trx('photos').where('uploaded_by_admin_id', id).update({ uploaded_by_admin_id: null });
+    }
     await deleteWithAccountingHistory(trx, 'admin_users', { id },
       { actor: deletedById, source: 'admin_user.delete' });
   });

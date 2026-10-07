@@ -19,6 +19,7 @@ const { heroAnchorQuery } = require('../utils/heroAnchor');
 const { applyFeedbackFilter } = require('./galleryPhotoQuery');
 const { getQuota, grantedPhotoIds, drawsOnQuota } = require('./downloadQuota');
 const { guestNameModeOf, creditVisibleToGuest } = require('./photoCredit');
+const { applyPhotoVisibilityFilter } = require('../utils/photoVisibility');
 async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaCustomer = false, adminPreview, hiddenForGuest, slug }) {
   // Get filter and sort parameters from query
   // `guest_id` is deliberately NOT read from the query string: the viewer's
@@ -48,12 +49,8 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
     })
     .select('photos.*');
 
-  // Guests only see visible photos; clients see all
-  if (!isClient) {
-    photosQuery = photosQuery.where(function() {
-      this.where('photos.visibility', 'visible').orWhereNull('photos.visibility');
-    });
-  }
+  // Guests only see visible photos; clients see all but those under review
+  photosQuery = applyPhotoVisibilityFilter(photosQuery, accessLevel);
 
   // Live Slideshow category filter (#202). Enforced server-side so the kiosk
   // viewer can't widen the set: when the event pins show_category_id, the
@@ -339,7 +336,7 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
       .where('event_id', event.id)
       .whereNotNull('folder_id')
       .where((q) => q.where('processing_status', 'complete').orWhereNull('processing_status'));
-    if (!isClient) directQuery = directQuery.where((q) => q.where('visibility', 'visible').orWhereNull('visibility'));
+    directQuery = applyPhotoVisibilityFilter(directQuery, accessLevel);
     const direct = await directQuery.distinct('folder_id').pluck('folder_id');
     for (const id of direct) {
       let cur = folderById.get(Number(id));

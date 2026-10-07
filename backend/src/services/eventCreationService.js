@@ -183,6 +183,13 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
   // gallery email, and the portal opens the gallery without its password.
   const portalOnly = !customerEmail && reachableAccounts.length > 0;
 
+  // Team members (issue 743), checked before anything is written. The
+  // creator owns the gallery, so leaving them in the list changes nothing.
+  const eventAdminAssignments = require('./eventAdminAssignmentsService');
+  const assignedAdminIds = Array.isArray(input.assigned_admin_ids)
+    ? await eventAdminAssignments.resolveAssignableIds(input.assigned_admin_ids, actor.id)
+    : [];
+
   // Conditional validation based on settings
   const validationErrors = [];
   if (fieldRequirements.require_customer_name && !customerName) {
@@ -517,6 +524,8 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     external_path: photoSource.external_path,
     external_watch: formatBoolean(photoSource.external_watch),
     folder_structure: formatBoolean(folderStructure),
+    // Hold team members' uploads for review (issue 743). Off unless asked.
+    review_contributor_uploads: formatBoolean(parseBooleanInput(input.review_contributor_uploads, false)),
   };
     
   // The gallery row and its feedback configuration commit together.
@@ -545,6 +554,9 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
         updated_at: new Date().toISOString()
       });
     }
+    if (assignedAdminIds.length > 0) {
+      await eventAdminAssignments.setAssignedAdmins(eventId, assignedAdminIds, actor.id, trx);
+    }
     
     return eventId;
   });
@@ -568,6 +580,13 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     eventId,
     { type: 'admin', id: actor.id, name: actor.username }
   );
+  if (assignedAdminIds.length > 0) {
+    await logActivity('event_team_changed',
+      { added: assignedAdminIds, removed: [], eventName: event_name },
+      eventId,
+      { type: 'admin', id: actor.id, name: actor.username }
+    );
+  }
 
   // Fire event.created webhook (#327). If the event is being published
   // immediately (not a draft), event.published also fires below.

@@ -37,7 +37,8 @@ const chunkedUpload = require('../services/chunkedUploadService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
 const downloadZipService = require('../services/downloadZipService');
 const { findReplacementCandidate, replacePhoto } = require('../services/photoReplacementService');
-const { requireEventOwnership, canAccessEvent } = require('../middleware/ownership');
+const { requireEventOwnership, canAccessEvent, ownsEvent } = require('../middleware/ownership');
+const { holdsForReview, adminUploadColumns, moderatePhotos, moderationCounts, MODERATION_STATUSES, MAX_MODERATION_IDS } = require('../services/uploadReviewService');
 const { getStorage } = require('../services/storage');
 const { errorResponse } = require('../utils/routeHelpers');
 const logger = require('../utils/logger');
@@ -273,7 +274,7 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
   try {
     const { eventId } = req.params;
     const { category_id, replace_by_name, match_mode } = req.body;
-    const replaceByName = replace_by_name === 'true' || replace_by_name === true;
+    let replaceByName = replace_by_name === 'true' || replace_by_name === true;
     // How replace_by_name finds its target (#745). 'exact' is the historical
     // behaviour and stays the default; 'number_token' matches on the trailing
     // digit run so a render renamed in Lightroom still lands on its proof.
@@ -293,6 +294,10 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
       logger.error('Event not found:', eventId);
       return res.status(404).json({ error: 'Event not found' });
     }
+    // A team member's upload held for review (issue 743) never replaces a
+    // photo: that would change a published photo without the owner's review.
+    // Matching files are uploaded as new photos and wait like the rest.
+    if (holdsForReview(req.admin, event)) replaceByName = false;
 
     // Enforce photo cap if set (replacements don't count as new)
     if (event.photo_cap && event.photo_cap > 0) {
@@ -504,6 +509,9 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
             // Explicit rather than the column default (#1561); the worker
             // reads the EXIF credit for admin rows.
             uploaded_by: 'admin',
+            // The uploading account, and hidden + pending for a team member
+            // whose uploads the owner reviews (issue 743).
+            ...adminUploadColumns(req.admin, event),
           })
           .returning('id');
         const photoId = inserted[0]?.id || inserted[0];
@@ -945,6 +953,11 @@ router.patch('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.e
     // Handle visibility update (#172)
     if (visibility !== undefined) {
       if (['visible', 'hidden'].includes(visibility)) {
+        // A photo under review (issue 743) is published by approving it
+        // (POST /photos/moderation), which only the owner can do.
+        if (visibility === 'visible' && photo.moderation_status) {
+          return res.status(409).json({ error: 'This photo is waiting for review. Approve it to publish it.', code: 'PHOTO_UNDER_REVIEW' });
+        }
         updateData.visibility = visibility;
       }
     }
@@ -1220,10 +1233,25 @@ router.post('/:eventId/photos/bulk-update', adminAuth, requirePermission('photos
       return res.status(400).json({ error: 'No updates provided' });
     }
 
-    await db('photos')
-      .whereIn('id', photoIds)
-      .where('event_id', eventId)
-      .update(updateData);
+    // Photos under review (issue 743) keep their visibility: only approving
+    // them (POST /photos/moderation) publishes them. They are counted back to
+    // the caller rather than failing the whole selection.
+    const { visibility: visibilityUpdate, ...otherUpdates } = updateData;
+    let skippedUnderReview = 0;
+    if (Object.keys(otherUpdates).length > 0) {
+      await db('photos')
+        .whereIn('id', photoIds)
+        .where('event_id', eventId)
+        .update(otherUpdates);
+    }
+    if (visibilityUpdate !== undefined) {
+      const changed = await db('photos')
+        .whereIn('id', photoIds)
+        .where('event_id', eventId)
+        .whereNull('moderation_status')
+        .update({ visibility: visibilityUpdate });
+      skippedUnderReview = photoIds.length - changed;
+    }
 
     // Visibility/category changes alter the guest download bundle — drop the
     // cached ZIP so it rebuilds fresh (codex review).
@@ -1234,9 +1262,63 @@ router.post('/:eventId/photos/bulk-update', adminAuth, requirePermission('photos
       downloadZipService.invalidate(parseInt(eventId, 10));
     }
 
-    res.json({ message: `${photoIds.length} photos updated successfully` });
+    res.json({ message: `${photoIds.length} photos updated successfully`, skipped_under_review: skippedUnderReview });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to update photos');
+  }
+});
+
+// How many photos of the event wait for review, or were rejected (issue 743),
+// for the photo grid's banner.
+router.get('/:eventId/photos/moderation', adminAuth, requirePermission('photos.view'), requireEventOwnership, async (req, res) => {
+  try {
+    res.json({ moderation: await moderationCounts(req.params.eventId) });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to count photos under review');
+  }
+});
+
+// Review of team members' uploads (issue 743): approve publishes the photos,
+// reject keeps them hidden as 'rejected'. Only photos under review move. The
+// owner decides; an assigned admin reaches the event through
+// requireEventOwnership but not past ownsEvent.
+router.post('/:eventId/photos/moderation', adminAuth, requirePermission('photos.edit'), requireEventOwnership, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { photoIds, action } = req.body || {};
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ error: 'action must be approve or reject' });
+    }
+    if (!Array.isArray(photoIds) || photoIds.length === 0
+      || !photoIds.every((id) => Number.isInteger(id) && id > 0)) {
+      return res.status(400).json({ error: 'Invalid photo IDs' });
+    }
+    if (photoIds.length > MAX_MODERATION_IDS) {
+      return res.status(400).json({ error: `At most ${MAX_MODERATION_IDS} photos per request` });
+    }
+
+    const event = await db('events').where({ id: eventId }).first();
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    if (!ownsEvent(req.admin, event)) {
+      return res.status(403).json({ error: 'Only the gallery owner can review uploads', code: 'EVENT_OWNER_REQUIRED' });
+    }
+
+    const updated = await moderatePhotos(event.id, photoIds, action);
+    if (updated > 0) {
+      // Approved photos join the guest download bundle.
+      if (action === 'approve') downloadZipService.invalidate(event.id);
+      await logActivity(action === 'approve' ? 'photos_review_approved' : 'photos_review_rejected',
+        { count: updated, eventName: event.event_name },
+        event.id,
+        { type: 'admin', id: req.admin.id, name: req.admin.username }
+      );
+    }
+
+    res.json({ updated, moderation: await moderationCounts(event.id) });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to review photos');
   }
 });
 
@@ -1357,7 +1439,16 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
     let query = db('photos')
       .where({ 'photos.event_id': eventId })
       .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
-      .select('photos.*', 'photo_categories.name as pc_name', 'photo_categories.slug as pc_slug');
+      // The account that uploaded it (issue 743), shown on photos under review.
+      .leftJoin('admin_users as uploader', 'photos.uploaded_by_admin_id', 'uploader.id')
+      .select('photos.*', 'photo_categories.name as pc_name', 'photo_categories.slug as pc_slug',
+        'uploader.username as uploader_username');
+
+    // Review of team members' uploads (issue 743): the photos waiting for
+    // the owner, or the ones the owner turned down.
+    if (MODERATION_STATUSES.includes(req.query.moderation)) {
+      query = query.where('photos.moderation_status', req.query.moderation);
+    }
 
     // Filter by category_id
     if (category_id !== undefined && category_id !== '' && category_id !== '0') {
@@ -1643,7 +1734,13 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
         // event's show-to-guests switch says.
         credit_name: photo.credit_name || null,
         credit_source: photo.credit_source || null,
-        uploaded_by: photo.uploaded_by === 'guest' ? 'guest' : 'admin'
+        uploaded_by: photo.uploaded_by === 'guest' ? 'guest' : 'admin',
+        // Review of team members' uploads (issue 743): null, 'pending' or
+        // 'rejected', and the admin account that ran the upload.
+        moderation_status: photo.moderation_status || null,
+        uploaded_by_admin: photo.uploaded_by_admin_id
+          ? { id: photo.uploaded_by_admin_id, username: photo.uploader_username || null }
+          : null,
       }))
     });
   } catch (error) {
@@ -2011,7 +2108,8 @@ router.post('/:eventId/chunked-upload/:uploadId/complete', adminAuth, requirePer
       mergedFile.eventId,
       'admin',
       category_id || null,
-      placementColumns(placement)
+      // Same uploader + review columns as the batch route (issue 743).
+      { ...placementColumns(placement), ...adminUploadColumns(req.admin, event) }
     );
     await afterUploadPlacement(mergedFile.eventId, placement, uploadedPhotos.length,
       { type: 'admin', id: req.admin.id, name: req.admin.username });

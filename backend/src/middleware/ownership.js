@@ -15,9 +15,46 @@ function managesAllEvents(admin) {
   return admin?.roleName === 'super_admin' || admin?.eventScope?.manageAll === true;
 }
 
-function canAccessEvent(admin, event) {
+/**
+ * Whether the admin owns the event: its creator, an ownerless (legacy/system)
+ * event, or a role that manages every gallery. Tells the owner from a team
+ * member assigned to the event (migration 269): only the owner changes who is
+ * assigned and publishes the uploads held for review.
+ */
+function ownsEvent(admin, event) {
   return Boolean(admin && event && (managesAllEvents(admin)
     || event.created_by == null || Number(event.created_by) === Number(admin.id)));
+}
+
+/**
+ * Whether the admin may act on the event's gallery: the owner, or an admin
+ * assigned to it. Assignment reaches the gallery the way the creator does,
+ * with the role's permissions as the limit; CRM and transfer data stay with
+ * the owner (filterOwnedEventIds).
+ */
+function canAccessEvent(admin, event) {
+  return ownsEvent(admin, event)
+    || Boolean(admin && event && Array.isArray(admin.assignedEventIds)
+      && admin.assignedEventIds.includes(Number(event.id)));
+}
+
+/**
+ * The events an admin is assigned to (migration 269), as numbers. adminAuth,
+ * apiTokenAuth and the gallery preview put them on the principal as
+ * `assignedEventIds`, which canAccessEvent reads. Before the migration has
+ * run there are none, the same posture roleEventScope takes.
+ *
+ * @returns {Promise<number[]>}
+ */
+let assignmentsTableReady = false;
+async function loadAssignedEventIds(adminId) {
+  // Schema only changes at boot, so a table found once stays found.
+  if (!assignmentsTableReady) {
+    if (!(await db.schema.hasTable('event_admin_assignments'))) return [];
+    assignmentsTableReady = true;
+  }
+  const ids = await db('event_admin_assignments').where('admin_user_id', adminId).pluck('event_id');
+  return ids.map(Number);
 }
 
 /**
@@ -36,7 +73,8 @@ function seesAllEvents(admin) {
 /**
  * Middleware to enforce event ownership for non-super_admin users.
  * Super admins and roles holding events.manage_all bypass the check. Other
- * admins can only access events they created, plus ownerless ones.
+ * admins can only access events they created or are assigned to, plus
+ * ownerless ones.
  */
 function requireEventOwnership(req, res, next) {
   if (managesAllEvents(req.admin)) {
@@ -55,7 +93,8 @@ function requireEventOwnership(req, res, next) {
       if (!event) {
         return res.status(404).json({ error: 'Event not found' });
       }
-      // Allow access if: event has no owner (legacy/system), or admin owns it
+      // Allow access if: event has no owner (legacy/system), admin owns it,
+      // or admin is assigned to it
       if (!canAccessEvent(req.admin, event)) {
         return res.status(403).json({ error: 'Access denied' });
       }
@@ -73,14 +112,17 @@ function requireEventOwnership(req, res, next) {
  * Apply the ownership predicate to a knex query over `events`, for list
  * endpoints that can't use requireEventOwnership (no :id to check).
  * super_admin is unrestricted; everyone else sees ownerless (legacy/system)
- * events plus their own — the same rule requireEventOwnership enforces
- * per-row.
+ * events, their own and the ones they are assigned to — the same rule
+ * requireEventOwnership enforces per-row. The event id column is the one
+ * beside `column` ('events.created_by' -> 'events.id').
  */
 function scopeEventsQuery(query, admin, column = 'created_by') {
   if (managesAllEvents(admin)) {
     return query;
   }
-  return query.where((q) => q.whereNull(column).orWhere(column, admin.id));
+  const idColumn = column.replace(/created_by$/, 'id');
+  return query.where((q) => q.whereNull(column).orWhere(column, admin.id)
+    .orWhereIn(idColumn, db('event_admin_assignments').select('event_id').where('admin_user_id', admin.id)));
 }
 
 /**
@@ -119,8 +161,9 @@ function withoutForeignEventSecrets(event, admin) {
  * land in `denied` — deliberately indistinguishable, so bulk routes
  * don't become an ownership/existence oracle.
  *
- * `honourManageAll` lets events.manage_all through as well; only gallery
- * routes pass it, so the permission never reaches CRM or transfer data
+ * `honourManageAll` lets events.manage_all through as well, and the events
+ * the admin is assigned to (migration 269); only gallery routes pass it, so
+ * neither the permission nor an assignment reaches CRM or transfer data
  * hanging off another owner's event (GHSA-wrg5).
  *
  * @returns {Promise<{allowed: Array, denied: Array}>}
@@ -129,9 +172,10 @@ async function filterOwnedEventIds(admin, eventIds, { honourManageAll = false } 
   if (admin.roleName === 'super_admin' || (honourManageAll && managesAllEvents(admin))) {
     return { allowed: [...eventIds], denied: [] };
   }
-  const rows = await db('events')
-    .whereIn('id', eventIds)
-    .andWhere((q) => q.whereNull('created_by').orWhere('created_by', admin.id))
+  const query = db('events').whereIn('id', eventIds);
+  const rows = await (honourManageAll
+    ? scopeEventsQuery(query, admin)
+    : query.andWhere((q) => q.whereNull('created_by').orWhere('created_by', admin.id)))
     .select('id');
   const allowedSet = new Set(rows.map((r) => r.id));
   const allowed = [];
@@ -230,6 +274,8 @@ function requireProjectOwnership(req, res, next) {
 
 module.exports = {
   canAccessEvent,
+  ownsEvent,
+  loadAssignedEventIds,
   managesAllEvents,
   seesAllEvents,
   requireEventOwnership,

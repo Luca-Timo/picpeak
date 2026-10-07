@@ -23,6 +23,7 @@ const { db, logActivity } = require('../../database/db');
 const { parseBooleanInput } = require('../../utils/parsers');
 const { apiTokenAuth, requireApiScope } = require('../../middleware/apiTokenAuth');
 const { requireEventOwnership, scopeEventsQuery } = require('../../middleware/ownership');
+const { holdsForReview, adminUploadColumns } = require('../../services/uploadReviewService');
 // GHSA-9697: migration 081 defines a token's effective permissions as the
 // INTERSECTION of the owner's role permissions and the token's scope flags.
 // requireApiScope only ever checked the scope half — so a token minted while
@@ -507,6 +508,16 @@ router.post(
       // otherwise overwrite a photo the caller never named in the URL.
       const rawReplacesId = req.body?.replaces_photo_id;
       if (rawReplacesId !== undefined && rawReplacesId !== null && rawReplacesId !== '') {
+        // A team member whose uploads the owner reviews (issue 743) cannot
+        // swap a photo underneath it.
+        if (holdsForReview(req.admin, event)) {
+          await fs.unlink(tempPath).catch(() => {});
+          tempPath = null;
+          return res.status(403).json({
+            error: 'Uploads to this event wait for the owner\'s review; replacing a photo is not available',
+            code: 'UPLOAD_REVIEW_REQUIRED',
+          });
+        }
         const replacesId = parseInt(rawReplacesId, 10);
         if (Number.isNaN(replacesId)) {
           // Cleanup is in this route's catch block, so an early return has to
@@ -630,6 +641,9 @@ router.post(
         mime_type: req.file.mimetype,
         uploaded_at: new Date().toISOString(),
         uploaded_by: 'admin',
+        // The token owner's account, and hidden + pending for a team member
+        // whose uploads the owner reviews (issue 743).
+        ...adminUploadColumns(req.admin, event),
         ...credit
       }).returning('id');
       const id = insertResult[0]?.id || insertResult[0];
