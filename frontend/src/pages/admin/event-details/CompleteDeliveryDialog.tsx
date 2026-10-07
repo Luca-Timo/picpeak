@@ -21,7 +21,7 @@ import { usePermission } from '../../../hooks/usePermission';
 import { useModalFocus } from '../../../hooks/useModalFocus';
 import { GalleryRecipientsList } from '../../../components/admin/GalleryRecipientsList';
 import type { Event } from '../../../types';
-import { eventNotice, useAccountReach } from './OverviewTab';
+import { accountsAnnounceable, eventNotice, useAccountReach } from './OverviewTab';
 
 interface CompleteDeliveryDialogProps {
   /** The gallery; the dialog lists who the mail goes to. */
@@ -35,12 +35,11 @@ interface CompleteDeliveryDialogProps {
 export const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({ event, state, isOpen, onClose, onCompleted }) => {
   const { t } = useTranslation();
   const eventId = event.id;
-  // The same people the gallery was announced to; accounts are not told about
-  // a draft (galleryNotificationService.notifyGalleryCompleted).
+  // Exactly whom galleryNotificationService.notifyGalleryCompleted mails: no
+  // account for a draft, archived or expired gallery, and one person in both
+  // fields gets the portal version.
   const reach = useAccountReach();
-  const notice = event.is_draft
-    ? { ...eventNotice(event, reach), accountNames: [], accountCount: 0, skippedAccountCount: 0 }
-    : eventNotice(event, reach);
+  const notice = eventNotice(event, reach, { preferPortal: true, accountsAnnounced: accountsAnnounceable(event) });
   const queryClient = useQueryClient();
   const canDelete = usePermission('photos.delete');
   const [sendEmail, setSendEmail] = useState(true);

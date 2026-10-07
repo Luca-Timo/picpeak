@@ -19,7 +19,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { queueEmail } = require('./emailProcessor');
 const { buildShareLinkVariants } = require('./shareLinkService');
-const { getFrontendBaseUrl } = require('../utils/frontendUrl');
+const { getFrontendBaseUrl, getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 const { hasColumnCached } = require('../utils/schemaCache');
 const { formatBoolean } = require('../utils/dbCompat');
 const { parseBooleanInput } = require('../utils/parsers');
@@ -112,14 +112,18 @@ function hasGalleryEmailOnlyContent(event) {
  * notifier can still send the standard email when that account's notice is
  * skipped (draft, expired, archived) — the person is told once, not never.
  *
+ * `preferPortal`: a mail with nothing the portal version lacks (the
+ * "complete gallery" mail carries no welcome message or client access)
+ * always folds one person into the account version.
+ *
  * @returns {Promise<{ inlineEmail: string|null, accounts: object[], fallbackFor?: object }>}
  */
-async function resolveGalleryRecipients(event, { includeAccounts = true } = {}) {
+async function resolveGalleryRecipients(event, { includeAccounts = true, preferPortal = false } = {}) {
   const reachable = includeAccounts ? await reachableAccountsForEvent(event.id) : [];
   const contact = event.customer_email || event.host_email || null;
   const samePerson = contact ? reachable.find((a) => sameAddress(a.email, contact)) : null;
   if (!samePerson) return { inlineEmail: contact, accounts: reachable };
-  if (hasGalleryEmailOnlyContent(event)) {
+  if (!preferPortal && hasGalleryEmailOnlyContent(event)) {
     return { inlineEmail: contact, accounts: reachable.filter((a) => a !== samePerson) };
   }
   return { inlineEmail: null, accounts: reachable, fallbackFor: { account: samePerson, email: contact } };
@@ -212,14 +216,39 @@ async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients
 }
 
 /**
+ * Whether assigned accounts are told about this gallery at all: not a draft,
+ * not archived, not expired. The same rule notifyCustomerOfNewAssignments
+ * applies in SQL (customerAccountsService), for a single event row here; an
+ * expired gallery's portal link answers 410.
+ */
+function accountsAnnounceable(event, now = new Date()) {
+  if (parseBooleanInput(event.is_draft, false) || parseBooleanInput(event.is_archived, false)) return false;
+  if (!event.expires_at) return true;
+  const expires = new Date(event.expires_at);
+  return Number.isNaN(expires.getTime()) || expires > now;
+}
+
+/** The gallery in a customer's portal, which opens it without the password. */
+async function portalEventLink(slug) {
+  return `${await getAbsoluteFrontendUrl()}/customer/events/${encodeURIComponent(slug)}`;
+}
+
+/**
  * "Your complete gallery is ready" (issue 1562) to the same people the gallery
  * was announced to: the inline address and every reachable account.
  *
  * Accounts get the same `gallery_completed` mail, linked to the gallery in
  * their customer portal, which opens it without the password. One person in
- * both fields gets that account version; this mail carries no welcome message
- * or client access, so there is nothing the account version would drop. A
- * draft is not announced to accounts, as with customer_gallery_assigned.
+ * both fields gets that account version (resolveGalleryRecipients with
+ * `preferPortal`); this mail carries no welcome message or client access, so
+ * there is nothing the account version would drop. If that account's mail is
+ * not queued, the person gets the standard version instead. Accounts are not
+ * told about a draft, archived or expired gallery (accountsAnnounceable).
+ *
+ * Account mails carry the account's preferred_language as `__language`
+ * (as customerDocumentNotifications does); without it the gallery's language
+ * would win, because emailProcessor.getRecipientLanguage checks the event
+ * first.
  *
  * @param {object} event the events row
  * @param {object} opts
@@ -228,10 +257,10 @@ async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients
  * @returns {Promise<{ inlineEmail: string|null, accounts: object[] }>} who was queued
  */
 async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }) {
-  const announceable = !parseBooleanInput(event.is_draft, false) && !parseBooleanInput(event.is_archived, false);
-  const reachable = includeAccounts && announceable ? await reachableAccountsForEvent(event.id) : [];
-  const contact = event.customer_email || event.host_email || null;
-  const inline = contact && !reachable.some((a) => sameAddress(a.email, contact)) ? contact : null;
+  const { inlineEmail, accounts, fallbackFor } = await resolveGalleryRecipients(event, {
+    includeAccounts: includeAccounts && accountsAnnounceable(event),
+    preferPortal: true,
+  });
 
   const queue = async (email, data) => {
     try {
@@ -241,23 +270,30 @@ async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }
       return false;
     }
   };
-
-  let inlineEmail = null;
-  if (inline) {
+  const queueInline = async (email) => {
     const { shareUrl } = await buildShareLinkVariants({ slug: event.slug, shareToken: event.share_token });
-    const name = event.customer_name || event.host_name || inline.split('@')[0];
-    if (await queue(inline, buildEmailData({ email: inline, name, link: shareUrl }))) inlineEmail = inline;
-  }
+    const name = event.customer_name || event.host_name || email.split('@')[0];
+    return (await queue(email, buildEmailData({ email, name, link: shareUrl }))) ? email : null;
+  };
 
-  const accounts = [];
-  if (reachable.length > 0) {
-    const portalLink = `${(await getFrontendBaseUrl()) || 'http://localhost:3000'}/customer/events/${encodeURIComponent(event.slug)}`;
-    for (const account of reachable) {
+  let inlineQueued = inlineEmail ? await queueInline(inlineEmail) : null;
+
+  const notified = [];
+  if (accounts.length > 0) {
+    const portalLink = await portalEventLink(event.slug);
+    for (const account of accounts) {
       const data = buildEmailData({ email: account.email, name: accountLabel(account), link: portalLink });
-      if (await queue(account.email, data)) accounts.push(account);
+      data.__language = account.preferred_language || undefined;
+      if (await queue(account.email, data)) notified.push(account);
     }
   }
-  return { inlineEmail, accounts };
+
+  // The inline address was folded into an account whose mail was not queued:
+  // send the standard version, so the person is still told.
+  if (fallbackFor && !notified.includes(fallbackFor.account)) {
+    inlineQueued = await queueInline(fallbackFor.email);
+  }
+  return { inlineEmail: inlineQueued, accounts: notified };
 }
 
 /**
@@ -304,6 +340,8 @@ module.exports = {
   galleryCreatedEmailData,
   notifyGalleryRecipients,
   notifyGalleryCompleted,
+  accountsAnnounceable,
+  portalEventLink,
   describeRecipients,
   recipientSummary,
   hasPasswordGeneratedColumn,

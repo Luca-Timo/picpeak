@@ -80,20 +80,27 @@ router.post('/events/:eventId/delivery/complete', adminAuth, requirePermission('
 
     // The inline address and every assigned customer account the gallery
     // was announced to (customers.events, as on every announcing route).
+    // The delivery is already complete at this point: a failure here is
+    // logged and reported as "no mail queued", not a 500 that would also
+    // skip the workflow event, with a retry refused as already complete.
     let sent = { inlineEmail: null, accounts: [] };
     if (sendEmail) {
-      sent = await notifyGalleryCompleted(event, {
-        includeAccounts: await userHasAnyPermission(req.admin.id, ['customers.events']),
-        buildEmailData: ({ name, link }) => ({
-          host_name: name,
-          customer_name: name,
-          event_name: event.event_name,
-          event_date: event.event_date,
-          gallery_link: link,
-          photo_count: photoCount,
-          expiry_date: event.expires_at,
-        }),
-      });
+      try {
+        sent = await notifyGalleryCompleted(event, {
+          includeAccounts: await userHasAnyPermission(req.admin.id, ['customers.events']),
+          buildEmailData: ({ name, link }) => ({
+            host_name: name,
+            customer_name: name,
+            event_name: event.event_name,
+            event_date: event.event_date,
+            gallery_link: link,
+            photo_count: photoCount,
+            expiry_date: event.expires_at,
+          }),
+        });
+      } catch (err) {
+        logger.warn('gallery_completed notification failed', { eventId, error: err.message });
+      }
     }
     const emailQueued = Boolean(sent.inlineEmail) || sent.accounts.length > 0;
 
@@ -124,13 +131,22 @@ router.post('/events/:eventId/delivery/complete', adminAuth, requirePermission('
       logger.warn('gallery.completed workflow event failed', { eventId, error: err.message });
     }
 
+    // Names and addresses of the accounts are customers.view data; a failed
+    // lookup shows the count only rather than failing the completed request.
+    let withIdentities = false;
+    if (sent.accounts.length > 0) {
+      try {
+        withIdentities = await userHasAnyPermission(req.admin.id, ['customers.view']);
+      } catch (err) {
+        logger.warn('customers.view lookup failed', { eventId, error: err.message });
+      }
+    }
+
     require('../services/downloadZipService').invalidate(eventId);
     res.json({
       completed: true,
       email_queued: emailQueued,
-      recipients: describeRecipients(sent, {
-        withIdentities: await userHasAnyPermission(req.admin.id, ['customers.view']),
-      }),
+      recipients: describeRecipients(sent, { withIdentities }),
       duplicate_photo_ids: result.duplicates.map((d) => d.first_look_id),
       state: await deliveryState(eventId),
     });
