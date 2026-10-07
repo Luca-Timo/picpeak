@@ -959,6 +959,17 @@
       "structureApplied_other": "{{count}} фото перемещено в папки",
       "structureNothing": "Все фото из вложенных папок уже находятся в папках",
       "structureFailed": "Не удалось применить структуру папок"
+    },
+    "team": {
+      "label": "Участники команды",
+      "help": "Добавленные здесь учётные записи администраторов могут работать с этой галереей как вы, в пределах своей роли. Данные клиентов и счетов остаются вашими.",
+      "removeAria": "Удалить {{name}}",
+      "placeholder": "Поиск учётных записей администраторов",
+      "loading": "Загрузка…",
+      "loadFailed": "Не удалось загрузить учётные записи администраторов.",
+      "noResults": "Других подходящих учётных записей нет.",
+      "reviewUploads": "Проверять загрузки участников команды перед публикацией",
+      "reviewUploadsHelp": "Фото, загруженные участником команды, скрыты от гостей и клиентов, пока вы не одобрите их на вкладке «Фото»."
     }
   },
   "settings": {
@@ -1964,7 +1975,16 @@
       "categoryHeroUpdated": "Главное фото категории обновлено",
       "publicSiteResetToDefault": "Публичный сайт сброшен к значениям по умолчанию",
       "cmsPageLogoUploaded": "Логотип CMS-страницы загружен: {{slug}}",
-      "adminPasswordResetByAdmin": "Пароль администратора сброшен другим администратором: {{username}}"
+      "adminPasswordResetByAdmin": "Пароль администратора сброшен другим администратором: {{username}}",
+      "eventTeamChanged": "Команда изменена: {{eventName}}",
+      "photosReviewApproved_one": "{{count}} загрузка команды одобрена в {{eventName}}",
+      "photosReviewApproved_few": "{{count}} загрузки команды одобрены в {{eventName}}",
+      "photosReviewApproved_many": "{{count}} загрузок команды одобрено в {{eventName}}",
+      "photosReviewApproved_other": "{{count}} загрузок команды одобрено в {{eventName}}",
+      "photosReviewRejected_one": "{{count}} загрузка команды отклонена в {{eventName}}",
+      "photosReviewRejected_few": "{{count}} загрузки команды отклонены в {{eventName}}",
+      "photosReviewRejected_many": "{{count}} загрузок команды отклонено в {{eventName}}",
+      "photosReviewRejected_other": "{{count}} загрузок команды отклонено в {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Все уведомления отмечены как прочитанные",
@@ -3266,6 +3286,39 @@
       "waitingForAdmin_few": "Запросов на папки, ожидающих администратора: {{count}}. До тех пор их фото ({{photos}}) находятся в ближайшей существующей папке.",
       "waitingForAdmin_many": "Запросов на папки, ожидающих администратора: {{count}}. До тех пор их фото ({{photos}}) находятся в ближайшей существующей папке.",
       "waitingForAdmin_other": "Запросов на папки, ожидающих администратора: {{count}}. До тех пор их фото ({{photos}}) находятся в ближайшей существующей папке."
+    },
+    "review": {
+      "pendingOwner_one": "{{count}} загрузка вашей команды ждёт проверки",
+      "pendingOwner_few": "{{count}} загрузки вашей команды ждут проверки",
+      "pendingOwner_many": "{{count}} загрузок вашей команды ждут проверки",
+      "pendingOwner_other": "{{count}} загрузок вашей команды ждут проверки",
+      "pendingMember_one": "{{count}} загрузка команды ждёт проверки владельцем",
+      "pendingMember_few": "{{count}} загрузки команды ждут проверки владельцем",
+      "pendingMember_many": "{{count}} загрузок команды ждут проверки владельцем",
+      "pendingMember_other": "{{count}} загрузок команды ждут проверки владельцем",
+      "nonePending": "Нет загрузок, ожидающих проверки.",
+      "filterPending": "На проверке ({{count}})",
+      "filterRejected": "Отклонены ({{count}})",
+      "showAll": "Все фото",
+      "approve": "Одобрить",
+      "reject": "Отклонить",
+      "approved_one": "{{count}} фото одобрено и опубликовано",
+      "approved_few": "{{count}} фото одобрены и опубликованы",
+      "approved_many": "{{count}} фото одобрено и опубликовано",
+      "approved_other": "{{count}} фото одобрено и опубликовано",
+      "rejected_one": "{{count}} фото отклонено",
+      "rejected_few": "{{count}} фото отклонены",
+      "rejected_many": "{{count}} фото отклонено",
+      "rejected_other": "{{count}} фото отклонено",
+      "failed": "Не удалось проверить фото",
+      "pendingBadge": "На проверке",
+      "rejectedBadge": "Отклонено",
+      "uploadedBy": "Загрузил(а) {{name}}",
+      "hiddenUntilApproved": "Скрыто от гостей и клиентов до одобрения",
+      "skippedOnShow_one": "{{count}} фото ждёт проверки и остаётся скрытым до одобрения",
+      "skippedOnShow_few": "{{count}} фото ждут проверки и остаются скрытыми до одобрения",
+      "skippedOnShow_many": "{{count}} фото ждут проверки и остаются скрытыми до одобрения",
+      "skippedOnShow_other": "{{count}} фото ждут проверки и остаются скрытыми до одобрения"
     }
   },
   "customer": {

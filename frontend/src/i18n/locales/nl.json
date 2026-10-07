@@ -903,6 +903,17 @@
       "structureApplied_other": "{{count}} foto's naar mappen verplaatst",
       "structureNothing": "Alle foto's uit een submap staan al in een map",
       "structureFailed": "De mapstructuur kon niet worden toegepast"
+    },
+    "team": {
+      "label": "Teamleden",
+      "help": "Beheerdersaccounts die hier zijn toegevoegd, kunnen net als u aan deze galerij werken, binnen wat hun rol toestaat. Klant- en factuurgegevens blijven van u.",
+      "removeAria": "{{name}} verwijderen",
+      "placeholder": "Beheerdersaccounts zoeken",
+      "loading": "Laden…",
+      "loadFailed": "De beheerdersaccounts konden niet worden geladen.",
+      "noResults": "Geen andere beheerdersaccounts gevonden.",
+      "reviewUploads": "Uploads van teamleden controleren voordat ze worden gepubliceerd",
+      "reviewUploadsHelp": "Foto's die een teamlid uploadt, blijven verborgen voor gasten en klanten totdat u ze goedkeurt op het tabblad Foto's."
     }
   },
   "settings": {
@@ -1900,7 +1911,12 @@
       "categoryHeroUpdated": "Categorie hero-foto bijgewerkt",
       "publicSiteResetToDefault": "Publieke site teruggezet naar standaard",
       "cmsPageLogoUploaded": "CMS-pagina-logo geüpload: {{slug}}",
-      "adminPasswordResetByAdmin": "Beheerderswachtwoord door andere beheerder gereset: {{username}}"
+      "adminPasswordResetByAdmin": "Beheerderswachtwoord door andere beheerder gereset: {{username}}",
+      "eventTeamChanged": "Team gewijzigd voor {{eventName}}",
+      "photosReviewApproved_one": "{{count}} teamupload goedgekeurd in {{eventName}}",
+      "photosReviewApproved_other": "{{count}} teamuploads goedgekeurd in {{eventName}}",
+      "photosReviewRejected_one": "{{count}} teamupload afgewezen in {{eventName}}",
+      "photosReviewRejected_other": "{{count}} teamuploads afgewezen in {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Alle meldingen als gelezen gemarkeerd",
@@ -3162,6 +3178,29 @@
       "showWaiting": "Wachtende foto's tonen",
       "waitingForAdmin_one": "{{count}} mapaanvraag wacht op een beheerder. Tot die tijd staan de {{photos}} foto's in de dichtstbijzijnde bestaande map.",
       "waitingForAdmin_other": "{{count}} mapaanvragen wachten op een beheerder. Tot die tijd staan de {{photos}} foto's in de dichtstbijzijnde bestaande map."
+    },
+    "review": {
+      "pendingOwner_one": "{{count}} upload van uw team wacht op uw controle",
+      "pendingOwner_other": "{{count}} uploads van uw team wachten op uw controle",
+      "pendingMember_one": "{{count}} teamupload wacht op controle door de eigenaar",
+      "pendingMember_other": "{{count}} teamuploads wachten op controle door de eigenaar",
+      "nonePending": "Er wachten geen uploads op controle.",
+      "filterPending": "Te controleren ({{count}})",
+      "filterRejected": "Afgewezen ({{count}})",
+      "showAll": "Alle foto's",
+      "approve": "Goedkeuren",
+      "reject": "Afwijzen",
+      "approved_one": "{{count}} foto goedgekeurd en gepubliceerd",
+      "approved_other": "{{count}} foto's goedgekeurd en gepubliceerd",
+      "rejected_one": "{{count}} foto afgewezen",
+      "rejected_other": "{{count}} foto's afgewezen",
+      "failed": "De foto's konden niet worden gecontroleerd",
+      "pendingBadge": "Te controleren",
+      "rejectedBadge": "Afgewezen",
+      "uploadedBy": "Geüpload door {{name}}",
+      "hiddenUntilApproved": "Verborgen voor gasten en klanten tot goedkeuring",
+      "skippedOnShow_one": "{{count}} foto wacht op controle en blijft verborgen tot goedkeuring",
+      "skippedOnShow_other": "{{count}} foto's wachten op controle en blijven verborgen tot goedkeuring"
     }
   },
   "customer": {

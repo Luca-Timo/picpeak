@@ -915,6 +915,17 @@
       "structureApplied_other": "{{count}} photos déplacées dans des dossiers",
       "structureNothing": "Toutes les photos d'un sous-dossier sont déjà dans un dossier",
       "structureFailed": "La structure des dossiers n'a pas pu être appliquée"
+    },
+    "team": {
+      "label": "Membres de l'équipe",
+      "help": "Les comptes administrateur ajoutés ici peuvent travailler sur cette galerie comme vous, dans les limites de leur rôle. Les données clients et de facturation restent les vôtres.",
+      "removeAria": "Retirer {{name}}",
+      "placeholder": "Rechercher des comptes administrateur",
+      "loading": "Chargement…",
+      "loadFailed": "Impossible de charger les comptes administrateur.",
+      "noResults": "Aucun autre compte administrateur ne correspond.",
+      "reviewUploads": "Vérifier les envois des membres de l'équipe avant publication",
+      "reviewUploadsHelp": "Les photos envoyées par un membre de l'équipe restent masquées pour les invités et les clients jusqu'à ce que vous les approuviez dans l'onglet Photos."
     }
   },
   "settings": {
@@ -1943,7 +1954,12 @@
       "categoryHeroUpdated": "Photo de couverture de catégorie mise à jour",
       "publicSiteResetToDefault": "Site public réinitialisé aux valeurs par défaut",
       "cmsPageLogoUploaded": "Logo de la page CMS téléversé : {{slug}}",
-      "adminPasswordResetByAdmin": "Réinitialisation du mot de passe admin par un autre admin : {{username}}"
+      "adminPasswordResetByAdmin": "Réinitialisation du mot de passe admin par un autre admin : {{username}}",
+      "eventTeamChanged": "Équipe modifiée pour {{eventName}}",
+      "photosReviewApproved_one": "{{count}} envoi de l'équipe approuvé dans {{eventName}}",
+      "photosReviewApproved_other": "{{count}} envois de l'équipe approuvés dans {{eventName}}",
+      "photosReviewRejected_one": "{{count}} envoi de l'équipe refusé dans {{eventName}}",
+      "photosReviewRejected_other": "{{count}} envois de l'équipe refusés dans {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Toutes les notifications marquées comme lues",
@@ -3212,6 +3228,29 @@
       "waitingForAdmin_one": "{{count}} demande de dossier attend un administrateur. D'ici là, ses {{photos}} photos restent dans le dossier existant le plus proche.",
       "waitingForAdmin_many": "{{count}} demandes de dossier attendent un administrateur. D'ici là, leurs {{photos}} photos restent dans le dossier existant le plus proche.",
       "waitingForAdmin_other": "{{count}} demandes de dossier attendent un administrateur. D'ici là, leurs {{photos}} photos restent dans le dossier existant le plus proche."
+    },
+    "review": {
+      "pendingOwner_one": "{{count}} envoi de votre équipe attend votre vérification",
+      "pendingOwner_other": "{{count}} envois de votre équipe attendent votre vérification",
+      "pendingMember_one": "{{count}} envoi de l'équipe attend la vérification du propriétaire",
+      "pendingMember_other": "{{count}} envois de l'équipe attendent la vérification du propriétaire",
+      "nonePending": "Aucun envoi n'attend de vérification.",
+      "filterPending": "À vérifier ({{count}})",
+      "filterRejected": "Refusées ({{count}})",
+      "showAll": "Toutes les photos",
+      "approve": "Approuver",
+      "reject": "Refuser",
+      "approved_one": "{{count}} photo approuvée et publiée",
+      "approved_other": "{{count}} photos approuvées et publiées",
+      "rejected_one": "{{count}} photo refusée",
+      "rejected_other": "{{count}} photos refusées",
+      "failed": "Les photos n'ont pas pu être vérifiées",
+      "pendingBadge": "À vérifier",
+      "rejectedBadge": "Refusée",
+      "uploadedBy": "Envoyée par {{name}}",
+      "hiddenUntilApproved": "Masquée pour les invités et les clients jusqu'à approbation",
+      "skippedOnShow_one": "{{count}} photo attend une vérification et reste masquée jusqu'à son approbation",
+      "skippedOnShow_other": "{{count}} photos attendent une vérification et restent masquées jusqu'à leur approbation"
     }
   },
   "customer": {

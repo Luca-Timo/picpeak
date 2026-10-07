@@ -1030,6 +1030,17 @@
       "structureApplied_other": "{{count}} fotos movidas para pastas",
       "structureNothing": "Todas as fotos de uma subpasta já estão em uma pasta",
       "structureFailed": "Não foi possível aplicar a estrutura de pastas"
+    },
+    "team": {
+      "label": "Membros da equipe",
+      "help": "As contas de administrador adicionadas aqui podem trabalhar nesta galeria como você, dentro do que a função delas permite. Os dados de clientes e faturamento continuam sendo seus.",
+      "removeAria": "Remover {{name}}",
+      "placeholder": "Pesquisar contas de administrador",
+      "loading": "Carregando…",
+      "loadFailed": "Não foi possível carregar as contas de administrador.",
+      "noResults": "Nenhuma outra conta de administrador encontrada.",
+      "reviewUploads": "Revisar os envios dos membros da equipe antes da publicação",
+      "reviewUploadsHelp": "As fotos enviadas por um membro da equipe ficam ocultas para convidados e clientes até que você as aprove na aba Fotos."
     }
   },
   "settings": {
@@ -2031,7 +2042,12 @@
       "categoryHeroUpdated": "Foto principal da categoria atualizada",
       "publicSiteResetToDefault": "Site público redefinido ao padrão",
       "cmsPageLogoUploaded": "Logotipo da página CMS carregado: {{slug}}",
-      "adminPasswordResetByAdmin": "Senha de admin redefinida por outro admin: {{username}}"
+      "adminPasswordResetByAdmin": "Senha de admin redefinida por outro admin: {{username}}",
+      "eventTeamChanged": "Equipe alterada em {{eventName}}",
+      "photosReviewApproved_one": "{{count}} envio da equipe aprovado em {{eventName}}",
+      "photosReviewApproved_other": "{{count}} envios da equipe aprovados em {{eventName}}",
+      "photosReviewRejected_one": "{{count}} envio da equipe rejeitado em {{eventName}}",
+      "photosReviewRejected_other": "{{count}} envios da equipe rejeitados em {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Todas as notificações marcadas como lidas",
@@ -3424,6 +3440,29 @@
       "waitingForAdmin_one": "{{count}} solicitação de pasta aguarda um administrador. Até lá, as {{photos}} fotos ficam na pasta existente mais próxima.",
       "waitingForAdmin_many": "{{count}} solicitações de pasta aguardam um administrador. Até lá, as {{photos}} fotos ficam na pasta existente mais próxima.",
       "waitingForAdmin_other": "{{count}} solicitações de pasta aguardam um administrador. Até lá, as {{photos}} fotos ficam na pasta existente mais próxima."
+    },
+    "review": {
+      "pendingOwner_one": "{{count}} envio da sua equipe aguarda sua revisão",
+      "pendingOwner_other": "{{count}} envios da sua equipe aguardam sua revisão",
+      "pendingMember_one": "{{count}} envio da equipe aguarda a revisão do proprietário",
+      "pendingMember_other": "{{count}} envios da equipe aguardam a revisão do proprietário",
+      "nonePending": "Nenhum envio aguarda revisão.",
+      "filterPending": "Aguardando revisão ({{count}})",
+      "filterRejected": "Rejeitadas ({{count}})",
+      "showAll": "Todas as fotos",
+      "approve": "Aprovar",
+      "reject": "Rejeitar",
+      "approved_one": "{{count}} foto aprovada e publicada",
+      "approved_other": "{{count}} fotos aprovadas e publicadas",
+      "rejected_one": "{{count}} foto rejeitada",
+      "rejected_other": "{{count}} fotos rejeitadas",
+      "failed": "Não foi possível revisar as fotos",
+      "pendingBadge": "Aguardando revisão",
+      "rejectedBadge": "Rejeitada",
+      "uploadedBy": "Enviada por {{name}}",
+      "hiddenUntilApproved": "Oculta para convidados e clientes até ser aprovada",
+      "skippedOnShow_one": "{{count}} foto aguarda revisão e continua oculta até ser aprovada",
+      "skippedOnShow_other": "{{count}} fotos aguardam revisão e continuam ocultas até serem aprovadas"
     }
   },
   "customer": {

@@ -10,6 +10,7 @@ import type { Event } from '../../../../types';
 import { Button, Input, LocalizedDateInput, PasswordGenerator } from '../../../../components/common';
 import { FeedbackSettings } from '../../../../components/admin';
 import { CustomerAccountPicker } from '../../../../components/admin/CustomerAccountPicker';
+import { TeamMemberPicker } from '../../../../components/admin/TeamMemberPicker';
 import { UploaderNameSettings } from '../../../../components/admin/UploaderNameSettings';
 import { useLocalizedDate } from '../../../../hooks/useLocalizedDate';
 import { usePermission } from '../../../../hooks/usePermission';
@@ -46,11 +47,17 @@ export const SectionCard: React.FC<{ title?: string; description?: string; child
 
 export const GeneralSection: React.FC<FieldsProps & {
   phoneFieldEnabled: boolean;
-  /** Feed the password generator, as on the create form. */
-  event?: Pick<Event, 'event_name' | 'event_date' | 'event_type'>;
+  /**
+   * Feeds the password generator, as on the create form, and says whether
+   * this admin may change the team (issue 743).
+   */
+  event?: Pick<Event, 'event_name' | 'event_date' | 'event_type' | 'can_manage_assignments' | 'created_by'>;
 }> = ({ f, set, phoneFieldEnabled, event }) => {
   const { t } = useTranslation();
   const [showPassword, setShowPassword] = useState(false);
+  // Only the owner changes the team and the review switch; everyone else
+  // sees them read-only (the backend refuses the change with 403).
+  const canManageTeam = event?.can_manage_assignments === true;
   return (
     <SectionCard>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -151,6 +158,35 @@ export const GeneralSection: React.FC<FieldsProps & {
         value={f.customer_accounts}
         onChange={(next) => set({ customer_accounts: next })}
       />
+      {/* Team members (issue 743) */}
+      {canManageTeam ? (
+        <TeamMemberPicker
+          value={f.assigned_admins}
+          onChange={(next) => set({ assigned_admins: next })}
+          ownerId={event?.created_by ?? null}
+        />
+      ) : f.assigned_admins.length > 0 && (
+        <TeamMemberPicker value={f.assigned_admins} onChange={() => undefined} disabled />
+      )}
+      {(canManageTeam || f.review_contributor_uploads) && (
+        <div>
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              checked={f.review_contributor_uploads}
+              onChange={(e) => set({ review_contributor_uploads: e.target.checked })}
+              disabled={!canManageTeam}
+              className={checkboxClass}
+            />
+            <span className="ml-2 text-sm text-body">
+              {t('events.team.reviewUploads', 'Review team members\' uploads before they are published')}
+            </span>
+          </label>
+          <p className="text-xs text-muted mt-1 ml-6">
+            {t('events.team.reviewUploadsHelp', 'Photos a team member uploads stay hidden from guests and clients until you approve them on the Photos tab.')}
+          </p>
+        </div>
+      )}
       <div>
         <label className={labelClass} htmlFor="settings-welcome">{t('events.welcomeMessageLabel')}</label>
         <textarea

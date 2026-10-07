@@ -2224,6 +2224,17 @@
       "whatsapp": "WhatsApp",
       "skippedAccounts_one": "{{count}} customer account is not notified — that needs the customers.events permission",
       "skippedAccounts_other": "{{count}} customer accounts are not notified — that needs the customers.events permission"
+    },
+    "team": {
+      "label": "Team members",
+      "help": "Admin accounts added here can work on this gallery like you, within what their role allows. Customer and billing data stay yours.",
+      "removeAria": "Remove {{name}}",
+      "placeholder": "Search admin accounts",
+      "loading": "Loading…",
+      "loadFailed": "The admin accounts could not be loaded.",
+      "noResults": "No other admin accounts match.",
+      "reviewUploads": "Review team members' uploads before they are published",
+      "reviewUploadsHelp": "Photos a team member uploads stay hidden from guests and clients until you approve them on the Photos tab."
     }
   },
   "settings": {
@@ -4267,7 +4278,12 @@
       "apiPhotoDownloaded": "Original downloaded from {{eventName}} with API token #{{token_id}}",
       "apiPhotosDownloaded_one": "API token “{{token_name}}” downloaded {{count}} original from {{eventName}}",
       "apiPhotosDownloaded_other": "API token “{{token_name}}” downloaded {{count}} originals from {{eventName}}",
-      "apiPhotosZipDownloaded": "API token “{{token_name}}” downloaded a ZIP of {{photo_count}} originals from {{eventName}}"
+      "apiPhotosZipDownloaded": "API token “{{token_name}}” downloaded a ZIP of {{photo_count}} originals from {{eventName}}",
+      "eventTeamChanged": "Team changed for {{eventName}}",
+      "photosReviewApproved_one": "{{count}} team upload approved in {{eventName}}",
+      "photosReviewApproved_other": "{{count}} team uploads approved in {{eventName}}",
+      "photosReviewRejected_one": "{{count}} team upload rejected in {{eventName}}",
+      "photosReviewRejected_other": "{{count}} team uploads rejected in {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "All notifications marked as read",
@@ -6383,6 +6399,29 @@
       "showWaiting": "Show waiting photos",
       "waitingForAdmin_one": "{{count}} folder request is waiting for an admin. Until then its {{photos}} photos sit in the closest existing folder.",
       "waitingForAdmin_other": "{{count}} folder requests are waiting for an admin. Until then their {{photos}} photos sit in the closest existing folder."
+    },
+    "review": {
+      "pendingOwner_one": "{{count}} upload from your team is waiting for your review",
+      "pendingOwner_other": "{{count}} uploads from your team are waiting for your review",
+      "pendingMember_one": "{{count}} team upload is waiting for the owner's review",
+      "pendingMember_other": "{{count}} team uploads are waiting for the owner's review",
+      "nonePending": "No uploads are waiting for review.",
+      "filterPending": "Pending review ({{count}})",
+      "filterRejected": "Rejected ({{count}})",
+      "showAll": "All photos",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approved_one": "{{count}} photo approved and published",
+      "approved_other": "{{count}} photos approved and published",
+      "rejected_one": "{{count}} photo rejected",
+      "rejected_other": "{{count}} photos rejected",
+      "failed": "The photos could not be reviewed",
+      "pendingBadge": "Pending review",
+      "rejectedBadge": "Rejected",
+      "uploadedBy": "Uploaded by {{name}}",
+      "hiddenUntilApproved": "Hidden from guests and clients until approved",
+      "skippedOnShow_one": "{{count}} photo waits for review and stays hidden until it is approved",
+      "skippedOnShow_other": "{{count}} photos wait for review and stay hidden until they are approved"
     }
   },
   "customer": {

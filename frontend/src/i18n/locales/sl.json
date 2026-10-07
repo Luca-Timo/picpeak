@@ -2051,6 +2051,17 @@
       "skippedAccounts_two": "{{count}} računa strank ne bosta obveščena — za to je potrebno dovoljenje customers.events",
       "skippedAccounts_few": "{{count}} računi strank ne bodo obveščeni — za to je potrebno dovoljenje customers.events",
       "skippedAccounts_other": "{{count}} računov strank ne bo obveščenih — za to je potrebno dovoljenje customers.events"
+    },
+    "team": {
+      "label": "Člani ekipe",
+      "help": "Skrbniški računi, dodani tukaj, lahko delajo na tej galeriji kot vi, v okviru svoje vloge. Podatki o strankah in obračunu ostanejo vaši.",
+      "removeAria": "Odstrani {{name}}",
+      "placeholder": "Iskanje skrbniških računov",
+      "loading": "Nalaganje …",
+      "loadFailed": "Skrbniških računov ni bilo mogoče naložiti.",
+      "noResults": "Ni drugih ustreznih skrbniških računov.",
+      "reviewUploads": "Preglej nalaganja članov ekipe pred objavo",
+      "reviewUploadsHelp": "Fotografije, ki jih naloži član ekipe, ostanejo skrite gostom in strankam, dokler jih ne odobrite na zavihku Fotografije."
     }
   },
   "settings": {
@@ -3768,7 +3779,16 @@
       "apiPhotoDownloaded": "Izvirnik prenesen iz {{eventName}} z žetonom API #{{token_id}}",
       "apiPhotosDownloaded_one": "Žeton API »{{token_name}}« je prenesel {{count}} izvirnik iz {{eventName}}",
       "apiPhotosDownloaded_other": "Žeton API »{{token_name}}« je prenesel {{count}} izvirnikov iz {{eventName}}",
-      "apiPhotosZipDownloaded": "Žeton API »{{token_name}}« je prenesel ZIP z {{photo_count}} izvirniki iz {{eventName}}"
+      "apiPhotosZipDownloaded": "Žeton API »{{token_name}}« je prenesel ZIP z {{photo_count}} izvirniki iz {{eventName}}",
+      "eventTeamChanged": "Ekipa spremenjena za {{eventName}}",
+      "photosReviewApproved_one": "{{count}} nalaganje ekipe odobreno v {{eventName}}",
+      "photosReviewApproved_two": "{{count}} nalaganji ekipe odobreni v {{eventName}}",
+      "photosReviewApproved_few": "{{count}} nalaganja ekipe odobrena v {{eventName}}",
+      "photosReviewApproved_other": "{{count}} nalaganj ekipe odobrenih v {{eventName}}",
+      "photosReviewRejected_one": "{{count}} nalaganje ekipe zavrnjeno v {{eventName}}",
+      "photosReviewRejected_two": "{{count}} nalaganji ekipe zavrnjeni v {{eventName}}",
+      "photosReviewRejected_few": "{{count}} nalaganja ekipe zavrnjena v {{eventName}}",
+      "photosReviewRejected_other": "{{count}} nalaganj ekipe zavrnjenih v {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Vsa obvestila so označena kot prebrana",
@@ -5856,6 +5876,39 @@
       "waitingForAdmin_two": "Zahteve za mape, ki čakajo na skrbnika: {{count}}. Do takrat so njihove fotografije ({{photos}}) v najbližji obstoječi mapi.",
       "waitingForAdmin_few": "Zahteve za mape, ki čakajo na skrbnika: {{count}}. Do takrat so njihove fotografije ({{photos}}) v najbližji obstoječi mapi.",
       "waitingForAdmin_other": "Zahteve za mape, ki čakajo na skrbnika: {{count}}. Do takrat so njihove fotografije ({{photos}}) v najbližji obstoječi mapi."
+    },
+    "review": {
+      "pendingOwner_one": "{{count}} nalaganje vaše ekipe čaka na vaš pregled",
+      "pendingOwner_two": "{{count}} nalaganji vaše ekipe čakata na vaš pregled",
+      "pendingOwner_few": "{{count}} nalaganja vaše ekipe čakajo na vaš pregled",
+      "pendingOwner_other": "{{count}} nalaganj vaše ekipe čaka na vaš pregled",
+      "pendingMember_one": "{{count}} nalaganje ekipe čaka na pregled lastnika",
+      "pendingMember_two": "{{count}} nalaganji ekipe čakata na pregled lastnika",
+      "pendingMember_few": "{{count}} nalaganja ekipe čakajo na pregled lastnika",
+      "pendingMember_other": "{{count}} nalaganj ekipe čaka na pregled lastnika",
+      "nonePending": "Nobeno nalaganje ne čaka na pregled.",
+      "filterPending": "Čaka na pregled ({{count}})",
+      "filterRejected": "Zavrnjene ({{count}})",
+      "showAll": "Vse fotografije",
+      "approve": "Odobri",
+      "reject": "Zavrni",
+      "approved_one": "{{count}} fotografija odobrena in objavljena",
+      "approved_two": "{{count}} fotografiji odobreni in objavljeni",
+      "approved_few": "{{count}} fotografije odobrene in objavljene",
+      "approved_other": "{{count}} fotografij odobrenih in objavljenih",
+      "rejected_one": "{{count}} fotografija zavrnjena",
+      "rejected_two": "{{count}} fotografiji zavrnjeni",
+      "rejected_few": "{{count}} fotografije zavrnjene",
+      "rejected_other": "{{count}} fotografij zavrnjenih",
+      "failed": "Fotografij ni bilo mogoče pregledati",
+      "pendingBadge": "Čaka na pregled",
+      "rejectedBadge": "Zavrnjena",
+      "uploadedBy": "Naložil(a) {{name}}",
+      "hiddenUntilApproved": "Skrita gostom in strankam do odobritve",
+      "skippedOnShow_one": "{{count}} fotografija čaka na pregled in ostane skrita do odobritve",
+      "skippedOnShow_two": "{{count}} fotografiji čakata na pregled in ostaneta skriti do odobritve",
+      "skippedOnShow_few": "{{count}} fotografije čakajo na pregled in ostanejo skrite do odobritve",
+      "skippedOnShow_other": "{{count}} fotografij čaka na pregled in ostane skritih do odobritve"
     }
   },
   "customer": {

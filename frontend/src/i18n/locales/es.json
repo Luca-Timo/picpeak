@@ -922,6 +922,17 @@
       "structureApplied_other": "{{count}} fotos movidas a carpetas",
       "structureNothing": "Todas las fotos de una subcarpeta ya están en una carpeta",
       "structureFailed": "No se pudo aplicar la estructura de carpetas"
+    },
+    "team": {
+      "label": "Miembros del equipo",
+      "help": "Las cuentas de administrador añadidas aquí pueden trabajar en esta galería como usted, dentro de lo que permite su rol. Los datos de clientes y facturación siguen siendo suyos.",
+      "removeAria": "Quitar a {{name}}",
+      "placeholder": "Buscar cuentas de administrador",
+      "loading": "Cargando…",
+      "loadFailed": "No se pudieron cargar las cuentas de administrador.",
+      "noResults": "No hay otras cuentas de administrador que coincidan.",
+      "reviewUploads": "Revisar las subidas de los miembros del equipo antes de publicarlas",
+      "reviewUploadsHelp": "Las fotos que sube un miembro del equipo permanecen ocultas para invitados y clientes hasta que usted las apruebe en la pestaña Fotos."
     }
   },
   "settings": {
@@ -1732,7 +1743,12 @@
       "galleryDownloadedCustomer": "El cliente descargó fotos de «{{eventName}}»",
       "photoFavorite": "Se marcó como favorita una foto de «{{eventName}}»",
       "systemActivity": "Actividad del sistema: {{type}}",
-      "adminProfileUpdated": "Perfil de admin actualizado por {{actorName}}"
+      "adminProfileUpdated": "Perfil de admin actualizado por {{actorName}}",
+      "eventTeamChanged": "Equipo modificado en {{eventName}}",
+      "photosReviewApproved_one": "{{count}} subida del equipo aprobada en {{eventName}}",
+      "photosReviewApproved_other": "{{count}} subidas del equipo aprobadas en {{eventName}}",
+      "photosReviewRejected_one": "{{count}} subida del equipo rechazada en {{eventName}}",
+      "photosReviewRejected_other": "{{count}} subidas del equipo rechazadas en {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Todas las notificaciones marcadas como leídas",
@@ -2970,6 +2986,29 @@
       "showWaiting": "Mostrar fotos en espera",
       "waitingForAdmin_one": "{{count}} solicitud de carpeta espera a un administrador. Hasta entonces, sus {{photos}} fotos están en la carpeta existente más cercana.",
       "waitingForAdmin_other": "{{count}} solicitudes de carpeta esperan a un administrador. Hasta entonces, sus {{photos}} fotos están en la carpeta existente más cercana."
+    },
+    "review": {
+      "pendingOwner_one": "{{count}} subida de su equipo espera su revisión",
+      "pendingOwner_other": "{{count}} subidas de su equipo esperan su revisión",
+      "pendingMember_one": "{{count}} subida del equipo espera la revisión del propietario",
+      "pendingMember_other": "{{count}} subidas del equipo esperan la revisión del propietario",
+      "nonePending": "No hay subidas pendientes de revisión.",
+      "filterPending": "Pendientes de revisión ({{count}})",
+      "filterRejected": "Rechazadas ({{count}})",
+      "showAll": "Todas las fotos",
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "approved_one": "{{count}} foto aprobada y publicada",
+      "approved_other": "{{count}} fotos aprobadas y publicadas",
+      "rejected_one": "{{count}} foto rechazada",
+      "rejected_other": "{{count}} fotos rechazadas",
+      "failed": "No se pudieron revisar las fotos",
+      "pendingBadge": "Pendiente de revisión",
+      "rejectedBadge": "Rechazada",
+      "uploadedBy": "Subida por {{name}}",
+      "hiddenUntilApproved": "Oculta para invitados y clientes hasta que se apruebe",
+      "skippedOnShow_one": "{{count}} foto espera revisión y sigue oculta hasta que se apruebe",
+      "skippedOnShow_other": "{{count}} fotos esperan revisión y siguen ocultas hasta que se aprueben"
     }
   }
 }

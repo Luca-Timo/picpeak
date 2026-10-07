@@ -2762,6 +2762,17 @@
       "whatsapp": "WhatsApp",
       "skippedAccounts_one": "{{count}} Kundenkonto wird nicht benachrichtigt — dafür ist die Berechtigung customers.events nötig",
       "skippedAccounts_other": "{{count}} Kundenkonten werden nicht benachrichtigt — dafür ist die Berechtigung customers.events nötig"
+    },
+    "team": {
+      "label": "Teammitglieder",
+      "help": "Hier hinzugefügte Admin-Konten können an dieser Galerie wie Sie arbeiten, im Rahmen ihrer Rolle. Kunden- und Abrechnungsdaten bleiben bei Ihnen.",
+      "removeAria": "{{name}} entfernen",
+      "placeholder": "Admin-Konten suchen",
+      "loading": "Wird geladen …",
+      "loadFailed": "Die Admin-Konten konnten nicht geladen werden.",
+      "noResults": "Keine weiteren Admin-Konten gefunden.",
+      "reviewUploads": "Uploads von Teammitgliedern vor der Veröffentlichung prüfen",
+      "reviewUploadsHelp": "Fotos, die ein Teammitglied hochlädt, bleiben für Gäste und Kunden verborgen, bis Sie sie im Tab Fotos freigeben."
     }
   },
   "settings": {
@@ -4738,7 +4749,12 @@
       "apiPhotoDownloaded": "Original aus {{eventName}} mit API-Token #{{token_id}} heruntergeladen",
       "apiPhotosDownloaded_one": "API-Token „{{token_name}}“ hat {{count}} Original aus {{eventName}} heruntergeladen",
       "apiPhotosDownloaded_other": "API-Token „{{token_name}}“ hat {{count}} Originale aus {{eventName}} heruntergeladen",
-      "apiPhotosZipDownloaded": "API-Token „{{token_name}}“ hat ein ZIP mit {{photo_count}} Originalen aus {{eventName}} heruntergeladen"
+      "apiPhotosZipDownloaded": "API-Token „{{token_name}}“ hat ein ZIP mit {{photo_count}} Originalen aus {{eventName}} heruntergeladen",
+      "eventTeamChanged": "Team geändert für {{eventName}}",
+      "photosReviewApproved_one": "{{count}} Team-Upload in {{eventName}} freigegeben",
+      "photosReviewApproved_other": "{{count}} Team-Uploads in {{eventName}} freigegeben",
+      "photosReviewRejected_one": "{{count}} Team-Upload in {{eventName}} abgelehnt",
+      "photosReviewRejected_other": "{{count}} Team-Uploads in {{eventName}} abgelehnt"
     },
     "notificationToasts": {
       "markedAllRead": "Alle Benachrichtigungen als gelesen markiert",
@@ -6348,6 +6364,29 @@
       "showWaiting": "Wartende Fotos anzeigen",
       "waitingForAdmin_one": "{{count}} Ordneranfrage wartet auf einen Admin. Bis dahin liegen die {{photos}} Fotos im nächstgelegenen vorhandenen Ordner.",
       "waitingForAdmin_other": "{{count}} Ordneranfragen warten auf einen Admin. Bis dahin liegen die {{photos}} Fotos im nächstgelegenen vorhandenen Ordner."
+    },
+    "review": {
+      "pendingOwner_one": "{{count}} Upload aus Ihrem Team wartet auf Ihre Prüfung",
+      "pendingOwner_other": "{{count}} Uploads aus Ihrem Team warten auf Ihre Prüfung",
+      "pendingMember_one": "{{count}} Team-Upload wartet auf die Prüfung durch den Inhaber",
+      "pendingMember_other": "{{count}} Team-Uploads warten auf die Prüfung durch den Inhaber",
+      "nonePending": "Keine Uploads warten auf Prüfung.",
+      "filterPending": "Zu prüfen ({{count}})",
+      "filterRejected": "Abgelehnt ({{count}})",
+      "showAll": "Alle Fotos",
+      "approve": "Freigeben",
+      "reject": "Ablehnen",
+      "approved_one": "{{count}} Foto freigegeben und veröffentlicht",
+      "approved_other": "{{count}} Fotos freigegeben und veröffentlicht",
+      "rejected_one": "{{count}} Foto abgelehnt",
+      "rejected_other": "{{count}} Fotos abgelehnt",
+      "failed": "Die Fotos konnten nicht geprüft werden",
+      "pendingBadge": "Zu prüfen",
+      "rejectedBadge": "Abgelehnt",
+      "uploadedBy": "Hochgeladen von {{name}}",
+      "hiddenUntilApproved": "Für Gäste und Kunden verborgen, bis es freigegeben ist",
+      "skippedOnShow_one": "{{count}} Foto wartet auf Prüfung und bleibt verborgen, bis es freigegeben ist",
+      "skippedOnShow_other": "{{count}} Fotos warten auf Prüfung und bleiben verborgen, bis sie freigegeben sind"
     }
   },
   "customer": {

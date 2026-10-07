@@ -53,6 +53,18 @@ export interface AdminPhoto {
   pending_folder_request_id?: number | null;
   // Delivered as part of a first look (issue 1562).
   first_look?: boolean;
+  // Review of team members' uploads (issue 743): null = published as usual.
+  moderation_status?: PhotoModerationStatus | null;
+  // The admin account that ran the upload; null for imports and older rows.
+  uploaded_by_admin?: { id: number; username: string | null } | null;
+}
+
+/** A photo a team member uploaded, waiting for the owner or turned down (issue 743). */
+export type PhotoModerationStatus = 'pending' | 'rejected';
+
+export interface PhotoModerationCounts {
+  pending: number;
+  rejected: number;
 }
 
 // Filter value for "photos without a credit" — mirrors CREDIT_NONE in
@@ -92,6 +104,8 @@ export interface PhotoFilters {
   myColorLabels?: string[];
   /** Exact credit name, or CREDIT_FILTER_NONE (#1561). */
   credit?: string;
+  /** Only the photos under review with this status (issue 743). */
+  moderation?: PhotoModerationStatus;
   logic?: 'AND' | 'OR';
 }
 
@@ -174,6 +188,7 @@ class PhotosService {
         params.append('my_color_label', filters.myColorLabels.join(','));
       }
       if (filters.credit) params.append('credit', filters.credit);
+      if (filters.moderation) params.append('moderation', filters.moderation);
       if (filters.logic) params.append('logic', filters.logic);
     }
     
@@ -185,6 +200,22 @@ class PhotosService {
     
     // Return photos as-is, URLs are already relative API paths
     return response.data.photos;
+  }
+
+  /** How many photos of the event wait for review or were rejected (issue 743). */
+  async getModerationCounts(eventId: number): Promise<PhotoModerationCounts> {
+    const response = await api.get<{ moderation: PhotoModerationCounts }>(`/admin/photos/${eventId}/photos/moderation`);
+    return response.data.moderation;
+  }
+
+  /** Publish (approve) or turn down (reject) photos under review; owner only. */
+  async moderatePhotos(
+    eventId: number,
+    photoIds: number[],
+    action: 'approve' | 'reject'
+  ): Promise<{ updated: number; moderation: PhotoModerationCounts }> {
+    const response = await api.post(`/admin/photos/${eventId}/photos/moderation`, { photoIds, action });
+    return response.data;
   }
 
   /** The names on this event's photos with their counts (#1561). */
@@ -226,11 +257,16 @@ class PhotosService {
     });
   }
 
-  async bulkUpdatePhotos(eventId: number, photoIds: number[], updates: Record<string, unknown>): Promise<void> {
-    await api.post(`/admin/events/${eventId}/photos/bulk-update`, {
+  /**
+   * `skipped_under_review`: photos a visibility change left alone because they
+   * wait for review (issue 743); only approving them publishes them.
+   */
+  async bulkUpdatePhotos(eventId: number, photoIds: number[], updates: Record<string, unknown>): Promise<{ skipped_under_review?: number }> {
+    const response = await api.post(`/admin/events/${eventId}/photos/bulk-update`, {
       photoIds,
       updates
     });
+    return response.data;
   }
 
   async downloadPhoto(eventId: number, photoId: number, filename: string): Promise<void> {
