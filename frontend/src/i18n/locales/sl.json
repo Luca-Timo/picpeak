@@ -2342,7 +2342,8 @@
       "firstLookKeywords": "Ključne besede",
       "firstLookKeywordsHelp": "Ločene z vejicami. Velike črke, presledki, vezaji in podčrtaji se prezrejo, zato se »FirstLook« ujema tudi s »first-look«.",
       "deliveryDays": "Rok za celotno galerijo po (dneh)",
-      "deliveryDaysHelp": "Če se prvi izbor začne brez obljubljenega datuma, je celotna galerija zapadla toliko dni po datumu dogodka."
+      "deliveryDaysHelp": "Če se prvi izbor začne brez obljubljenega datuma, je celotna galerija zapadla toliko dni po datumu dogodka.",
+      "defaultAllowDecisions": "Odobri / zavrni posamezno fotografijo"
     },
     "imageSecurity": {
       "title": "Zaščita slik",
@@ -3788,7 +3789,9 @@
       "photosReviewRejected_one": "{{count}} nalaganje ekipe zavrnjeno v {{eventName}}",
       "photosReviewRejected_two": "{{count}} nalaganji ekipe zavrnjeni v {{eventName}}",
       "photosReviewRejected_few": "{{count}} nalaganja ekipe zavrnjena v {{eventName}}",
-      "photosReviewRejected_other": "{{count}} nalaganj ekipe zavrnjenih v {{eventName}}"
+      "photosReviewRejected_other": "{{count}} nalaganj ekipe zavrnjenih v {{eventName}}",
+      "photoDecision": "Fotografija odobrena ali zavrnjena v {{eventName}}",
+      "guestFeedbackDecision": "Gost je odobril ali zavrnil fotografijo v {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Vsa obvestila so označena kot prebrana",
@@ -3868,7 +3871,9 @@
         "filterLabel": "Filtriraj po avtorju",
         "filterAll": "Vsa imena",
         "filterNone": "Brez imena"
-      }
+      },
+      "approvedBy": "Odobreno: {{value}}",
+      "rejectedBy": "Zavrnjeno: {{value}}"
     },
     "events": {
       "tabs": {
@@ -4158,7 +4163,9 @@
       "delivery_first_look_started": "Prvi izbor začet za {{eventName}}",
       "delivery_completed": "Celotna galerija dostavljena: {{eventName}}",
       "delivery_due_soon": "Rok za celotno galerijo {{eventName}} se bliža",
-      "delivery_overdue": "Celotna galerija {{eventName}} zamuja"
+      "delivery_overdue": "Celotna galerija {{eventName}} zamuja",
+      "photo_decision": "Fotografija odobrena ali zavrnjena v {{eventName}}",
+      "guest_feedback_decision": "Gost je odobril ali zavrnil fotografijo v {{eventName}}"
     },
     "people": {
       "title": "Osebe v tej galeriji",
@@ -5332,7 +5339,9 @@
       "enableRateLimiting": "Omogoči omejevanje hitrosti",
       "rateLimitingDesc": "Prepreči neželeno pošiljanje z omejevanjem pogostosti povratnih informacij",
       "timeWindow": "Časovno okno (minute)",
-      "maxRequests": "Največ zahtev"
+      "maxRequests": "Največ zahtev",
+      "decisions": "Odobri / zavrni posamezno fotografijo",
+      "decisionsDesc": "Gostje vsako fotografijo odobrijo ali zavrnejo, po želji z razlogom. Po njihovi odločitvi lahko filtrirate in izvažate"
     },
     "settingsUpdated": "Nastavitve povratnih informacij posodobljene",
     "settingsUpdateError": "Nastavitev ni bilo mogoče posodobiti",
@@ -5355,7 +5364,8 @@
       "like": "Všečki",
       "comment": "Komentarji",
       "favorite": "Priljubljene",
-      "reaction": "Odzivi"
+      "reaction": "Odzivi",
+      "decision": "Odobri / zavrni"
     },
     "allStatuses": "Vsa stanja",
     "status": {
@@ -5433,7 +5443,25 @@
     "removeColorLabel": "Odstrani oznako {{color}}",
     "setColorLabel": "Označi kot {{color}}",
     "markedAs": "Označeno kot {{color}}",
-    "alsoMarkedBy": "Označili tudi drugi: {{colors}}"
+    "alsoMarkedBy": "Označili tudi drugi: {{colors}}",
+    "decisions": {
+      "approved": "Odobreno",
+      "rejected": "Zavrnjeno"
+    },
+    "totalDecisions": "Odobreno / zavrnjeno",
+    "decisionsTitle": "Odobri / zavrni",
+    "decisionApprove": "Odobri",
+    "decisionReject": "Zavrni",
+    "decisionClear": "Prekliči odločitev",
+    "decisionReasonEdit": "Zakaj? (neobvezno)",
+    "decisionReasonLabel": "Zakaj zavračate to fotografijo? (neobvezno)",
+    "decisionReasonPlaceholder": "npr. zaprte oči, ni moja najboljša stran",
+    "decisionReasonSave": "Shrani razlog",
+    "decisionReasonBlocked": "Vaš razlog vsebuje besede, ki tukaj niso dovoljene.",
+    "decisionError": "Odločitve ni bilo mogoče shraniti",
+    "decisionType": "vašo odločitev",
+    "youApproved": "To fotografijo ste odobrili",
+    "youRejected": "To fotografijo ste zavrnili"
   },
   "filter": {
     "feedbackFilters": "Filtri povratnih informacij",
@@ -5456,7 +5484,11 @@
     "colorLabels": "Barvne oznake",
     "showOnlyColor": "Prikaži samo {{color}}",
     "myColorLabels": "Vaše oznake",
-    "showOnlyMyColor": "Prikaži samo moje oznake {{color}}"
+    "showOnlyMyColor": "Prikaži samo moje oznake {{color}}",
+    "decisions": "Odobri / zavrni",
+    "decisionApproved": "Odobreno",
+    "decisionRejected": "Zavrnjeno",
+    "decisionUndecided": "Neodločeno"
   },
   "setup": {
     "title": "Dobrodošli v PicPeaku",

@@ -38,6 +38,9 @@ export interface AdminPhoto {
   color_label_count?: number;
   color_labels?: Record<string, number>;
   dominant_color_label?: string | null;
+  // Approve / reject tallies across guests (issue 744).
+  approved_count?: number;
+  rejected_count?: number;
   // The requesting admin's OWN triage mark (#1044 follow-up) — separate from
   // the client's selections above, and never shown in the gallery.
   my_rating?: number | null;
@@ -71,6 +74,9 @@ export interface PhotoModerationCounts {
 // backend/src/services/photoCredit.js.
 export const CREDIT_FILTER_NONE = '__none__';
 
+/** Admin filter on the guests' approve / reject (issue 744). */
+export type DecisionFilter = 'approved' | 'rejected' | 'undecided';
+
 export interface PhotoCreditSummary {
   credits: Array<{ name: string; count: number }>;
   none: number;
@@ -102,6 +108,8 @@ export interface PhotoFilters {
   colorLabels?: string[];
   /** Same, against the caller's own marks. */
   myColorLabels?: string[];
+  /** Approve / reject (issue 744); several OR together. */
+  decisions?: DecisionFilter[];
   /** Exact credit name, or CREDIT_FILTER_NONE (#1561). */
   credit?: string;
   /** Only the photos under review with this status (issue 743). */
@@ -186,6 +194,9 @@ class PhotosService {
       }
       if (filters.myColorLabels && filters.myColorLabels.length > 0) {
         params.append('my_color_label', filters.myColorLabels.join(','));
+      }
+      if (filters.decisions && filters.decisions.length > 0) {
+        params.append('decision', filters.decisions.join(','));
       }
       if (filters.credit) params.append('credit', filters.credit);
       if (filters.moderation) params.append('moderation', filters.moderation);
@@ -433,6 +444,9 @@ class PhotosService {
     if (filters.myColorLabels && filters.myColorLabels.length > 0) {
       params.append('my_color_labels', filters.myColorLabels.join(','));
     }
+    if (filters.decisions && filters.decisions.length > 0) {
+      params.append('decisions', filters.decisions.join(','));
+    }
     if (filters.categoryId) params.append('category_id', filters.categoryId.toString());
     if (filters.logic) params.append('logic', filters.logic);
     if (filters.sort) params.append('sort', filters.sort);
@@ -531,6 +545,8 @@ export interface FeedbackFilters {
   colorLabels?: string[];
   /** Same, against the caller's own marks. */
   myColorLabels?: string[];
+  /** Approve / reject (issue 744). Empty = no filtering. */
+  decisions?: DecisionFilter[];
   categoryId?: number;
   logic?: 'AND' | 'OR';
   sort?: 'rating' | 'likes' | 'favorites' | 'date' | 'filename';
@@ -550,6 +566,10 @@ export interface FilterSummary {
   colorLabelCounts?: Record<string, number>;
   /** Same, for the caller's own marks. */
   myColorLabelCounts?: Record<string, number>;
+  /** Photos some guest approved / rejected / either (issue 744). */
+  withApproved?: number;
+  withRejected?: number;
+  withDecisions?: number;
 }
 
 export interface FilteredPhotosResponse {
@@ -580,6 +600,7 @@ export interface ExportFilter {
   has_comments?: boolean;
   color_labels?: string[];
   my_color_labels?: string[];
+  decisions?: DecisionFilter[];
   category_id?: number;
   logic?: 'AND' | 'OR';
   sort?: 'rating' | 'likes' | 'favorites' | 'date' | 'filename';

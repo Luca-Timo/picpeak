@@ -1171,7 +1171,8 @@
       "firstLookKeywords": "Mots-clés",
       "firstLookKeywordsHelp": "Séparés par des virgules. La casse, les espaces, les tirets et les traits de soulignement sont ignorés : « FirstLook » correspond aussi à « first-look ».",
       "deliveryDays": "Galerie complète due après (jours)",
-      "deliveryDaysHelp": "Si une première sélection démarre sans date promise, la galerie complète est due ce nombre de jours après la date de l'événement."
+      "deliveryDaysHelp": "Si une première sélection démarre sans date promise, la galerie complète est due ce nombre de jours après la date de l'événement.",
+      "defaultAllowDecisions": "Approuver / refuser chaque photo"
     },
     "imageSecurity": {
       "title": "Protection des images",
@@ -1959,7 +1960,9 @@
       "photosReviewApproved_one": "{{count}} envoi de l'équipe approuvé dans {{eventName}}",
       "photosReviewApproved_other": "{{count}} envois de l'équipe approuvés dans {{eventName}}",
       "photosReviewRejected_one": "{{count}} envoi de l'équipe refusé dans {{eventName}}",
-      "photosReviewRejected_other": "{{count}} envois de l'équipe refusés dans {{eventName}}"
+      "photosReviewRejected_other": "{{count}} envois de l'équipe refusés dans {{eventName}}",
+      "photoDecision": "Photo approuvée ou refusée dans {{eventName}}",
+      "guestFeedbackDecision": "Un invité a approuvé ou refusé une photo dans {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Toutes les notifications marquées comme lues",
@@ -2021,7 +2024,9 @@
         "filterLabel": "Filtrer par crédit",
         "filterAll": "Tous les noms",
         "filterNone": "Aucun nom"
-      }
+      },
+      "approvedBy": "Approuvée : {{value}}",
+      "rejectedBy": "Refusée : {{value}}"
     },
     "events": {
       "tabs": {
@@ -2219,7 +2224,9 @@
       "delivery_first_look_started": "Première sélection démarrée pour {{eventName}}",
       "delivery_completed": "Galerie complète livrée : {{eventName}}",
       "delivery_due_soon": "La galerie complète de {{eventName}} arrive à échéance",
-      "delivery_overdue": "La galerie complète de {{eventName}} est en retard"
+      "delivery_overdue": "La galerie complète de {{eventName}} est en retard",
+      "photo_decision": "Photo approuvée ou refusée dans {{eventName}}",
+      "guest_feedback_decision": "Un invité a approuvé ou refusé une photo dans {{eventName}}"
     },
     "catalogedMedia": "{{size}} catalogués",
     "storageUnavailable": "indisponible",
@@ -2959,7 +2966,9 @@
       "keybindColors": "Couleurs uniquement (le plus simple)",
       "keybindColorsDesc": "1 = vert (1er choix), 2 = jaune (2e choix), 3 = rouge (rejeté)",
       "keybindLightroom": "Valeurs par défaut de Lightroom",
-      "keybindLightroomDesc": "1-5 attribuent les étoiles, 6-9 les couleurs rouge / jaune / vert / bleu"
+      "keybindLightroomDesc": "1-5 attribuent les étoiles, 6-9 les couleurs rouge / jaune / vert / bleu",
+      "decisions": "Approuver / refuser chaque photo",
+      "decisionsDesc": "Les invités approuvent ou refusent chaque photo, en indiquant éventuellement pourquoi. Vous filtrez et exportez selon leur décision"
     },
     "settingsUpdated": "Paramètres de commentaires mis à jour",
     "settingsUpdateError": "Échec de la mise à jour des paramètres",
@@ -2982,7 +2991,8 @@
       "like": "J'aimes",
       "comment": "Commentaires",
       "favorite": "Favoris",
-      "reaction": "Réactions"
+      "reaction": "Réactions",
+      "decision": "Approuver / refuser"
     },
     "allStatuses": "Tous statuts",
     "status": {
@@ -3049,7 +3059,25 @@
     "removeColorLabel": "Retirer l'étiquette {{color}}",
     "setColorLabel": "Marquer comme {{color}}",
     "markedAs": "Marqué comme {{color}}",
-    "alsoMarkedBy": "Également marqué par d’autres : {{colors}}"
+    "alsoMarkedBy": "Également marqué par d’autres : {{colors}}",
+    "decisions": {
+      "approved": "Approuvée",
+      "rejected": "Refusée"
+    },
+    "totalDecisions": "Approuvées / refusées",
+    "decisionsTitle": "Approuver / refuser",
+    "decisionApprove": "Approuver",
+    "decisionReject": "Refuser",
+    "decisionClear": "Annuler votre décision",
+    "decisionReasonEdit": "Pourquoi ? (facultatif)",
+    "decisionReasonLabel": "Pourquoi refusez-vous cette photo ? (facultatif)",
+    "decisionReasonPlaceholder": "p. ex. yeux fermés, pas mon meilleur profil",
+    "decisionReasonSave": "Enregistrer le motif",
+    "decisionReasonBlocked": "Votre motif contient des mots qui ne sont pas autorisés ici.",
+    "decisionError": "Impossible d'enregistrer votre décision",
+    "decisionType": "votre décision",
+    "youApproved": "Vous avez approuvé cette photo",
+    "youRejected": "Vous avez refusé cette photo"
   },
   "filter": {
     "feedbackFilters": "Filtres de commentaires",
@@ -3072,7 +3100,11 @@
     "colorLabels": "Étiquettes de couleur",
     "showOnlyColor": "Afficher uniquement {{color}}",
     "myColorLabels": "Vos marques",
-    "showOnlyMyColor": "Afficher uniquement mes marques {{color}}"
+    "showOnlyMyColor": "Afficher uniquement mes marques {{color}}",
+    "decisions": "Approuver / refuser",
+    "decisionApproved": "Approuvées",
+    "decisionRejected": "Refusées",
+    "decisionUndecided": "Sans décision"
   },
   "adminLogin": {
     "title": "Connexion administrateur",

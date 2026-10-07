@@ -2987,7 +2987,8 @@
       "firstLookKeywords": "Stichwörter",
       "firstLookKeywordsHelp": "Durch Kommas getrennt. Groß-/Kleinschreibung, Leerzeichen, Binde- und Unterstriche werden ignoriert, „FirstLook“ passt also auch auf „first-look“.",
       "deliveryDays": "Vollständige Galerie fällig nach (Tagen)",
-      "deliveryDaysHelp": "Startet eine erste Auswahl ohne zugesagtes Datum, ist die vollständige Galerie so viele Tage nach dem Eventdatum fällig."
+      "deliveryDaysHelp": "Startet eine erste Auswahl ohne zugesagtes Datum, ist die vollständige Galerie so viele Tage nach dem Eventdatum fällig.",
+      "defaultAllowDecisions": "Freigabe / Ablehnung pro Foto"
     },
     "imageSecurity": {
       "title": "Bildschutz",
@@ -4754,7 +4755,9 @@
       "photosReviewApproved_one": "{{count}} Team-Upload in {{eventName}} freigegeben",
       "photosReviewApproved_other": "{{count}} Team-Uploads in {{eventName}} freigegeben",
       "photosReviewRejected_one": "{{count}} Team-Upload in {{eventName}} abgelehnt",
-      "photosReviewRejected_other": "{{count}} Team-Uploads in {{eventName}} abgelehnt"
+      "photosReviewRejected_other": "{{count}} Team-Uploads in {{eventName}} abgelehnt",
+      "photoDecision": "Foto freigegeben oder abgelehnt in {{eventName}}",
+      "guestFeedbackDecision": "Gast hat ein Foto freigegeben oder abgelehnt in {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Alle Benachrichtigungen als gelesen markiert",
@@ -4838,7 +4841,9 @@
         "filterLabel": "Nach Urheber filtern",
         "filterAll": "Alle Namen",
         "filterNone": "Kein Name"
-      }
+      },
+      "approvedBy": "Freigegeben: {{value}}",
+      "rejectedBy": "Abgelehnt: {{value}}"
     },
     "events": {
       "tabs": {
@@ -5137,7 +5142,9 @@
       "self_update_request_failed": "In-App-Update nicht gestartet: Die Anfrage konnte nicht abgelegt werden",
       "self_update_expired": "In-App-Update-Anfrage zurückgezogen: Der Updater hat sie nicht übernommen",
       "self_update_withdrawn": "In-App-Update-Anfrage abgebrochen",
-      "self_update_finished": "In-App-Update beendet: {{state}} ({{from_version}} → {{to_version}})"
+      "self_update_finished": "In-App-Update beendet: {{state}} ({{from_version}} → {{to_version}})",
+      "photo_decision": "Foto freigegeben oder abgelehnt in {{eventName}}",
+      "guest_feedback_decision": "Gast hat ein Foto freigegeben oder abgelehnt in {{eventName}}"
     },
     "people": {
       "title": "Personen in dieser Galerie",
@@ -5817,7 +5824,9 @@
       "enableRateLimiting": "Ratenbegrenzung aktivieren",
       "rateLimitingDesc": "Spam durch Begrenzung der Feedback-Häufigkeit verhindern",
       "timeWindow": "Zeitfenster (Minuten)",
-      "maxRequests": "Maximale Anfragen"
+      "maxRequests": "Maximale Anfragen",
+      "decisions": "Freigabe / Ablehnung pro Foto",
+      "decisionsDesc": "Gäste geben jedes Foto frei oder lehnen es ab, auf Wunsch mit Begründung. Du filterst und exportierst nach ihrer Entscheidung"
     },
     "moderated": "Feedback moderiert",
     "deleted": "Feedback gelöscht",
@@ -5837,7 +5846,8 @@
       "like": "Likes",
       "comment": "Kommentare",
       "favorite": "Favoriten",
-      "reaction": "Reaktionen"
+      "reaction": "Reaktionen",
+      "decision": "Freigabe / Ablehnung"
     },
     "allStatuses": "Alle Status",
     "status": {
@@ -5915,7 +5925,25 @@
     "removeColorLabel": "Markierung {{color}} entfernen",
     "setColorLabel": "Als {{color}} markieren",
     "markedAs": "Markiert als {{color}}",
-    "alsoMarkedBy": "Auch von anderen markiert: {{colors}}"
+    "alsoMarkedBy": "Auch von anderen markiert: {{colors}}",
+    "decisions": {
+      "approved": "Freigegeben",
+      "rejected": "Abgelehnt"
+    },
+    "totalDecisions": "Freigegeben / abgelehnt",
+    "decisionsTitle": "Freigabe / Ablehnung",
+    "decisionApprove": "Freigeben",
+    "decisionReject": "Ablehnen",
+    "decisionClear": "Entscheidung zurücknehmen",
+    "decisionReasonEdit": "Warum? (optional)",
+    "decisionReasonLabel": "Warum lehnst du dieses Foto ab? (optional)",
+    "decisionReasonPlaceholder": "z. B. Augen zu, nicht meine beste Seite",
+    "decisionReasonSave": "Grund speichern",
+    "decisionReasonBlocked": "Dein Grund enthält Wörter, die hier nicht erlaubt sind.",
+    "decisionError": "Deine Entscheidung konnte nicht gespeichert werden",
+    "decisionType": "deine Entscheidung",
+    "youApproved": "Du hast dieses Foto freigegeben",
+    "youRejected": "Du hast dieses Foto abgelehnt"
   },
   "filter": {
     "feedbackFilters": "Feedback-Filter",
@@ -5938,7 +5966,11 @@
     "colorLabels": "Farbmarkierungen",
     "showOnlyColor": "Nur {{color}} anzeigen",
     "myColorLabels": "Ihre Markierungen",
-    "showOnlyMyColor": "Nur meine Markierungen in {{color}} anzeigen"
+    "showOnlyMyColor": "Nur meine Markierungen in {{color}} anzeigen",
+    "decisions": "Freigabe / Ablehnung",
+    "decisionApproved": "Freigegeben",
+    "decisionRejected": "Abgelehnt",
+    "decisionUndecided": "Offen"
   },
   "export": {
     "button": "Exportieren",

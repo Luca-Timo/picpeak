@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, ClipboardCheck, Download, Trash2, Eye, EyeOff, Heart, Package, MessageSquare, Star, Video, FolderOpen, FolderInput, Cog, AlertTriangle, RefreshCw, LayoutGrid, List, UserRound, X } from 'lucide-react';
+import { Check, ClipboardCheck, Download, Trash2, Eye, EyeOff, Heart, Package, MessageSquare, Star, Video, FolderOpen, FolderInput, Cog, AlertTriangle, RefreshCw, LayoutGrid, List, UserRound, X, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { COLOR_LABEL_SWATCHES, type ColorLabel } from '../../services/feedback.service';
 import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
@@ -606,6 +606,9 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
           const commentCount = photo.comment_count ?? 0;
           const averageRating = photo.average_rating ?? 0;
           const likeCount = photo.like_count ?? 0;
+          // Approve / reject tallies across guests (issue 744).
+          const approvedCount = photo.approved_count ?? 0;
+          const rejectedCount = photo.rejected_count ?? 0;
           const isVideo = (photo.media_type === 'video') ||
             (photo.mime_type && photo.mime_type.startsWith('video/')) ||
             photo.type === 'video';
@@ -875,8 +878,26 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
             )}
 
             {/* Feedback Indicators (moved to bottom-right to avoid covering category) */}
-            {(commentCount > 0 || averageRating > 0 || likeCount > 0) && (
+            {(commentCount > 0 || averageRating > 0 || likeCount > 0 || approvedCount > 0 || rejectedCount > 0) && (
               <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10">
+                {approvedCount > 0 && (
+                  <div
+                    className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1"
+                    title={t('admin.photos.approvedBy', 'Approved: {{value}}', { value: approvedCount })}
+                  >
+                    <ThumbsUp className="w-3.5 h-3.5 text-green-600" aria-hidden="true" />
+                    <span className="text-xs font-medium text-neutral-700">{approvedCount}</span>
+                  </div>
+                )}
+                {rejectedCount > 0 && (
+                  <div
+                    className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1"
+                    title={t('admin.photos.rejectedBy', 'Rejected: {{value}}', { value: rejectedCount })}
+                  >
+                    <ThumbsDown className="w-3.5 h-3.5 text-red-600" aria-hidden="true" />
+                    <span className="text-xs font-medium text-neutral-700">{rejectedCount}</span>
+                  </div>
+                )}
                 {averageRating > 0 && (
                   <div className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1" title={`Rating: ${Number(averageRating).toFixed(1)}`}>
                     <Star className="w-3.5 h-3.5 text-yellow-500" fill="currentColor" />

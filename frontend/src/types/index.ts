@@ -292,6 +292,12 @@ export interface Photo {
   // else was visible in fullscreen and invisible on the tile. Empty when the
   // gallery has show_feedback_to_guests off — it is other people's feedback.
   other_color_labels?: string[];
+  // Approve / reject (issue 744). The tallies follow show_feedback_to_guests
+  // like color_label_count; the viewer's own decision and reason do not.
+  approved_count?: number;
+  rejected_count?: number;
+  my_decision?: 'approved' | 'rejected' | null;
+  my_decision_reason?: string | null;
 }
 
 // Download resolutions (#858).

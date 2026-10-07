@@ -91,6 +91,7 @@ interface FormData {
     allow_favorites: boolean;
     allow_reactions: boolean;
     allow_color_labels: boolean;
+    allow_decisions?: boolean;
     // Optional, mirroring the shared FeedbackSettings contract — the
     // <FeedbackSettings> editor's onChange emits that shape.
     keybind_mode?: 'colors' | 'lightroom';
@@ -183,6 +184,7 @@ export const CreateEventPage: React.FC = () => {
       allow_favorites: true,
       allow_reactions: true,
       allow_color_labels: false,
+      allow_decisions: false,
       keybind_mode: 'colors',
       require_name_email: false,
       moderate_comments: true,
@@ -387,6 +389,7 @@ export const CreateEventPage: React.FC = () => {
         allow_comments: publicSettings.event_default_allow_comments !== false,
         allow_reactions: publicSettings.event_default_allow_reactions !== false,
         allow_color_labels: publicSettings.event_default_allow_color_labels === true,
+        allow_decisions: publicSettings.event_default_allow_decisions === true,
         keybind_mode: publicSettings.event_default_keybind_mode === 'lightroom' ? 'lightroom' : 'colors'
       }
     }));
@@ -627,6 +630,7 @@ export const CreateEventPage: React.FC = () => {
       allow_favorites: feedbackSettings.allow_favorites,
       allow_reactions: feedbackSettings.allow_reactions,
       allow_color_labels: feedbackSettings.allow_color_labels,
+      allow_decisions: feedbackSettings.allow_decisions,
       keybind_mode: feedbackSettings.keybind_mode,
       require_name_email: feedbackSettings.require_name_email,
       moderate_comments: feedbackSettings.moderate_comments,

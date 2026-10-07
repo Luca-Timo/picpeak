@@ -1190,7 +1190,8 @@
       "firstLookKeywords": "Palabras clave",
       "firstLookKeywordsHelp": "Separadas por comas. Se ignoran mayúsculas, espacios, guiones y guiones bajos, así que «FirstLook» también coincide con «first-look».",
       "deliveryDays": "Galería completa vence tras (días)",
-      "deliveryDaysHelp": "Si una primera selección empieza sin fecha prometida, la galería completa vence tantos días después de la fecha del evento."
+      "deliveryDaysHelp": "Si una primera selección empieza sin fecha prometida, la galería completa vence tantos días después de la fecha del evento.",
+      "defaultAllowDecisions": "Aprobar / rechazar cada foto"
     },
     "imageSecurity": {
       "title": "Proteger Imagen",
@@ -1748,7 +1749,9 @@
       "photosReviewApproved_one": "{{count}} subida del equipo aprobada en {{eventName}}",
       "photosReviewApproved_other": "{{count}} subidas del equipo aprobadas en {{eventName}}",
       "photosReviewRejected_one": "{{count}} subida del equipo rechazada en {{eventName}}",
-      "photosReviewRejected_other": "{{count}} subidas del equipo rechazadas en {{eventName}}"
+      "photosReviewRejected_other": "{{count}} subidas del equipo rechazadas en {{eventName}}",
+      "photoDecision": "Foto aprobada o rechazada en {{eventName}}",
+      "guestFeedbackDecision": "Un invitado aprobó o rechazó una foto en {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Todas las notificaciones marcadas como leídas",
@@ -1855,7 +1858,9 @@
       "delivery_first_look_started": "Primera selección iniciada para {{eventName}}",
       "delivery_completed": "Galería completa entregada: {{eventName}}",
       "delivery_due_soon": "La galería completa de {{eventName}} vence pronto",
-      "delivery_overdue": "La galería completa de {{eventName}} está atrasada"
+      "delivery_overdue": "La galería completa de {{eventName}} está atrasada",
+      "photo_decision": "Foto aprobada o rechazada en {{eventName}}",
+      "guest_feedback_decision": "Un invitado aprobó o rechazó una foto en {{eventName}}"
     },
     "userManagement": "Gestión de usuarios",
     "inviteUser": "Invitar usuario",
@@ -1919,7 +1924,9 @@
       "individualVideos": "Vídeos individuales",
       "collages": "Collages",
       "noPosterFrame": "Sin fotograma de portada",
-      "noPosterFrameRetry": "Volver a tomar el fotograma de portada"
+      "noPosterFrameRetry": "Volver a tomar el fotograma de portada",
+      "approvedBy": "Aprobada: {{value}}",
+      "rejectedBy": "Rechazada: {{value}}"
     },
     "guests": {
       "columns": {
@@ -2788,7 +2795,9 @@
       "keybindColors": "Solo colores (lo más sencillo)",
       "keybindColorsDesc": "1 = verde (1.ª opción), 2 = amarillo (2.ª opción), 3 = rojo (descartada)",
       "keybindLightroom": "Valores por defecto de Lightroom",
-      "keybindLightroomDesc": "1-5 asignan estrellas, 6-9 asignan rojo / amarillo / verde / azul"
+      "keybindLightroomDesc": "1-5 asignan estrellas, 6-9 asignan rojo / amarillo / verde / azul",
+      "decisions": "Aprobar / rechazar cada foto",
+      "decisionsDesc": "Los invitados aprueban o rechazan cada foto, opcionalmente indicando el motivo. Puedes filtrar y exportar según su decisión"
     },
     "colorLabels": {
       "red": "Rojo",
@@ -2803,7 +2812,28 @@
     "removeColorLabel": "Quitar la etiqueta {{color}}",
     "setColorLabel": "Marcar como {{color}}",
     "markedAs": "Marcado como {{color}}",
-    "alsoMarkedBy": "También marcado por otros: {{colors}}"
+    "alsoMarkedBy": "También marcado por otros: {{colors}}",
+    "types": {
+      "decision": "Aprobar / rechazar"
+    },
+    "decisions": {
+      "approved": "Aprobada",
+      "rejected": "Rechazada"
+    },
+    "totalDecisions": "Aprobadas / rechazadas",
+    "decisionsTitle": "Aprobar / rechazar",
+    "decisionApprove": "Aprobar",
+    "decisionReject": "Rechazar",
+    "decisionClear": "Retirar tu decisión",
+    "decisionReasonEdit": "¿Por qué? (opcional)",
+    "decisionReasonLabel": "¿Por qué rechazas esta foto? (opcional)",
+    "decisionReasonPlaceholder": "p. ej. ojos cerrados, no es mi mejor lado",
+    "decisionReasonSave": "Guardar motivo",
+    "decisionReasonBlocked": "Tu motivo contiene palabras que no están permitidas aquí.",
+    "decisionError": "No se pudo guardar tu decisión",
+    "decisionType": "tu decisión",
+    "youApproved": "Has aprobado esta foto",
+    "youRejected": "Has rechazado esta foto"
   },
   "filter": {
     "feedbackFilters": "Filtros de feedback",
@@ -2825,7 +2855,11 @@
     "colorLabels": "Etiquetas de color",
     "showOnlyColor": "Mostrar solo {{color}}",
     "myColorLabels": "Tus marcas",
-    "showOnlyMyColor": "Mostrar solo mis marcas en {{color}}"
+    "showOnlyMyColor": "Mostrar solo mis marcas en {{color}}",
+    "decisions": "Aprobar / rechazar",
+    "decisionApproved": "Aprobadas",
+    "decisionRejected": "Rechazadas",
+    "decisionUndecided": "Sin decidir"
   },
   "adminLogin": {
     "title": "Acceso admin",

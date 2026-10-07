@@ -1155,7 +1155,8 @@
       "firstLookKeywords": "Trefwoorden",
       "firstLookKeywordsHelp": "Gescheiden door komma's. Hoofdletters, spaties, streepjes en underscores worden genegeerd, dus „FirstLook” past ook op „first-look”.",
       "deliveryDays": "Volledige galerie verschuldigd na (dagen)",
-      "deliveryDaysHelp": "Als een eerste selectie start zonder toegezegde datum, is de volledige galerie zoveel dagen na de evenementdatum verschuldigd."
+      "deliveryDaysHelp": "Als een eerste selectie start zonder toegezegde datum, is de volledige galerie zoveel dagen na de evenementdatum verschuldigd.",
+      "defaultAllowDecisions": "Goedkeuren / afwijzen per foto"
     },
     "imageSecurity": {
       "title": "Afbeeldingsbeveiliging",
@@ -1916,7 +1917,9 @@
       "photosReviewApproved_one": "{{count}} teamupload goedgekeurd in {{eventName}}",
       "photosReviewApproved_other": "{{count}} teamuploads goedgekeurd in {{eventName}}",
       "photosReviewRejected_one": "{{count}} teamupload afgewezen in {{eventName}}",
-      "photosReviewRejected_other": "{{count}} teamuploads afgewezen in {{eventName}}"
+      "photosReviewRejected_other": "{{count}} teamuploads afgewezen in {{eventName}}",
+      "photoDecision": "Foto goedgekeurd of afgewezen in {{eventName}}",
+      "guestFeedbackDecision": "Gast heeft een foto goedgekeurd of afgewezen in {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Alle meldingen als gelezen gemarkeerd",
@@ -1978,7 +1981,9 @@
         "filterLabel": "Filteren op maker",
         "filterAll": "Alle namen",
         "filterNone": "Geen naam"
-      }
+      },
+      "approvedBy": "Goedgekeurd: {{value}}",
+      "rejectedBy": "Afgewezen: {{value}}"
     },
     "events": {
       "tabs": {
@@ -2176,7 +2181,9 @@
       "delivery_first_look_started": "Eerste selectie gestart voor {{eventName}}",
       "delivery_completed": "Volledige galerie geleverd: {{eventName}}",
       "delivery_due_soon": "Volledige galerie voor {{eventName}} is bijna verschuldigd",
-      "delivery_overdue": "Volledige galerie voor {{eventName}} is te laat"
+      "delivery_overdue": "Volledige galerie voor {{eventName}} is te laat",
+      "photo_decision": "Foto goedgekeurd of afgewezen in {{eventName}}",
+      "guest_feedback_decision": "Gast heeft een foto goedgekeurd of afgewezen in {{eventName}}"
     },
     "catalogedMedia": "{{size}} gecatalogiseerd",
     "storageUnavailable": "niet beschikbaar",
@@ -2916,7 +2923,9 @@
       "keybindColors": "Alleen kleuren (eenvoudigst)",
       "keybindColorsDesc": "1 = groen (1e keuze), 2 = geel (2e keuze), 3 = rood (afgewezen)",
       "keybindLightroom": "Lightroom-standaard",
-      "keybindLightroomDesc": "1-5 geven sterren, 6-9 geven rood / geel / groen / blauw"
+      "keybindLightroomDesc": "1-5 geven sterren, 6-9 geven rood / geel / groen / blauw",
+      "decisions": "Goedkeuren / afwijzen per foto",
+      "decisionsDesc": "Gasten keuren elke foto goed of wijzen hem af, eventueel met een reden. Jij filtert en exporteert op hun beslissing"
     },
     "settingsUpdated": "Feedbackinstellingen bijgewerkt",
     "settingsUpdateError": "Bijwerken instellingen mislukt",
@@ -2939,7 +2948,8 @@
       "like": "Likes",
       "comment": "Opmerkingen",
       "favorite": "Favorieten",
-      "reaction": "Reacties"
+      "reaction": "Reacties",
+      "decision": "Goedkeuren / afwijzen"
     },
     "allStatuses": "Alle statussen",
     "status": {
@@ -3006,7 +3016,25 @@
     "removeColorLabel": "Label {{color}} verwijderen",
     "setColorLabel": "Markeren als {{color}}",
     "markedAs": "Gemarkeerd als {{color}}",
-    "alsoMarkedBy": "Ook door anderen gemarkeerd: {{colors}}"
+    "alsoMarkedBy": "Ook door anderen gemarkeerd: {{colors}}",
+    "decisions": {
+      "approved": "Goedgekeurd",
+      "rejected": "Afgewezen"
+    },
+    "totalDecisions": "Goedgekeurd / afgewezen",
+    "decisionsTitle": "Goedkeuren / afwijzen",
+    "decisionApprove": "Goedkeuren",
+    "decisionReject": "Afwijzen",
+    "decisionClear": "Je beslissing intrekken",
+    "decisionReasonEdit": "Waarom? (optioneel)",
+    "decisionReasonLabel": "Waarom wijs je deze foto af? (optioneel)",
+    "decisionReasonPlaceholder": "bijv. ogen dicht, niet mijn beste kant",
+    "decisionReasonSave": "Reden opslaan",
+    "decisionReasonBlocked": "Je reden bevat woorden die hier niet zijn toegestaan.",
+    "decisionError": "Je beslissing kon niet worden opgeslagen",
+    "decisionType": "je beslissing",
+    "youApproved": "Je hebt deze foto goedgekeurd",
+    "youRejected": "Je hebt deze foto afgewezen"
   },
   "filter": {
     "feedbackFilters": "Feedbackfilters",
@@ -3029,7 +3057,11 @@
     "colorLabels": "Kleurlabels",
     "showOnlyColor": "Alleen {{color}} tonen",
     "myColorLabels": "Jouw markeringen",
-    "showOnlyMyColor": "Alleen mijn {{color}} markeringen tonen"
+    "showOnlyMyColor": "Alleen mijn {{color}} markeringen tonen",
+    "decisions": "Goedkeuren / afwijzen",
+    "decisionApproved": "Goedgekeurd",
+    "decisionRejected": "Afgewezen",
+    "decisionUndecided": "Onbeslist"
   },
   "export": {
     "button": "Exporteren",

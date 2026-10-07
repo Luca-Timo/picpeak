@@ -1202,7 +1202,8 @@
       "firstLookKeywords": "Ключевые слова",
       "firstLookKeywordsHelp": "Через запятую. Регистр, пробелы, дефисы и подчёркивания игнорируются, поэтому «FirstLook» совпадает и с «first-look».",
       "deliveryDays": "Срок полной галереи через (дней)",
-      "deliveryDaysHelp": "Если первая подборка начинается без обещанной даты, срок полной галереи наступает через столько дней после даты события."
+      "deliveryDaysHelp": "Если первая подборка начинается без обещанной даты, срок полной галереи наступает через столько дней после даты события.",
+      "defaultAllowDecisions": "Одобрение / отклонение каждого фото"
     },
     "imageSecurity": {
       "title": "Защита изображений",
@@ -1984,7 +1985,9 @@
       "photosReviewRejected_one": "{{count}} загрузка команды отклонена в {{eventName}}",
       "photosReviewRejected_few": "{{count}} загрузки команды отклонены в {{eventName}}",
       "photosReviewRejected_many": "{{count}} загрузок команды отклонено в {{eventName}}",
-      "photosReviewRejected_other": "{{count}} загрузок команды отклонено в {{eventName}}"
+      "photosReviewRejected_other": "{{count}} загрузок команды отклонено в {{eventName}}",
+      "photoDecision": "Фото одобрено или отклонено в {{eventName}}",
+      "guestFeedbackDecision": "Гость одобрил или отклонил фото в {{eventName}}"
     },
     "notificationToasts": {
       "markedAllRead": "Все уведомления отмечены как прочитанные",
@@ -2048,7 +2051,9 @@
         "filterLabel": "Фильтр по автору",
         "filterAll": "Все имена",
         "filterNone": "Без имени"
-      }
+      },
+      "approvedBy": "Одобрено: {{value}}",
+      "rejectedBy": "Отклонено: {{value}}"
     },
     "events": {
       "tabs": {
@@ -2254,7 +2259,9 @@
       "delivery_first_look_started": "Первая подборка начата для «{{eventName}}»",
       "delivery_completed": "Полная галерея выдана: {{eventName}}",
       "delivery_due_soon": "Скоро срок полной галереи «{{eventName}}»",
-      "delivery_overdue": "Полная галерея «{{eventName}}» просрочена"
+      "delivery_overdue": "Полная галерея «{{eventName}}» просрочена",
+      "photo_decision": "Фото одобрено или отклонено в {{eventName}}",
+      "guest_feedback_decision": "Гость одобрил или отклонил фото в {{eventName}}"
     },
     "catalogedMedia": "{{size}} в каталоге",
     "storageUnavailable": "недоступно",
@@ -2994,7 +3001,9 @@
       "keybindColors": "Только цвета (самый простой вариант)",
       "keybindColorsDesc": "1 — зелёный (1-й выбор), 2 — жёлтый (2-й выбор), 3 — красный (отклонено)",
       "keybindLightroom": "Как в Lightroom",
-      "keybindLightroomDesc": "1–5 ставят звёзды, 6–9 — красный / жёлтый / зелёный / синий"
+      "keybindLightroomDesc": "1–5 ставят звёзды, 6–9 — красный / жёлтый / зелёный / синий",
+      "decisions": "Одобрение / отклонение каждого фото",
+      "decisionsDesc": "Гости одобряют или отклоняют каждое фото и при желании указывают причину. Вы фильтруете и экспортируете по их решению"
     },
     "settingsUpdated": "Настройки отзывов обновлены",
     "settingsUpdateError": "Не удалось обновить настройки",
@@ -3017,7 +3026,8 @@
       "like": "Лайки",
       "comment": "Комментарии",
       "favorite": "Избранное",
-      "reaction": "Реакции"
+      "reaction": "Реакции",
+      "decision": "Одобрение / отклонение"
     },
     "allStatuses": "Все статусы",
     "status": {
@@ -3094,7 +3104,25 @@
     "removeColorLabel": "Убрать метку «{{color}}»",
     "setColorLabel": "Отметить как «{{color}}»",
     "markedAs": "Отмечено как «{{color}}»",
-    "alsoMarkedBy": "Также отмечено другими: {{colors}}"
+    "alsoMarkedBy": "Также отмечено другими: {{colors}}",
+    "decisions": {
+      "approved": "Одобрено",
+      "rejected": "Отклонено"
+    },
+    "totalDecisions": "Одобрено / отклонено",
+    "decisionsTitle": "Одобрение / отклонение",
+    "decisionApprove": "Одобрить",
+    "decisionReject": "Отклонить",
+    "decisionClear": "Отменить решение",
+    "decisionReasonEdit": "Почему? (необязательно)",
+    "decisionReasonLabel": "Почему вы отклоняете это фото? (необязательно)",
+    "decisionReasonPlaceholder": "например, закрыты глаза, неудачный ракурс",
+    "decisionReasonSave": "Сохранить причину",
+    "decisionReasonBlocked": "Причина содержит недопустимые слова.",
+    "decisionError": "Не удалось сохранить решение",
+    "decisionType": "ваше решение",
+    "youApproved": "Вы одобрили это фото",
+    "youRejected": "Вы отклонили это фото"
   },
   "filter": {
     "feedbackFilters": "Фильтры отзывов",
@@ -3117,7 +3145,11 @@
     "colorLabels": "Цветовые метки",
     "showOnlyColor": "Показать только «{{color}}»",
     "myColorLabels": "Ваши отметки",
-    "showOnlyMyColor": "Показать только мои отметки «{{color}}»"
+    "showOnlyMyColor": "Показать только мои отметки «{{color}}»",
+    "decisions": "Одобрение / отклонение",
+    "decisionApproved": "Одобрено",
+    "decisionRejected": "Отклонено",
+    "decisionUndecided": "Без решения"
   },
   "adminLogin": {
     "title": "Вход для администратора",
