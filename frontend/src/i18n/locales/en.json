@@ -2213,7 +2213,6 @@
     },
     "recipients": {
       "andMore": "{{names}} +{{count}} more",
-      "customerAccounts": "Customer accounts",
       "galleryEmail": "Gallery email",
       "portalEmail": "Customer portal email",
       "previewTitle": "Notified when you publish the gallery:",

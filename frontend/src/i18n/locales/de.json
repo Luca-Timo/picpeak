@@ -2751,7 +2751,6 @@
     },
     "recipients": {
       "andMore": "{{names}} +{{count}} weitere",
-      "customerAccounts": "Kundenkonten",
       "galleryEmail": "Galerie-E-Mail",
       "portalEmail": "Kundenportal-E-Mail",
       "previewTitle": "Benachrichtigt, wenn Sie die Galerie veröffentlichen:",

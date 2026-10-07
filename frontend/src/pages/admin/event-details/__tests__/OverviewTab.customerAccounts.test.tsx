@@ -1,7 +1,7 @@
 /**
  * The Details card lists the customer accounts assigned in Settings →
- * General, each linking to its customer page when that page is reachable
- * (the `clients` flag, `customerPortal` or `newsletters`, and customers.view).
+ * General while the customer portal is on, each linking to its customer page
+ * when that page is reachable (the `clients` flag and customers.view).
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -102,16 +102,20 @@ describe('OverviewTab — assigned customer accounts', () => {
     expect(within(accountsRow()).queryAllByRole('link')).toHaveLength(0);
   });
 
-  it('shows the names without links when neither the portal nor newsletters is on', () => {
+  // The row is the customer portal's (PR 1819 gated it on the flag), so with
+  // the portal off there is no row, and no link to a page the install may
+  // not serve: newsletters alone opens the customer page, but assigning
+  // portal accounts to a gallery is a portal feature.
+  it('has no row with the customer portal off', () => {
     flagState.flags = { clients: true, customerPortal: false, newsletters: false };
     renderTab();
-    expect(within(accountsRow()).queryAllByRole('link')).toHaveLength(0);
+    expect(screen.queryByText('Customer accounts')).toBeNull();
   });
 
-  it('links the accounts on a newsletters-only install', () => {
+  it('has no row with the portal off on a newsletters-only install either', () => {
     flagState.flags = { clients: true, customerPortal: false, newsletters: true };
     renderTab();
-    expect(within(accountsRow()).getAllByRole('link')).toHaveLength(3);
+    expect(screen.queryByText('Customer accounts')).toBeNull();
   });
 
   it('has no row when no account is assigned', () => {
