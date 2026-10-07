@@ -1603,6 +1603,20 @@ module.exports = (router) => {
         return res.status(404).json({ error: 'Event not found' });
       }
 
+      // A team upload still under review (issue 743) is not the gallery's to
+      // show yet, and the hero is the public link-preview cover; it is
+      // chosen once the owner has approved the photo.
+      if (updates.hero_photo_id != null
+        && Number(updates.hero_photo_id) !== Number(event.hero_photo_id)) {
+        const underReview = await db('photos')
+          .where({ id: updates.hero_photo_id, event_id: event.id })
+          .whereNotNull('moderation_status')
+          .first('id');
+        if (underReview) {
+          return res.status(409).json({ error: 'Photo is awaiting review', code: 'PHOTO_UNDER_REVIEW' });
+        }
+      }
+
       const currentRequirePassword = parseBooleanInput(event.require_password, true);
 
       // Resubmitting the current client password is not a change: keep the hash
@@ -1890,10 +1904,22 @@ module.exports = (router) => {
       }
 
       // Team members (issue 743): replaced as one set, validated above.
+      // Its own transaction after the event UPDATE (a db-level helper above
+      // would deadlock SQLite inside one), so a failure here comes after the
+      // gallery edits are already saved: say exactly that, and still audit
+      // the edits, rather than a 500 claiming nothing was saved.
       let teamChange = null;
+      let teamError = null;
       if (assignedAdminIds) {
-        teamChange = await db.transaction((trx) => eventAdminAssignments.setAssignedAdmins(
-          parseInt(id, 10), assignedAdminIds, req.admin.id, trx));
+        try {
+          teamChange = await db.transaction((trx) => eventAdminAssignments.setAssignedAdmins(
+            parseInt(id, 10), assignedAdminIds, req.admin.id, trx));
+        } catch (e) {
+          teamError = e;
+          logger.error('Failed to set team members on event update', {
+            eventId: id, error: e.message, stack: e.stack,
+          });
+        }
       }
 
       // Log activity
@@ -1916,6 +1942,12 @@ module.exports = (router) => {
         downloadZipService.invalidate(parseInt(id));
       }
 
+      if (teamError) {
+        return res.status(500).json({
+          error: 'Gallery saved, but the team could not be saved. Try again.',
+          code: 'TEAM_NOT_SAVED',
+        });
+      }
       res.json({ message: 'Event updated successfully' });
     } catch (error) {
       if (error.isOperational) return res.status(error.statusCode).json({ error: error.message, code: error.code });

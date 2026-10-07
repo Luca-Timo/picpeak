@@ -1246,12 +1246,19 @@ router.post('/:eventId/photos/bulk-update', adminAuth, requirePermission('photos
         .update(otherUpdates);
     }
     if (visibilityUpdate !== undefined) {
-      const changed = await db('photos')
+      // Counted, not derived from the update's row count: PostgreSQL leaves an
+      // unchanged row out of it, and foreign ids are not "under review".
+      const [{ count }] = await db('photos')
+        .whereIn('id', photoIds)
+        .where('event_id', eventId)
+        .whereNotNull('moderation_status')
+        .count('id as count');
+      skippedUnderReview = Number(count) || 0;
+      await db('photos')
         .whereIn('id', photoIds)
         .where('event_id', eventId)
         .whereNull('moderation_status')
         .update({ visibility: visibilityUpdate });
-      skippedUnderReview = photoIds.length - changed;
     }
 
     // Visibility/category changes alter the guest download bundle — drop the

@@ -185,7 +185,7 @@ export const PhotoDecision: React.FC<PhotoDecisionProps> = ({
 
       {showReason && myDecision === 'rejected' && (
         <form
-          className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] p-3 rounded-lg shadow-xl bg-surface border border-surface z-40 space-y-2"
+          className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72 p-3 rounded-lg shadow-xl bg-surface border border-surface z-40 space-y-2"
           onSubmit={(e) => {
             e.preventDefault();
             void submit({ decision: 'rejected', reason: reasonDraft });

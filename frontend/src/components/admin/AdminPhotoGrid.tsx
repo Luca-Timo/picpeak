@@ -397,15 +397,15 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
     const uploader = photo.uploaded_by_admin?.username;
     return (
       <span
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${colors}`}
+        className={`inline-flex max-w-full items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${colors}`}
         title={(uploader
           ? t('photos.review.uploadedBy', 'Uploaded by {{name}}', { name: uploader })
           : t('photos.review.hiddenUntilApproved', 'Hidden from guests and clients until approved')) as string}
         data-testid={`admin-photo-review-badge-${photo.id}`}
       >
-        <ClipboardCheck className="w-3 h-3" />
-        {pending ? t('photos.review.pendingBadge', 'Pending review') : t('photos.review.rejectedBadge', 'Rejected')}
-        {uploader && <span className="font-normal opacity-90">· {uploader}</span>}
+        <ClipboardCheck className="w-3 h-3 shrink-0" />
+        <span className="shrink-0">{pending ? t('photos.review.pendingBadge', 'Pending review') : t('photos.review.rejectedBadge', 'Rejected')}</span>
+        {uploader && <span className="min-w-0 truncate font-normal opacity-90">· {uploader}</span>}
       </span>
     );
   };
@@ -648,7 +648,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                 explanation. It shares the top-left corner with the category
                 badge, so that one drops a row while this is showing. */}
             {photo.moderation_status && (
-              <div className="absolute top-2 left-2 z-20 max-w-[calc(100%-3rem)] truncate">
+              <div className="absolute top-2 left-2 z-20 flex max-w-[calc(100%-3rem)]">
                 {reviewBadge(photo, 'solid')}
               </div>
             )}

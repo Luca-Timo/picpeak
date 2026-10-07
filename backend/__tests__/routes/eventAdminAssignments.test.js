@@ -101,6 +101,7 @@ describe('gallery team members and upload review (issue 743)', () => {
     app.use(cookieParser());
     app.use('/api/admin/events', require('../../src/routes/adminEvents'));
     app.use('/api/admin/photos', require('../../src/routes/adminPhotos'));
+    app.use('/api/admin/external-media', require('../../src/routes/adminExternalMedia'));
     app.use('/api/gallery', require('../../src/routes/gallery'));
     // eslint-disable-next-line no-unused-vars
     app.use((err, req, res, next) => {
@@ -286,6 +287,24 @@ describe('gallery team members and upload review (issue 743)', () => {
       expect(bulk.status).toBe(200);
       expect(bulk.body.skipped_under_review).toBe(1);
       expect((await db('photos').where({ id: pendingId }).first()).visibility).toBe('hidden');
+    });
+
+    it('does not make a photo under review the public cover', async () => {
+      const res = await as(request(app).put(`/api/admin/events/${id.event}`), 'owner')
+        .send({ hero_photo_id: pendingId });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('PHOTO_UNDER_REVIEW');
+      expect((await db('events').where({ id: id.event }).first()).hero_photo_id).not.toBe(pendingId);
+    });
+
+    it('refuses a folder import from a team member whose uploads are reviewed', async () => {
+      const before = await db('photos').where('event_id', id.event).count('id as c').first();
+      const res = await as(request(app).post(`/api/admin/external-media/events/${id.event}/import-external`), 'team')
+        .send({ external_path: 'anything' });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('UPLOAD_REVIEW_REQUIRED');
+      const after = await db('photos').where('event_id', id.event).count('id as c').first();
+      expect(Number(after.c)).toBe(Number(before.c));
     });
 
     it('lets only the owner approve or reject', async () => {
