@@ -686,7 +686,8 @@ async function processPhoto(photoId) {
   if (exifCredit) {
     await db('photos')
       .where({ id: photoId, path: photo.path, filename: photo.filename })
-      .whereNull('credit_source')
+      // An account credit (issue 743) is the fallback EXIF replaces.
+      .where((q) => q.whereNull('credit_source').orWhere('credit_source', 'account'))
       .update({ credit_name: exifCredit, credit_source: 'exif' });
   }
 

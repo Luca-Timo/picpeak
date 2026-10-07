@@ -335,6 +335,26 @@ describe('gallery team members and upload review (issue 743)', () => {
       expect(badIds.status).toBe(400);
     });
 
+    it('credits an upload without an EXIF name to the account credit name, never the login', async () => {
+      const { creditOpenForExif, accountCreditName } = require('../../src/services/photoCredit');
+      // No credit name: no credit at all, not the username.
+      await db('admin_users').where({ id: id.owner }).update({ credit_name: null });
+      const bare = await upload('owner', id.event);
+      expect(await db('photos').where({ id: bare.body.photo_ids[0] }).first())
+        .toMatchObject({ credit_name: null, credit_source: null });
+
+      await db('admin_users').where({ id: id.owner }).update({ credit_name: 'Studio Lena' });
+      const named = await upload('owner', id.event);
+      const row = await db('photos').where({ id: named.body.photo_ids[0] }).first();
+      expect(row).toMatchObject({ credit_name: 'Studio Lena', credit_source: 'account' });
+      // EXIF found later by the worker or the backfill still replaces it.
+      expect(creditOpenForExif(row)).toBe(true);
+
+      expect(accountCreditName('  ')).toEqual({ value: null });
+      expect(accountCreditName('<>').error).toBeTruthy();
+      await db('admin_users').where({ id: id.owner }).update({ credit_name: null });
+    });
+
     it('lets a project lead holding photos.review review, and does not hold its own uploads', async () => {
       // Migration 269 projects photos.review onto the roles holding both
       // photos.edit and events.edit; Team Photographer holds only photos.edit.

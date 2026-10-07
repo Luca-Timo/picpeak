@@ -71,7 +71,8 @@
     "confirmCancelInvitation": {
       "title": "Annuler l'invitation",
       "message": "Êtes-vous sûr de vouloir annuler l'invitation pour {{email}} ?"
-    }
+    },
+    "creditNameHelp": "Indiqué sur les photos importées par ce compte lorsque le fichier ne contient pas de nom de photographe dans ses métadonnées."
   },
   "common": {
     "loading": "Chargement...",
@@ -974,7 +975,9 @@
       "accountSaveSuccess": "Détails du compte mis à jour",
       "adminLanguage": "Votre langue d’administration",
       "adminLanguageHelp": "S'applique à l'espace d'administration, pour vous sur cet appareil uniquement. L'effet est immédiat — inutile d'enregistrer.",
-      "customerLanguage": "Langue de la galerie et des invités"
+      "customerLanguage": "Langue de la galerie et des invités",
+      "accountCreditName": "Crédit photo",
+      "accountCreditNameHelp": "Indiqué sur les photos que vous importez lorsque le fichier ne contient pas de nom de photographe dans ses métadonnées. Laissez vide pour aucun crédit."
     },
     "publicSite": {
       "badge": "Page d'accueil publique",

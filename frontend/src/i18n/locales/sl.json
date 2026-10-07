@@ -665,7 +665,8 @@
     "confirmEmailForSsoDialog": {
       "title": "Potrdim ta e-poštni naslov za SSO?",
       "message": "Želite potrditi {{email}} kot naslov uporabnika {{name}}? Prijava z enotno prijavo, ki prispe s tem preverjenim e-poštnim naslovom, bo nato povezana s tem računom. Sam naslov se ne spremeni. Potrdite ga le, če veste, da pripada tej osebi."
-    }
+    },
+    "creditNameHelp": "Navedeno pri fotografijah, ki jih naloži ta račun, če datoteka v metapodatkih nima imena fotografa."
   },
   "systemHealth": {
     "retry": "Ponovi",
@@ -2118,7 +2119,9 @@
       "timeFormatHelp": "Določa prikaz časa v skrbniških pogledih, straneh za stranke in PDF-jih. Shranjevanje ostane 24-urno (HH:mm); spremeni se samo prikaz.",
       "adminLanguage": "Vaš jezik skrbniškega dela",
       "adminLanguageHelp": "Velja za skrbniški del, samo za vas na tej napravi. Učinkuje takoj — shranjevanje ni potrebno.",
-      "customerLanguage": "Jezik galerije in gostov"
+      "customerLanguage": "Jezik galerije in gostov",
+      "accountCreditName": "Avtor fotografije",
+      "accountCreditNameHelp": "Navedeno pri fotografijah, ki jih naložite, če datoteka v metapodatkih nima imena fotografa. Pustite prazno, če ne želite navedbe."
     },
     "publicSite": {
       "badge": "Javna pristajalna stran",

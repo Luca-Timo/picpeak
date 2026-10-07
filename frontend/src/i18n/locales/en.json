@@ -665,7 +665,8 @@
     "confirmEmailForSsoDialog": {
       "title": "Confirm this email for SSO?",
       "message": "Confirm {{email}} as {{name}}'s address? A single sign-on login that arrives with this verified email will then be linked to this account. The address itself is not changed. Only confirm it if you know it belongs to them."
-    }
+    },
+    "creditNameHelp": "Credited on photos this account uploads when the file has no photographer name in its metadata."
   },
   "systemHealth": {
     "retry": "Retry",
@@ -2291,7 +2292,9 @@
       "timeFormatHelp": "Controls how times render across admin views, customer-facing pages, and PDFs. Storage stays 24-hour (HH:mm); only the display switches.",
       "adminLanguage": "Your admin language",
       "adminLanguageHelp": "Applies to the admin area, for you on this device only. It takes effect immediately — no need to save.",
-      "customerLanguage": "Gallery & guest language"
+      "customerLanguage": "Gallery & guest language",
+      "accountCreditName": "Photo credit",
+      "accountCreditNameHelp": "Credited on photos you upload when the file has no photographer name in its metadata. Leave empty for no credit."
     },
     "publicSite": {
       "badge": "Public Landing",

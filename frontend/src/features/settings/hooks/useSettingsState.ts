@@ -298,13 +298,16 @@ export function useSettingsState() {
 
   const [accountForm, setAccountForm] = useState({
     username: '',
-    email: ''
+    email: '',
+    creditName: ''
   });
   const [accountErrors, setAccountErrors] = useState<Record<string, string>>({});
-  const accountDirty = !!adminProfile && (accountForm.username !== (adminProfile.username || '') || accountForm.email !== (adminProfile.email || ''));
+  const accountDirty = !!adminProfile && (accountForm.username !== (adminProfile.username || '')
+    || accountForm.email !== (adminProfile.email || '')
+    || accountForm.creditName !== (adminProfile.creditName || ''));
   const discardAccount = () => {
     if (!adminProfile) return;
-    setAccountForm({ username: adminProfile.username || '', email: adminProfile.email || '' });
+    setAccountForm({ username: adminProfile.username || '', email: adminProfile.email || '', creditName: adminProfile.creditName || '' });
     setAccountErrors({});
   };
 
@@ -460,7 +463,8 @@ export function useSettingsState() {
     if (adminProfile) {
       setAccountForm({
         username: adminProfile.username || '',
-        email: adminProfile.email || ''
+        email: adminProfile.email || '',
+        creditName: adminProfile.creditName || ''
       });
     }
   }, [adminProfile]);
@@ -607,13 +611,14 @@ export function useSettingsState() {
   });
 
   const updateAdminProfileMutation = useMutation({
-    mutationFn: (payload: { username: string; email: string }) => adminService.updateAdminProfile(payload),
+    mutationFn: (payload: { username: string; email: string; credit_name?: string | null }) => adminService.updateAdminProfile(payload),
     onSuccess: (updatedUser) => {
       toast.success(t('settings.general.accountSaveSuccess'));
       setAccountErrors({});
       setAccountForm({
         username: updatedUser.username,
-        email: updatedUser.email
+        email: updatedUser.email,
+        creditName: updatedUser.creditName || ''
       });
       updateUserProfile(updatedUser);
       queryClient.invalidateQueries({ queryKey: ['admin-profile'] });
@@ -679,7 +684,7 @@ export function useSettingsState() {
   });
 
   // Handlers
-  const handleAccountChange = (field: 'username' | 'email') => (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAccountChange = (field: 'username' | 'email' | 'creditName') => (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
     setAccountForm((prev) => ({ ...prev, [field]: value }));
     if (accountErrors[field]) {
@@ -715,7 +720,8 @@ export function useSettingsState() {
 
     updateAdminProfileMutation.mutate({
       username: trimmedUsername,
-      email: trimmedEmail
+      email: trimmedEmail,
+      credit_name: accountForm.creditName.trim() || null
     });
   };
 

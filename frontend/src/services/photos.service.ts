@@ -48,7 +48,7 @@ export interface AdminPhoto {
   // Photo credit (#1561). The admin always sees it, whatever the event's
   // show-to-guests switch says.
   credit_name?: string | null;
-  credit_source?: 'guest' | 'exif' | 'manual' | null;
+  credit_source?: 'guest' | 'exif' | 'manual' | 'account' | null;
   uploaded_by?: 'admin' | 'guest';
   // Folders (issue 1786): the folder the photo lives in (null = gallery
   // root), and the open folder request it waits on, if any.

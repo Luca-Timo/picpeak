@@ -13,6 +13,7 @@ const { getBcryptRounds } = require('../utils/passwordValidation');
 const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 const { queueEmail } = require('./emailProcessor');
 const logger = require('../utils/logger');
+const { accountCreditName } = require('./photoCredit');
 const { ConflictError, NotFoundError, ValidationError, ForbiddenError } = require('../utils/errors');
 const { hasColumnCached } = require('../utils/schemaCache');
 
@@ -207,6 +208,10 @@ async function getAllAdminUsers() {
   if (await hasColumnCached('admin_users', 'email_link_eligible')) {
     columns.push('admin_users.email_link_eligible');
   }
+  // Photo credit for the account's uploads (issue 743, migration 269).
+  if (await hasColumnCached('admin_users', 'credit_name')) {
+    columns.push('admin_users.credit_name');
+  }
   return db('admin_users')
     .leftJoin('roles', 'roles.id', 'admin_users.role_id')
     .leftJoin('admin_users as creator', 'creator.id', 'admin_users.created_by')
@@ -235,6 +240,10 @@ async function getAdminUserById(id) {
   ];
   if (await hasColumnCached('admin_users', 'email_link_eligible')) {
     columns.push('admin_users.email_link_eligible');
+  }
+  // Photo credit for the account's uploads (issue 743, migration 269).
+  if (await hasColumnCached('admin_users', 'credit_name')) {
+    columns.push('admin_users.credit_name');
   }
   const user = await db('admin_users')
     .leftJoin('roles', 'roles.id', 'admin_users.role_id')
@@ -371,6 +380,14 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
     }
 
     allowedUpdates.role_id = updates.role_id;
+  }
+
+  // The name the account's uploads are credited with when a file carries no
+  // EXIF name (issue 743).
+  if (updates.credit_name !== undefined && await hasColumnCached('admin_users', 'credit_name')) {
+    const credit = accountCreditName(updates.credit_name);
+    if (credit.error) throw new ValidationError(credit.error);
+    allowedUpdates.credit_name = credit.value;
   }
 
   allowedUpdates.updated_at = new Date();

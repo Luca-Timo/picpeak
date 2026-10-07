@@ -665,7 +665,8 @@
     "confirmEmailForSsoDialog": {
       "title": "Diese E-Mail für SSO bestätigen?",
       "message": "{{email}} als Adresse von {{name}} bestätigen? Eine Single-Sign-on-Anmeldung mit dieser verifizierten E-Mail-Adresse wird danach mit diesem Konto verknüpft. Die Adresse selbst wird nicht geändert. Bestätigen Sie nur, wenn Sie wissen, dass sie dieser Person gehört."
-    }
+    },
+    "creditNameHelp": "Wird bei Uploads dieses Kontos als Fotograf angegeben, wenn die Datei keinen Fotografennamen in den Metadaten enthält."
   },
   "systemHealth": {
     "retry": "Erneut versuchen",
@@ -2829,7 +2830,9 @@
       "timeFormatHelp": "Steuert die Darstellung von Uhrzeiten in der Administration, auf kundenseitigen Seiten und in PDFs. Gespeichert wird weiterhin im 24-Stunden-Format (HH:mm) — nur die Anzeige ändert sich.",
       "adminLanguage": "Ihre Admin-Sprache",
       "adminLanguageHelp": "Gilt für den Admin-Bereich, nur für Sie auf diesem Gerät. Die Änderung wirkt sofort — Speichern ist nicht nötig.",
-      "customerLanguage": "Sprache für Galerie & Gäste"
+      "customerLanguage": "Sprache für Galerie & Gäste",
+      "accountCreditName": "Fotografen-Credit",
+      "accountCreditNameHelp": "Wird bei Ihren Uploads als Fotograf angegeben, wenn die Datei keinen Fotografennamen in den Metadaten enthält. Leer lassen für keinen Credit."
     },
     "publicSite": {
       "badge": "Öffentliche Landingpage",

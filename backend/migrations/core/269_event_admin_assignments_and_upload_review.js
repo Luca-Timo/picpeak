@@ -21,6 +21,8 @@
  *   photos.uploaded_by_admin_id      the admin account that ran an upload.
  *                                    `uploaded_by` keeps meaning admin/guest;
  *                                    watcher and import rows leave this NULL.
+ *   admin_users.credit_name          the name an account's uploads are credited
+ *                                    with when the file carries no EXIF name.
  *   permission photos.review         approve or reject team uploads on any
  *                                    gallery the holder reaches (a project
  *                                    lead assigned to it), and upload without
@@ -116,6 +118,13 @@ exports.up = async function up(knex) {
     }
   }
 
+  if (await knex.schema.hasTable('admin_users')
+    && !(await knex.schema.hasColumn('admin_users', 'credit_name'))) {
+    await knex.schema.alterTable('admin_users', (t) => {
+      t.string('credit_name', 100).nullable();
+    });
+  }
+
   await upReviewPermission(knex);
 };
 
@@ -140,5 +149,6 @@ exports.down = async function down(knex) {
   await knex.raw('DROP INDEX IF EXISTS photos_event_moderation_idx');
   await drop('photos', ['moderation_status', 'uploaded_by_admin_id']);
   await drop('events', ['review_contributor_uploads']);
+  await drop('admin_users', ['credit_name']);
   await knex.schema.dropTableIfExists('event_admin_assignments');
 };

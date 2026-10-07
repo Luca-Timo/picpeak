@@ -16,6 +16,7 @@ const { db } = require('../database/db');
 const { ownsEvent } = require('../middleware/ownership');
 const { roleHasPermission } = require('../middleware/permissions');
 const { parseBooleanInput } = require('../utils/parsers');
+const { accountCreditFields } = require('./photoCredit');
 
 const MODERATION_STATUSES = ['pending', 'rejected'];
 const MAX_MODERATION_IDS = 500;
@@ -37,11 +38,13 @@ async function holdsForReview(admin, event) {
 
 /**
  * The photo columns an admin upload is inserted with: which account ran it,
- * and, for a contributor under review, hidden + pending.
+ * that account's credit name as the no-EXIF fallback, and, for a contributor
+ * under review, hidden + pending.
  */
 async function adminUploadColumns(admin, event) {
   return {
     uploaded_by_admin_id: admin.id,
+    ...(await accountCreditFields(admin.id)),
     ...(await holdsForReview(admin, event) ? { visibility: 'hidden', moderation_status: 'pending' } : {}),
   };
 }

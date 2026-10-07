@@ -347,6 +347,9 @@ export interface AdminProfile {
   username: string;
   email: string;
   mustChangePassword?: boolean;
+  // The name this account's uploads are credited with when a file carries no
+  // EXIF name (issue 743). Null when unset.
+  creditName?: string | null;
   last_login?: string | null;
   last_login_ip?: string | null;
   created_at?: string;
@@ -629,7 +632,7 @@ export const adminService = {
     return response.data;
   },
 
-  async updateAdminProfile(data: { username: string; email: string }): Promise<AdminProfile> {
+  async updateAdminProfile(data: { username: string; email: string; credit_name?: string | null }): Promise<AdminProfile> {
     const response = await api.put<{ user: AdminProfile }>('/admin/auth/profile', data);
     return response.data.user;
   }

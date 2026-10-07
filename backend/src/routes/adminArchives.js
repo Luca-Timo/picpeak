@@ -451,7 +451,7 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
         if (!entry) return {};
         const fields = {};
         if (entry.uploaded_by === 'admin' || entry.uploaded_by === 'guest') fields.uploaded_by = entry.uploaded_by;
-        const source = ['guest', 'exif', 'manual'].includes(entry.credit_source) ? entry.credit_source : null;
+        const source = ['guest', 'exif', 'manual', 'account'].includes(entry.credit_source) ? entry.credit_source : null;
         const guestId = Number(entry.uploader_guest_id);
         const guestKept = Number.isInteger(guestId) && activeGuestIds.has(guestId);
         if (source === 'guest' && !guestKept) return fields;

@@ -71,7 +71,8 @@
     "confirmCancelInvitation": {
       "title": "Uitnodiging annuleren",
       "message": "Weet u zeker dat u de uitnodiging voor {{email}} wilt annuleren?"
-    }
+    },
+    "creditNameHelp": "Wordt vermeld bij foto's die dit account uploadt als het bestand geen fotografennaam in de metadata heeft."
   },
   "common": {
     "loading": "Laden...",
@@ -958,7 +959,9 @@
       "accountSaveSuccess": "Accountgegevens bijgewerkt",
       "adminLanguage": "Jouw beheertaal",
       "adminLanguageHelp": "Geldt voor het beheergedeelte, alleen voor jou op dit apparaat. Werkt direct — opslaan is niet nodig.",
-      "customerLanguage": "Taal voor galerie en gasten"
+      "customerLanguage": "Taal voor galerie en gasten",
+      "accountCreditName": "Fotocredit",
+      "accountCreditNameHelp": "Wordt vermeld bij foto's die je uploadt als het bestand geen fotografennaam in de metadata heeft. Laat leeg voor geen credit."
     },
     "publicSite": {
       "badge": "Openbare landingspagina",

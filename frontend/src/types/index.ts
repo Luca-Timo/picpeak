@@ -466,6 +466,9 @@ export interface AdminUser {
   createdAt?: string | null;
   updatedAt?: string | null;
   createdByUsername?: string;
+  // Photo credit for the account's uploads when a file has no EXIF name
+  // (issue 743).
+  creditName?: string | null;
   /**
    * Whether a first SSO login may link to this admin by email
    * (admin_users.email_link_eligible, migration 227). Undefined on a backend

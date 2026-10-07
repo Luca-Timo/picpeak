@@ -71,7 +71,8 @@
     "confirmCancelInvitation": {
       "title": "Cancelar invitación",
       "message": "¿Seguro que quieres cancelar la invitación para {{email}}?"
-    }
+    },
+    "creditNameHelp": "Se muestra en las fotos que sube esta cuenta cuando el archivo no tiene nombre de fotógrafo en sus metadatos."
   },
   "common": {
     "loading": "Cargando...",
@@ -985,7 +986,9 @@
       "accountSaveSuccess": "Detalles de la cuenta actualizados",
       "adminLanguage": "Tu idioma de administración",
       "adminLanguageHelp": "Se aplica al área de administración, solo para ti en este dispositivo. Surte efecto de inmediato — no hace falta guardar.",
-      "customerLanguage": "Idioma de la galería y los invitados"
+      "customerLanguage": "Idioma de la galería y los invitados",
+      "accountCreditName": "Crédito fotográfico",
+      "accountCreditNameHelp": "Se muestra en las fotos que subes cuando el archivo no tiene nombre de fotógrafo en sus metadatos. Déjalo vacío para no mostrar crédito."
     },
     "publicSite": {
       "tabLabel": "Sitio público",
