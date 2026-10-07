@@ -86,6 +86,7 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     allow_favorites: allowFavoritesInput,
     allow_reactions: allowReactionsInput,
     allow_color_labels: allowColorLabelsInput,
+    allow_decisions: allowDecisionsInput,
     keybind_mode: keybindModeInput,
     require_name_email = false,
     moderate_comments = true,
@@ -260,6 +261,7 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     allow_favorites: allowFavoritesInput,
     allow_reactions: allowReactionsInput,
     allow_color_labels: allowColorLabelsInput,
+    allow_decisions: allowDecisionsInput,
     keybind_mode: keybindModeInput,
   }, await resolveEventFeedbackDefaults());
 
@@ -543,6 +545,7 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
         allow_favorites: formatBoolean(feedbackDefaults.allow_favorites),
         allow_reactions: formatBoolean(feedbackDefaults.allow_reactions),
         allow_color_labels: formatBoolean(feedbackDefaults.allow_color_labels),
+        allow_decisions: formatBoolean(feedbackDefaults.allow_decisions),
         keybind_mode: feedbackDefaults.keybind_mode,
         require_name_email: formatBoolean(require_name_email),
         moderate_comments: formatBoolean(moderate_comments),

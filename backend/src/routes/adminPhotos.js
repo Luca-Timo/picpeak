@@ -16,6 +16,7 @@ const {
 } = require('../services/downloadFilenameService');
 const { escapeLikePattern, likeWithEscape } = require('../utils/sqlSecurity');
 const { COLOR_LABELS, dominantColorLabel, SHARED_COLOR_LABEL_IDENTITY } = require('../constants/colorLabels');
+const { normalizeDecisionFilter, whereDecision } = require('../utils/photoFilterBuilder');
 const feedbackService = require('../services/feedbackService');
 const photoAdminMarksService = require('../services/photoAdminMarksService');
 const { validateUploadedFiles } = require('../middleware/uploadValidation');
@@ -1583,6 +1584,12 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
           .whereIn('photo_admin_marks.color_label', requestedMyColorLabels);
       }));
     }
+    // Approve / reject (issue 744): approved, rejected and/or undecided,
+    // comma-separated — the same condition the export filter applies.
+    const requestedDecisions = normalizeDecisionFilter(req.query.decision);
+    if (requestedDecisions.length > 0) {
+      feedbackConditions.push(qb => whereDecision(qb, requestedDecisions));
+    }
     if (feedbackConditions.length > 0) {
       if (logic === 'OR') {
         query = query.where(builder => {
@@ -1718,6 +1725,9 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
         like_count: photo.like_count || 0,
         favorite_count: photo.favorite_count || 0,
         color_label_count: photo.color_label_count || 0,
+        // Approve / reject tallies across guests (issue 744).
+        approved_count: photo.approved_count || 0,
+        rejected_count: photo.rejected_count || 0,
         color_labels: colorLabelMap[photo.id] || {},
         dominant_color_label: dominantColorLabel(colorLabelMap[photo.id]),
         // The requesting admin's own mark — never the whole team's, and never

@@ -470,7 +470,9 @@ describe('Photo credits (issue 1561)', () => {
       await addPhoto(event, { credit_name: '=O\'Brien', credit_source: 'manual' });
 
       const csv = await exporter.exportPhotos(event.id, null, 'csv');
-      expect(csv.content.split('\n')[0].endsWith(',credit')).toBe(true);
+      // A named column, not the last one: later columns append after it
+      // (approved / rejected, issue 744).
+      expect(csv.content.split('\n')[0].split(',')).toContain('credit');
       expect(csv.content).toContain('"Anna & Co"');
       // An apostrophe in a name reaches the CSV formula-neutralised and quoted.
       expect(csv.content).toContain('"\'=O\'Brien"');
