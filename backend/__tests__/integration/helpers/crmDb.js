@@ -45,6 +45,19 @@ async function runCoreMigrations(db) {
   }
 }
 
+// True while nothing has opened or written the SQLite file yet, so
+// replacing it with the template cannot pull it out from under a connection.
+async function isUntouched(db, file) {
+  const pool = db.client.pool;
+  if (!pool || pool.numUsed() + pool.numFree() + pool.numPendingCreates() > 0) return false;
+  try {
+    return (await fs.promises.stat(file)).size === 0;
+  } catch (err) {
+    if (err.code === 'ENOENT') return true;
+    throw err;
+  }
+}
+
 /**
  * Boot a clean test DB. Returns { db, cleanup, tmpDir }.
  * Caller must invoke cleanup() in afterAll to release the SQLite file
@@ -64,17 +77,17 @@ async function bootCrmDb() {
   // setting TEST_DATABASE_PATH before the first require of db.js
   // (which knexfile reads at module-init time); bootCrmDb only works
   // when invoked before any service import.
-  // Copy the run's migrated template rather than migrating again (see
-  // migrationTemplate.js). The copy must land before db.js opens the file.
-  const template = await templateFor(process.env);
-  if (template) await fs.promises.copyFile(template, process.env.TEST_DATABASE_PATH);
-
   const { db } = require('../../../src/database/db');
 
-  // db.js may already have been loaded against another file, in which case
-  // the copy went unused and this database still needs its schema.
-  const openedFile = db.client.config.connection?.filename;
-  if (!template || path.resolve(openedFile || '') !== process.env.TEST_DATABASE_PATH) {
+  // Copy the run's migrated template rather than migrating again (see
+  // migrationTemplate.js). It goes to whichever file db.js opens: usually
+  // the TEST_DATABASE_PATH set above, but a suite that sets its own path and
+  // loads services before booting has db.js bound to that file instead.
+  const template = await templateFor(process.env);
+  const target = db.client.config.connection?.filename;
+  if (template && target && await isUntouched(db, target)) {
+    await fs.promises.copyFile(template, target);
+  } else {
     await runCoreMigrations(db);
   }
 
