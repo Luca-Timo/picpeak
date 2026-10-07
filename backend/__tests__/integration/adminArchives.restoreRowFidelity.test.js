@@ -601,6 +601,27 @@ describe('archive restore rebuilds the photo row faithfully', () => {
     }
   });
 
+  it('brings a team upload archived under review back hidden and under review (issue 743)', async () => {
+    const archiveRelPath = await writeArchive('review.zip', {
+      'individual/pending.jpg': BYTES,
+      'individual/rejected.jpg': BYTES,
+      'individual/approved.jpg': BYTES,
+      'photos_manifest.json': manifestOf([
+        { filename: 'pending.jpg', type: 'individual', moderation_status: 'pending' },
+        { filename: 'rejected.jpg', type: 'individual', moderation_status: 'rejected' },
+        { filename: 'approved.jpg', type: 'individual', moderation_status: null },
+      ]),
+    });
+    const eventId = await seedArchivedEvent(archiveRelPath, 'review-event');
+
+    await restore(eventId);
+
+    const rows = Object.fromEntries((await db('photos').where('event_id', eventId)).map((p) => [p.filename, p]));
+    expect(rows['pending.jpg']).toMatchObject({ moderation_status: 'pending', visibility: 'hidden' });
+    expect(rows['rejected.jpg']).toMatchObject({ moderation_status: 'rejected', visibility: 'hidden' });
+    expect(rows['approved.jpg']).toMatchObject({ moderation_status: null, visibility: 'visible' });
+  });
+
   it('keeps the original upload time rather than stamping the restore time', async () => {
     const uploadedAt = '2026-06-27T10:30:00.000Z';
     const archiveRelPath = await writeArchive('uploadedat.zip', {

@@ -725,6 +725,12 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
           // not the column default — and this column is NOT NULL.
           credit_visible_to_guests: false,
           ...creditFieldsOf(manifestEntry),
+          // Always written for the same multi-row reason. A team upload that
+          // was archived under review (issue 743) comes back hidden and under
+          // review; the restore must not publish it.
+          ...(['pending', 'rejected'].includes(manifestEntry?.moderation_status)
+            ? { moderation_status: manifestEntry.moderation_status, visibility: 'hidden' }
+            : { moderation_status: null, visibility: 'visible' }),
         });
       }
 
