@@ -25,11 +25,6 @@ for (const root of ['__tests__', 'src']) {
 
 const shared = {
   testEnvironment: 'node',
-  // Some suites still run the whole core migration chain themselves (the
-  // migration tests, and bootCrmDb when no template applies); that chain
-  // pushed several past jest's default on CI runners — the 3.94 release PR
-  // failed on exactly this. 120s matches what the newer suites pin.
-  testTimeout: 120000,
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   // sanitize-html's htmlparser2 12 is ESM-only; see jest.sanitizeHtml.js.
   moduleNameMapper: {
@@ -38,6 +33,12 @@ const shared = {
 };
 
 module.exports = {
+  // Some suites still run the whole core migration chain themselves (the
+  // migration tests, and bootCrmDb when no template applies); that chain
+  // pushed several past jest's default on CI runners — the 3.94 release PR
+  // failed on exactly this. 120s matches what the newer suites pin.
+  // Global option: jest ignores testTimeout inside a project entry.
+  testTimeout: 120000,
   coverageDirectory: 'coverage',
   collectCoverageFrom: [
     'src/**/*.js',
