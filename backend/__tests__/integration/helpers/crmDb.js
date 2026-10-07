@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const bcrypt = require('bcrypt');
+const { templateFor } = require('./migrationTemplate');
 
 async function runCoreMigrations(db) {
   await db.schema.createTable('migrations', (t) => {
@@ -63,9 +64,19 @@ async function bootCrmDb() {
   // setting TEST_DATABASE_PATH before the first require of db.js
   // (which knexfile reads at module-init time); bootCrmDb only works
   // when invoked before any service import.
+  // Copy the run's migrated template rather than migrating again (see
+  // migrationTemplate.js). The copy must land before db.js opens the file.
+  const template = await templateFor(process.env);
+  if (template) await fs.promises.copyFile(template, process.env.TEST_DATABASE_PATH);
+
   const { db } = require('../../../src/database/db');
 
-  await runCoreMigrations(db);
+  // db.js may already have been loaded against another file, in which case
+  // the copy went unused and this database still needs its schema.
+  const openedFile = db.client.config.connection?.filename;
+  if (!template || path.resolve(openedFile || '') !== process.env.TEST_DATABASE_PATH) {
+    await runCoreMigrations(db);
+  }
 
   return {
     db,
@@ -226,6 +237,7 @@ function buildRouteApp(mount, router) {
 
 module.exports = {
   bootCrmDb,
+  runCoreMigrations,
   seedMinimal,
   assignAdminRole,
   mintAdminToken,
