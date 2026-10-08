@@ -261,7 +261,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            {item.feedback_type === 'rating' && <Star className="w-4 h-4 text-yellow-500" />}
+                            {item.feedback_type === 'rating' && <Star className="w-4 h-4 text-rating" />}
                             {item.feedback_type === 'like' && <Heart className="w-4 h-4 text-danger" />}
                             {item.feedback_type === 'comment' && <MessageSquare className="w-4 h-4 text-info" />}
                             {item.feedback_type === 'reaction' && item.reaction && (
@@ -293,7 +293,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                                 <Star
                                   key={star}
                                   className={`w-4 h-4 ${
-                                    star <= item.rating! ? 'fill-yellow-500 text-yellow-500' : 'text-neutral-300'
+                                    star <= item.rating! ? 'fill-rating text-rating' : 'text-neutral-300'
                                   }`}
                                 />
                               ))}
@@ -415,7 +415,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                 <Card>
                   <div className="p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <Star className="w-8 h-8 text-yellow-500" />
+                      <Star className="w-8 h-8 text-rating" />
                       <div>
                         <p className="text-2xl font-bold">{(analytics.summary.average_rating || 0).toFixed(1)}</p>
                         <p className="text-sm text-neutral-600">{t('feedback.avgRating', 'Average Rating')}</p>
@@ -458,7 +458,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                       </div>
                     </div>
                     {analytics.summary.pending_moderation > 0 && (
-                      <p className="text-xs text-orange-600">
+                      <p className="text-xs text-warning-text">
                         {t('feedback.pendingModeration', '{{count}} pending', { 
                           count: analytics.summary.pending_moderation 
                         })}
@@ -513,7 +513,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                                   key={star}
                                   className={`w-3 h-3 ${
                                     star <= Math.round(photo.average_rating) 
-                                      ? 'fill-yellow-500 text-yellow-500' 
+                                      ? 'fill-rating text-rating' 
                                       : 'text-neutral-300'
                                   }`}
                                 />

@@ -350,7 +350,7 @@ export const AnalyticsPage: React.FC = () => {
                 {renderTrendBadge(analytics?.downloads.trend || 0)}
               </div>
             </div>
-            <Download className="w-8 h-8 text-purple-600" />
+            <Download className="w-8 h-8 text-chart-4" />
           </div>
           <div className="mt-4 space-y-2">
             <p className="text-xs text-muted uppercase">{t('analytics.topGallery')}</p>
@@ -396,7 +396,7 @@ export const AnalyticsPage: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <div className="flex-1 bg-fill rounded-full h-2 max-w-[100px]">
                       <div
-                        className="bg-purple-600 h-2 rounded-full"
+                        className="bg-chart-4 h-2 rounded-full"
                         style={{
                           width: `${(gallery.downloads / (analytics.downloads.topGalleries[0]?.downloads || 1)) * 100}%`
                         }}

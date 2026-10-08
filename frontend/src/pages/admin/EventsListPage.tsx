@@ -413,7 +413,7 @@ export const EventsListPage: React.FC = () => {
   };
 
   const getEventStatus = (event: Event) => {
-    if (event.is_draft) return { label: t('events.draft'), color: 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/40' };
+    if (event.is_draft) return { label: t('events.draft'), color: 'text-warning-text bg-warning-soft' };
     if (event.is_archived) return { label: t('events.archived'), color: 'text-muted bg-inset' };
     if (!event.is_active) return { label: t('events.inactive'), color: 'text-danger-text bg-danger-soft' };
 
@@ -427,7 +427,7 @@ export const EventsListPage: React.FC = () => {
     if (expiresAt.getTime() <= Date.now()) return { label: t('events.expired'), color: 'text-danger-text bg-danger-soft' };
     // Ceiling so the last day reads "1 day left", never "0 days".
     const days = Math.ceil((expiresAt.getTime() - Date.now()) / 86400000);
-    if (days <= 7) return { label: t('events.daysLeft', { count: days }), color: 'text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/40' };
+    if (days <= 7) return { label: t('events.daysLeft', { count: days }), color: 'text-warning-text bg-warning-soft' };
 
     return { label: t('events.active'), color: 'text-success-text bg-success-soft' };
   };
@@ -527,7 +527,7 @@ export const EventsListPage: React.FC = () => {
                 {dashboardStats?.expiringEvents ?? 0}
               </p>
             </div>
-            <AlertTriangle className="w-8 h-8 text-orange-600" />
+            <AlertTriangle className="w-8 h-8 text-warning-text" />
           </div>
         </Card>
       </div>

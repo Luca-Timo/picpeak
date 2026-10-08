@@ -624,7 +624,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                   <span className="ml-2 font-semibold text-info-text">
                     {systemStatus.emailQueue.pending}
                     {systemStatus.emailQueue.stuck > 0 && (
-                      <span className="text-orange-600 text-xs ml-1">
+                      <span className="text-warning-text text-xs ml-1">
                         ({systemStatus.emailQueue.stuck} stuck)
                       </span>
                     )}
@@ -640,8 +640,8 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 </div>
               </div>
               {systemStatus.emailQueue.stuck > 0 && (
-                <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/30 rounded-md">
-                  <p className="text-xs text-orange-800 dark:text-orange-200">
+                <div className="mt-3 p-3 bg-warning-soft rounded-md">
+                  <p className="text-xs text-warning-text">
                     <span className="font-semibold">Warning: {systemStatus.emailQueue.stuck} email(s) stuck:</span> These emails have exceeded retry limits and won&apos;t be processed automatically.
                     Only {systemStatus.emailQueue.processable} of {systemStatus.emailQueue.pending} pending emails will be processed.
                   </p>

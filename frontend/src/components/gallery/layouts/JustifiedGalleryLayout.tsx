@@ -184,7 +184,7 @@ const JustifiedPhoto: React.FC<JustifiedPhotoProps> = ({
               className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/90 backdrop-blur-sm"
               title="Rated"
             >
-              <Star className="w-3.5 h-3.5 text-yellow-500" fill="currentColor" />
+              <Star className="w-3.5 h-3.5 text-rating" fill="currentColor" />
             </span>
           )}
           {commentCount > 0 && (

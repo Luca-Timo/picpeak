@@ -212,7 +212,7 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
               </div>
               <span className="text-sm tabular-nums">{formatMoney(Number(inv.totalAmountMinor) / 100, inv.currency)}</span>
               {isDraftInvoice(inv) ? (
-                <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-warning-soft text-warning-text">
                   {t('bills.status.draft', 'Draft')}
                 </span>
               ) : (

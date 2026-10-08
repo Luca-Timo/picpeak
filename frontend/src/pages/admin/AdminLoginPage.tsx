@@ -406,7 +406,7 @@ export const AdminLoginPage: React.FC = () => {
           <form onSubmit={handleMfaSubmit} className="space-y-6">
             <div className="text-center">
               <div className="mx-auto mb-3 w-12 h-12 rounded-full flex items-center justify-center bg-accent-soft">
-                <ShieldCheck className="w-6 h-6" style={{ color: 'var(--color-primary, #5C8762)' }} />
+                <ShieldCheck className="w-6 h-6" style={{ color: 'var(--color-accent-dark)' }} />
               </div>
               <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text, #171717)' }}>
                 {t('adminLogin.mfa.title')}
@@ -470,7 +470,7 @@ export const AdminLoginPage: React.FC = () => {
                   setMfaError(null);
                 }}
                 className="hover:underline"
-                style={{ color: 'var(--color-primary, #5C8762)' }}
+                style={{ color: 'var(--color-accent-dark)' }}
               >
                 {useRecoveryCode ? t('adminLogin.mfa.useAuthenticator') : t('adminLogin.mfa.useRecoveryCode')}
               </button>
@@ -489,7 +489,7 @@ export const AdminLoginPage: React.FC = () => {
               <a
                 href={`mailto:${settingsData.branding_support_email}`}
                 className="hover:underline"
-                style={{ color: 'var(--color-primary, #5C8762)' }}
+                style={{ color: 'var(--color-accent-dark)' }}
               >
                 {settingsData.branding_support_email}
               </a>

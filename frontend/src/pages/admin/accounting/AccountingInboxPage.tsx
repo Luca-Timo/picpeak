@@ -33,7 +33,7 @@ const BOOKING_DISPOSITIONS: Disposition[] = ['rebill', 'durchlaufend'];
 
 const statusClasses: Record<string, string> = {
   unsorted: 'bg-warning-soft text-warning-text',
-  categorized: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+  categorized: 'bg-info-soft text-info-text',
   declined: 'bg-fill text-body',
   duplicate: 'bg-fill text-body',
 };
@@ -466,7 +466,7 @@ export const AccountingInboxPage: React.FC = () => {
                   {doc.disposition && <>{' · '}{t(`accounting.disposition.${doc.disposition}`, doc.disposition)}</>}
                   {/* Pending re-bill = attached to a client but not yet on an invoice. */}
                   {doc.customerAccountId && !doc.billedInvoiceId && (
-                    <span className="text-indigo-600 dark:text-indigo-400">{' · '}{t('accounting.incoming.pendingRebill', 'Pending re-bill')}{doc.customerName ? ` → ${doc.customerName}` : ''}</span>
+                    <span className="text-info-text">{' · '}{t('accounting.incoming.pendingRebill', 'Pending re-bill')}{doc.customerName ? ` → ${doc.customerName}` : ''}</span>
                   )}
                 </div>
               </button>

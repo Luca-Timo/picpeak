@@ -143,7 +143,7 @@ export const AcceptInvitePage: React.FC = () => {
     const metCount = passwordRequirements.filter(req => req.test(formData.password)).length;
     if (metCount === 0) return { level: 0, label: '', color: '' };
     if (metCount <= 2) return { level: 1, label: t('acceptInvitation.strength.weak'), color: 'bg-danger' };
-    if (metCount <= 3) return { level: 2, label: t('acceptInvitation.strength.fair'), color: 'bg-yellow-500' };
+    if (metCount <= 3) return { level: 2, label: t('acceptInvitation.strength.fair'), color: 'bg-warning' };
     if (metCount <= 4) return { level: 3, label: t('acceptInvitation.strength.good'), color: 'bg-info' };
     return { level: 4, label: t('acceptInvitation.strength.strong'), color: 'bg-success' };
   }, [formData.password, passwordRequirements, t]);
@@ -438,7 +438,7 @@ export const AcceptInvitePage: React.FC = () => {
                     <span className="text-xs text-neutral-500">{t('acceptInvitation.passwordStrength')}</span>
                     <span className={`text-xs font-medium ${
                       passwordStrength.level <= 1 ? 'text-danger-text' :
-                      passwordStrength.level === 2 ? 'text-yellow-600' :
+                      passwordStrength.level === 2 ? 'text-warning-text' :
                       passwordStrength.level === 3 ? 'text-info-text' :
                       'text-success-text'
                     }`}>
@@ -532,7 +532,7 @@ export const AcceptInvitePage: React.FC = () => {
             <a
               href="/admin/login"
               className="hover:underline"
-              style={{ color: 'var(--color-primary, #5C8762)' }}
+              style={{ color: 'var(--color-accent-dark)' }}
             >
               {t('acceptInvitation.signIn')}
             </a>

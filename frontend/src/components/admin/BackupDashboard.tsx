@@ -84,7 +84,7 @@ interface BackupDashboardProps {
 const statCardColors: Record<string, { box: string; icon: string }> = {
   blue: { box: 'bg-info-soft', icon: 'text-info-text' },
   green: { box: 'bg-success-soft', icon: 'text-success-text' },
-  purple: { box: 'bg-purple-100 dark:bg-purple-900/40', icon: 'text-purple-600 dark:text-purple-400' },
+  purple: { box: 'bg-inset', icon: 'text-chart-4' },
   gray: { box: 'bg-gray-100 dark:bg-gray-900/40', icon: 'text-gray-600 dark:text-gray-400' },
 };
 
@@ -412,7 +412,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
               {config?.backup_destination_type === 's3' ? (
                 <Cloud className="h-5 w-5 text-info" />
               ) : config?.backup_destination_type === 'rsync' ? (
-                <Server className="h-5 w-5 text-purple-500" />
+                <Server className="h-5 w-5 text-chart-4" />
               ) : (
                 <HardDrive className="h-5 w-5 text-neutral-500" />
               )}

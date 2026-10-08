@@ -134,8 +134,8 @@ export const UploadProgressBar: React.FC = () => {
                 className={clsx(
                   'flex-shrink-0 mt-0.5 px-1.5 py-0.5 rounded font-medium whitespace-nowrap',
                   f.kind === 'rejected' && 'bg-danger-soft text-danger-text',
-                  f.kind === 'transfer' && 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-                  f.kind === 'processing' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                  f.kind === 'transfer' && 'bg-inset text-chart-8',
+                  f.kind === 'processing' && 'bg-inset text-chart-4'
                 )}
               >
                 {f.kind === 'rejected' && t('upload.failures.kindRejected', 'Rejected')}

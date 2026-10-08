@@ -529,7 +529,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                   title={`${value}`}
                 >
                   <Star
-                    className={`w-5 h-5 ${(currentMark.rating || 0) >= value ? 'text-yellow-400' : 'text-neutral-600'}`}
+                    className={`w-5 h-5 ${(currentMark.rating || 0) >= value ? 'text-rating' : 'text-neutral-600'}`}
                     fill={(currentMark.rating || 0) >= value ? 'currentColor' : 'none'}
                   />
                 </button>
@@ -582,7 +582,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {averageRating > 0 && (
                   <div className="bg-neutral-800 rounded-lg p-3">
-                    <div className="flex items-center gap-1 text-yellow-400 mb-1">
+                    <div className="flex items-center gap-1 text-rating mb-1">
                       <Star className="w-4 h-4" fill="currentColor" />
                       <span className="text-white font-medium">{Number(averageRating).toFixed(1)}</span>
                     </div>
@@ -648,7 +648,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                               {/* Comment Status Badge */}
                               <div className="flex items-center gap-1">
                                 {!comment.is_approved && !comment.is_hidden && (
-                                  <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded flex items-center gap-1">
+                                  <span className="text-xs bg-rating text-rating px-2 py-1 rounded flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3" />
                                     Pending
                                   </span>
@@ -694,7 +694,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                                     action: 'hide' 
                                   })}
                                   disabled={moderateFeedbackMutation.isPending}
-                                  className="text-xs px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded"
+                                  className="text-xs px-2 py-1 bg-warning hover:opacity-90 text-white rounded"
                                 >
                                   Hide
                                 </button>

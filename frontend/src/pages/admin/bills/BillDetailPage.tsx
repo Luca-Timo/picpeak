@@ -299,7 +299,7 @@ export const BillDetailPage: React.FC = () => {
                 the admin sees at a glance that this row is a
                 cancellation document, not an invoice. */}
             {inv.kind === 'storno' && (
-              <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-800">
+              <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded bg-storno-soft text-storno-text">
                 {t('bills.kind.storno', 'Stornorechnung')}
               </span>
             )}
@@ -399,8 +399,8 @@ export const BillDetailPage: React.FC = () => {
           Both lineage links are clickable so the admin can hop
           between the document pair without leaving the detail flow. */}
       {inv.kind === 'storno' && inv.cancelsInvoiceId && (
-        <Card padding="md" className="bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800">
-          <p className="text-sm text-purple-900 dark:text-purple-200">
+        <Card padding="md" className="bg-storno-soft border-storno-line">
+          <p className="text-sm text-storno-text">
             {t('bills.stornoCancelsLabel', 'This Stornorechnung cancels invoice')}{' '}
             <Link to={`/admin/clients/bills/${inv.cancelsInvoiceId}`} className="font-medium underline">
               {inv.cancelsInvoiceNumber || `#${inv.cancelsInvoiceId}`}

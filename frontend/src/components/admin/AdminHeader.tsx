@@ -153,7 +153,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick, onOpenSea
           />
         )}
         {showText && (
-          <span className={`${wordmarkVisibilityClass} text-xl sm:text-2xl truncate`} style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, color: '#145346' }}>{companyName}</span>
+          <span className={`${wordmarkVisibilityClass} text-xl sm:text-2xl truncate`} style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, color: 'var(--picpeak-wordmark)' }}>{companyName}</span>
         )}
       </DashboardHomeLink>
     );

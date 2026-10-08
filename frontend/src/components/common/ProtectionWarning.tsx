@@ -44,7 +44,7 @@ export const ProtectionWarning: React.FC<ProtectionWarningProps> = ({
           icon: <Shield className="w-5 h-5" />,
           title: 'Screenshot Attempt Detected',
           defaultMessage: 'A screenshot attempt has been detected. This gallery is protected from unauthorized copying.',
-          bgColor: 'bg-orange-500',
+          bgColor: 'bg-warning',
           textColor: 'text-white'
         };
       case 'violation':
@@ -52,7 +52,7 @@ export const ProtectionWarning: React.FC<ProtectionWarningProps> = ({
           icon: <Shield className="w-5 h-5" />,
           title: 'Protection Violation',
           defaultMessage: 'An unauthorized action has been detected and blocked.',
-          bgColor: severity === 'high' ? 'bg-danger' : severity === 'medium' ? 'bg-orange-500' : 'bg-yellow-500',
+          bgColor: severity === 'high' ? 'bg-danger' : severity === 'medium' ? 'bg-warning' : 'bg-info',
           textColor: 'text-white'
         };
       default:

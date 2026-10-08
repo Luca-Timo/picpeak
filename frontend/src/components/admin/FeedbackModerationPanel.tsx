@@ -84,7 +84,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
             {t('feedback.pendingModeration', 'Pending Moderation')}
           </h2>
           {hasPending && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-soft text-warning-text">
               {pendingComments.length} {t('feedback.pending', 'pending')}
             </span>
           )}

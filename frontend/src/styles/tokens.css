@@ -45,8 +45,6 @@
   --border-radius: 0.5rem;            /* theme-controlled button radius */
   --font-size-base: 16px;
   --shadow-default: 0 4px 6px rgba(0,0,0,0.1);   /* gallery card shadow */
-  /* Tailwind RGB values for primary color (legacy, used by primary-* utilities) */
-  --tw-color-primary: 92 135 98;
   --radius: 0.5rem;
 
   /* ---- Status: one hue per meaning ------------------------------- */
@@ -71,6 +69,13 @@
   --chart-6: #65a30d;  /* lime   */
   --chart-7: #0891b2;  /* cyan   */
   --chart-8: #ea580c;  /* orange */
+
+  /* Rating stars: gold, and not a status (a 5-star photo is not a warning). */
+  --color-rating: #eab308;
+
+  /* The PicPeak wordmark in the admin header: the product's own colour,
+     not the studio's. */
+  --picpeak-wordmark: #145346;
 
   /* ---- Shared components ---------------------------------------- */
   /* Components used on both sides (Skeleton) read these: the gallery theme
@@ -182,6 +187,8 @@
   --color-muted-text: #a3a3a3;
   --color-accent: #22c55e;
   --color-accent-dark: #5C8762;
+
+  --picpeak-wordmark: color-mix(in srgb, #145346 45%, #ffffff);
 
   /* Data colours, lighter for dark backgrounds */
   --chart-1: #60a5fa;

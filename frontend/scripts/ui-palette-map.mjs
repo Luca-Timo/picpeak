@@ -66,19 +66,33 @@ function mapAccent(variants, util, shade, alpha) {
   return `${variants}${util}-accent`;
 }
 
+/** A data colour (chart-N) for a hue used only to tell things apart. */
+function mapChart(variants, util, n, shade, alpha) {
+  if (util === 'bg') {
+    const soft = alpha != null ? alpha <= 30 : shade <= 200;
+    return `${variants}bg-${soft ? 'inset' : `chart-${n}`}`;
+  }
+  if (util === 'placeholder') return null;
+  return `${variants}${util}-chart-${n}`;
+}
+
 /**
  * Rewrite the palette classes in one class list. Returns the new string and
  * the classes it could not map (for the lint message). `dark:` classes of a
  * hue are dropped when a light class of the same hue group and utility was
  * mapped in the same list; a lone one is reported.
+ *
+ * `hues` decides the hues without a fixed meaning, for a one-off migration
+ * of a file where a person has looked at what they mean: a status name,
+ * 'accent', 'rating' or 'chart-<n>'.
  */
-export function rewritePalette(str) {
+export function rewritePalette(str, { hues = {} } = {}) {
   const toks = str.split(/(\s+)/);
   const parsed = toks.map((t) => {
     const m = t.match(PALETTE_RE);
     if (!m) return null;
     const [, variants, util, hue, shade, alpha] = m;
-    const group = hue === 'primary' ? 'accent' : STATUS_HUES[hue] || null;
+    const group = hues[hue] || (hue === 'primary' ? 'accent' : STATUS_HUES[hue] || null);
     return { variants, util, hue, shade: Number(shade), alpha: alpha == null ? null : Number(alpha), group, dark: /(^|:)dark:/.test(variants) };
   });
 
@@ -101,7 +115,11 @@ export function rewritePalette(str) {
     if (!p.group) { unmapped.push(toks[i]); return; }
     const next = p.group === 'accent'
       ? mapAccent(p.variants, p.util, p.shade, p.alpha)
-      : mapStatus(p.variants, p.util, p.group, p.shade, p.alpha);
+      : p.group === 'rating'
+        ? `${p.variants}${p.util}-rating`
+        : p.group.startsWith('chart-')
+          ? mapChart(p.variants, p.util, p.group.slice(6), p.shade, p.alpha)
+          : mapStatus(p.variants, p.util, p.group, p.shade, p.alpha);
     if (!next) { unmapped.push(toks[i]); return; }
     out[i] = next;
     mappedKeys.add(`${p.group}|${p.util.replace(/-[trblxy]$/, '')}`);
@@ -125,12 +143,23 @@ export function rewritePalette(str) {
   for (let i = 0; i < out.length; i++) {
     if (!parsed[i] || !out[i]) continue;
     const base = out[i].replace(/^(?:(?:hover|focus|group-hover|focus-visible):)+/, '');
+    // A soft hover tint on a box of the same tint still needs feedback.
+    if (base !== out[i] && present.has(base) && /hover:bg-[a-z-]+-soft$/.test(out[i])) {
+      out[i] = out[i].replace(/bg-[a-z-]+-soft$/, 'brightness-95');
+      seen.add(out[i]);
+      continue;
+    }
     if (seen.has(out[i]) || (base !== out[i] && present.has(base))) {
       out[i] = '';
       if (i > 0 && /^\s+$/.test(out[i - 1])) out[i - 1] = '';
       continue;
     }
     seen.add(out[i]);
+  }
+  // Accent text on an accent tint disappears on dark themes (STYLING.md):
+  // content on bg-accent-soft takes text-on-accent-soft.
+  if (out.includes('bg-accent-soft')) {
+    for (let i = 0; i < out.length; i++) if (parsed[i] && out[i] === 'text-accent') out[i] = 'text-on-accent-soft';
   }
   const lead = str.match(/^\s*/)[0];
   const trail = str.length > lead.length ? str.match(/\s*$/)[0] : '';

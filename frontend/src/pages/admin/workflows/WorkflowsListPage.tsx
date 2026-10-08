@@ -188,7 +188,7 @@ export const WorkflowsListPage: React.FC = () => {
                       <span className="text-neutral-400 w-6 shrink-0">{i + 1}.</span>
                       <span className="font-mono text-body">{s.node_type}:{s.node_key}</span>
                       <span className="text-muted">{s.status}</span>
-                      {s.result && (s.result as any).would ? <span className="text-purple-600 dark:text-purple-400">→ would {String((s.result as any).would)}</span> : null}
+                      {s.result && (s.result as any).would ? <span className="text-info-text">→ would {String((s.result as any).would)}</span> : null}
                       {s.error ? <span className="text-danger-text">{s.error}</span> : null}
                     </li>
                   ))}

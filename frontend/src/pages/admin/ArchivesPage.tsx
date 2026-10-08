@@ -177,7 +177,7 @@ export const ArchivesPage: React.FC = () => {
                 }
               </p>
             </div>
-            <Calendar className="w-8 h-8 text-purple-600" />
+            <Calendar className="w-8 h-8 text-chart-4" />
           </div>
         </Card>
       </div>

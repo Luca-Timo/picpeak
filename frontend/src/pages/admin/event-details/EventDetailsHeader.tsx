@@ -152,7 +152,7 @@ export const DraftPill: React.FC = () => {
       onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); setDismissed(true); } }}
       onBlur={() => setDismissed(false)}
       onMouseLeave={() => setDismissed(false)}
-      className={`info-tooltip info-tooltip-start ${open ? 'is-open' : ''} ${dismissed ? 'is-dismissed' : ''} items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 hover:text-yellow-800 dark:hover:bg-yellow-900/60`}
+      className={`info-tooltip info-tooltip-start ${open ? 'is-open' : ''} ${dismissed ? 'is-dismissed' : ''} items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warning-soft text-warning-text hover:brightness-95`}
     >
       {t('events.draft')}
       <Info className="w-3.5 h-3.5" aria-hidden="true" />
@@ -380,19 +380,19 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
 
       {/* Expiration Warning */}
       {!archived && (isExpired || isExpiring) && (
-        <Card className={`p-4 mb-6 border-2 ${isExpired ? 'border-danger bg-danger-soft' : 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'}`}>
+        <Card className={`p-4 mb-6 border-2 ${isExpired ? 'border-danger bg-danger-soft' : 'border-warning bg-warning-soft'}`}>
           <div className="flex items-start gap-3">
-            <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${isExpired ? 'text-danger-text' : 'text-orange-600'}`} />
+            <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${isExpired ? 'text-danger-text' : 'text-warning-text'}`} />
             {/* Text and action share a wrapping row beside the icon: on a
                 phone the button drops under the text, lined up with it. */}
             <div className="flex-1 min-w-0 flex flex-wrap items-start justify-between gap-3">
               <div className="flex-1 basis-64 min-w-0">
-                <p className={`font-medium ${isExpired ? 'text-danger-text' : 'text-orange-900 dark:text-orange-200'}`}>
+                <p className={`font-medium ${isExpired ? 'text-danger-text' : 'text-warning-text'}`}>
                   {isExpired
                     ? t('events.eventExpiredMessage')
                     : t('events.eventExpiresIn', { days: daysUntilExpiration })}
                 </p>
-                <p className={`text-sm mt-1 ${isExpired ? 'text-danger-text' : 'text-orange-700 dark:text-orange-300'}`}>
+                <p className={`text-sm mt-1 ${isExpired ? 'text-danger-text' : 'text-warning-text'}`}>
                   {isExpired ? t('events.guestsCannotAccessGallery') : t('events.warningEmailsHaveBeenSent')}
                 </p>
               </div>

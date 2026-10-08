@@ -133,9 +133,9 @@ export const WordFilterManager: React.FC = () => {
       case 'low':
         return <Shield className="w-4 h-4 text-info" />;
       case 'moderate':
-        return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+        return <AlertTriangle className="w-4 h-4 text-warning" />;
       case 'high':
-        return <XCircle className="w-4 h-4 text-orange-500" />;
+        return <XCircle className="w-4 h-4 text-danger" />;
       case 'block':
         return <XCircle className="w-4 h-4 text-danger-text" />;
       default:
@@ -148,9 +148,9 @@ export const WordFilterManager: React.FC = () => {
       case 'low':
         return 'bg-info-soft text-info-text';
       case 'moderate':
-        return 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300';
+        return 'bg-warning-soft text-warning-text';
       case 'high':
-        return 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300';
+        return 'bg-danger-soft text-danger-text';
       case 'block':
         return 'bg-danger-soft text-danger-text';
       default:

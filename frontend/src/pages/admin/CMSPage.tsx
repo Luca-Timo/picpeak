@@ -549,7 +549,7 @@ export const CMSPage: React.FC = () => {
                     <p className="text-sm text-muted">/{page.slug}</p>
                   </div>
                   {selectedPage === page.slug && hasUnsavedChanges && (
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />
+                    <div className="w-2 h-2 bg-warning rounded-full flex-shrink-0" />
                   )}
                 </button>
               ))}
@@ -591,8 +591,8 @@ export const CMSPage: React.FC = () => {
                   </div>
                 )}
                 {!isAutoSaving && hasUnsavedChanges && (
-                  <div className="flex items-center gap-2 text-yellow-600">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full" />
+                  <div className="flex items-center gap-2 text-warning-text">
+                    <div className="w-2 h-2 bg-warning rounded-full" />
                     Unsaved changes
                   </div>
                 )}

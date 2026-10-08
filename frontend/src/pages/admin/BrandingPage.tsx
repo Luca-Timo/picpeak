@@ -1157,7 +1157,7 @@ export const BrandingPage: React.FC = () => {
                     WebkitAppearance: 'none',
                     appearance: 'none',
                     height: '8px',
-                    background: '#d4d4d4',
+                    background: 'var(--ui-fill-strong)',
                     borderRadius: '4px',
                     outline: 'none'
                   }}
@@ -1186,7 +1186,7 @@ export const BrandingPage: React.FC = () => {
                     WebkitAppearance: 'none',
                     appearance: 'none',
                     height: '8px',
-                    background: '#d4d4d4',
+                    background: 'var(--ui-fill-strong)',
                     borderRadius: '4px',
                     outline: 'none'
                   }}

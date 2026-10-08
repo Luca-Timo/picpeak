@@ -404,7 +404,7 @@ export const SetupPage: React.FC = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-2 inline-flex items-center gap-1 text-xs hover:underline"
-                    style={{ color: 'var(--color-primary, #5C8762)' }}
+                    style={{ color: 'var(--color-accent-dark)' }}
                   >
                     {t('setup.tokenRotatedLink')}
                     <ExternalLink className="w-3 h-3" />
@@ -634,7 +634,7 @@ export const SetupPage: React.FC = () => {
                     rel="noopener noreferrer"
                     className="flex items-start gap-3 rounded-lg border border-neutral-200 p-3 hover:bg-neutral-50 transition-colors"
                   >
-                    <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-primary, #5C8762)' }} />
+                    <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-accent-dark)' }} />
                     <span className="min-w-0">
                       <span className="block text-sm font-medium text-neutral-800">
                         {t(`setup.community.${key}Title`)}

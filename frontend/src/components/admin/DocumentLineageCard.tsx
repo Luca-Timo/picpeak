@@ -284,7 +284,7 @@ const Row: React.FC<{
       <div className="flex items-center gap-2 min-w-0">
         <span className={`font-mono text-sm ${isCurrent ? 'text-muted' : ''}`}>{number}</span>
         {badge && (
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
+          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-storno-soft text-storno-text">
             {badge}
           </span>
         )}

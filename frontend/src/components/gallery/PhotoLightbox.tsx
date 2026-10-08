@@ -1159,7 +1159,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
                     aria-label={i === myRating ? 'Remove rating' : `Rate ${i} star${i>1?'s':''}`}
                     title={i === myRating ? 'Remove rating' : `Rate ${i}`}
                   >
-                    <Star className={`w-5 h-5 ${myRating >= i ? 'text-yellow-400 fill-yellow-400' : 'text-white/70'}`} />
+                    <Star className={`w-5 h-5 ${myRating >= i ? 'text-rating fill-rating' : 'text-white/70'}`} />
                   </button>
                 ))}
                 {/* The average is other guests' ratings: shown only when the

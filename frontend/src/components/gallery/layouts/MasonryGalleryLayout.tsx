@@ -30,7 +30,7 @@ const FeedbackCountIndicators: React.FC<{ photo: Photo; withTitles?: boolean }> 
       )}
       {(photo.average_rating ?? 0) > 0 && (
         <div className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1" title={withTitles ? `Rating: ${Number(photo.average_rating ?? 0).toFixed(1)}` : undefined}>
-          <Star className="w-3.5 h-3.5 text-yellow-500" fill="currentColor" />
+          <Star className="w-3.5 h-3.5 text-rating" fill="currentColor" />
           <span className="text-xs font-medium text-neutral-700">{Number(photo.average_rating ?? 0).toFixed(1)}</span>
         </div>
       )}

@@ -92,7 +92,7 @@ export const PasswordGenerator: React.FC<PasswordGeneratorProps> = ({
     });
     
     if (validation.score <= 1) return { label: t('passwordGenerator.weak'), color: 'text-danger-text' };
-    if (validation.score <= 2) return { label: t('passwordGenerator.fair'), color: 'text-yellow-600' };
+    if (validation.score <= 2) return { label: t('passwordGenerator.fair'), color: 'text-warning-text' };
     if (validation.score <= 3) return { label: t('passwordGenerator.good'), color: 'text-info-text' };
     return { label: t('passwordGenerator.strong'), color: 'text-success-text' };
   };

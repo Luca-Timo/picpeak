@@ -149,7 +149,7 @@ export const BillsListPage: React.FC = () => {
                               cancellation documents instantly
                               recognisable. */}
                           {inv.kind === 'storno' && (
-                            <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 uppercase tracking-wide">
+                            <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-storno-soft text-storno-text uppercase tracking-wide">
                               {t('bills.kind.storno', 'Storno')}
                             </span>
                           )}
@@ -185,7 +185,7 @@ export const BillsListPage: React.FC = () => {
                             // Held invoice: 'scheduled' with no send date (incl. the
                             // monthly/manual accumulator) never auto-ships, so badge it
                             // honestly as "Draft" rather than "Scheduled".
-                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-storno-soft text-storno-text">
                               {t('bills.status.draft', 'Draft')}
                             </span>
                           ) : (

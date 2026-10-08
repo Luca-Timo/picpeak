@@ -506,7 +506,7 @@ export const GalleryPage: React.FC = () => {
                 className="h-12 sm:h-16 lg:h-20 w-auto object-contain mx-auto mb-3 sm:mb-4"
               />
             )}
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 px-2" style={{ color: 'var(--color-primary, #5C8762)' }}>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 px-2" style={{ color: 'var(--color-accent-dark)' }}>
               {galleryInfo?.event_name}
             </h1>
           </div>

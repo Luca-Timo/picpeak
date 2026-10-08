@@ -238,7 +238,7 @@ export const PhotoComments: React.FC<PhotoCommentsProps> = ({
                     {format(new Date(comment.created_at), 'PP')}
                   </span>
                   {comment.is_mine && !comment.is_approved && (
-                    <span className="text-xs text-orange-600">
+                    <span className="text-xs text-warning-text">
                       {t('feedback.pendingApproval', 'Pending approval')}
                     </span>
                   )}

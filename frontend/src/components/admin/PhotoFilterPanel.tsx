@@ -170,7 +170,7 @@ export const PhotoFilterPanel: React.FC<PhotoFilterPanelProps> = ({
               className="rounded border-neutral-300 text-accent focus:ring-accent"
               disabled={isLoading}
             />
-            <Bookmark className="w-4 h-4 text-yellow-500" />
+            <Bookmark className="w-4 h-4 text-rating" />
             <span className="text-sm text-body">
               {t('filter.hasFavorites', 'Has favorites')}
               {summary && (

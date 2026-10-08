@@ -218,7 +218,7 @@ export const AdminDashboard: React.FC = () => {
       value: dashboardStats?.expiringEvents || 0,
       change: t('admin.next7Days'),
       icon: AlertTriangle,
-      color: 'text-orange-600',
+      color: 'text-warning-text',
     },
     {
       // An install that holds videos counts media and shows the split; one
@@ -254,21 +254,21 @@ export const AdminDashboard: React.FC = () => {
           : t('admin.catalogedMedia', { size: adminService.formatBytes(dashboardStats.catalogedBytes) }))
         : undefined,
       icon: HardDrive,
-      color: 'text-purple-600',
+      color: 'text-chart-4',
     },
     {
       title: t('admin.totalViews'),
       value: formatNumber(dashboardStats?.totalViews || 0),
       change: dashboardStats?.viewsTrend ? t('admin.percentFromLastWeek', { percent: `${dashboardStats.viewsTrend > 0 ? '+' : ''}${dashboardStats.viewsTrend}` }) : undefined,
       icon: Eye,
-      color: 'text-indigo-600',
+      color: 'text-chart-1',
     },
     {
       title: t('admin.downloads'),
       value: formatNumber(dashboardStats?.totalDownloads || 0),
       change: dashboardStats?.downloadsTrend ? t('admin.percentFromLastWeek', { percent: `${dashboardStats.downloadsTrend > 0 ? '+' : ''}${dashboardStats.downloadsTrend}` }) : undefined,
       icon: Download,
-      color: 'text-pink-600',
+      color: 'text-chart-5',
     },
     {
       title: t('admin.archivedEvents'),
@@ -280,7 +280,7 @@ export const AdminDashboard: React.FC = () => {
       title: t('admin.systemHealth'),
       value: systemHealth ? t(`admin.health.${systemHealth.overall}`) : t('admin.health.checking'),
       icon: Heart,
-      color: systemHealth?.overall === 'healthy' ? 'text-success-text' : systemHealth?.overall === 'warning' ? 'text-yellow-600' : 'text-danger-text',
+      color: systemHealth?.overall === 'healthy' ? 'text-success-text' : systemHealth?.overall === 'warning' ? 'text-warning-text' : 'text-danger-text',
     },
   ];
 
@@ -333,7 +333,7 @@ export const AdminDashboard: React.FC = () => {
           <Card padding="md">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-heading">{t('admin.eventsExpiringSoon')}</h2>
-              <AlertTriangle className="w-5 h-5 text-orange-600" />
+              <AlertTriangle className="w-5 h-5 text-warning-text" />
             </div>
 
             {expiringEvents.length === 0 ? (
@@ -349,7 +349,7 @@ export const AdminDashboard: React.FC = () => {
                   return (
                     <div
                       key={event.id}
-                      className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800 cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/50 transition-colors"
+                      className="flex items-center justify-between p-4 bg-warning-soft rounded-lg border border-warning-line cursor-pointer transition-colors"
                       onClick={() => navigate(`/admin/events/${event.id}`)}
                     >
                       <div>
@@ -361,7 +361,7 @@ export const AdminDashboard: React.FC = () => {
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
+                        <p className="text-sm font-medium text-warning-text">
                           {t('admin.daysLeft', { count: daysLeft })}
                         </p>
                         <p className="text-xs text-muted">
@@ -438,7 +438,7 @@ export const AdminDashboard: React.FC = () => {
             <Card padding="md" className="mt-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-heading">{t('workflows.approvals.pendingTitle', 'Pending approvals')}</h2>
-                <Inbox className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                <Inbox className="w-5 h-5 text-warning-text" />
               </div>
               <div className="space-y-3">
                 {pendingApprovals.slice(0, 5).map((a) => {
@@ -453,12 +453,12 @@ export const AdminDashboard: React.FC = () => {
                     </>
                   );
                   return (
-                    <div key={a.id} className="flex items-center justify-between gap-3 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                    <div key={a.id} className="flex items-center justify-between gap-3 p-4 bg-warning-soft rounded-lg border border-warning-line">
                       {href ? (
                         <button
                           type="button"
                           onClick={() => navigate(href)}
-                          className="min-w-0 text-left rounded -m-1 p-1 hover:bg-purple-100/60 dark:hover:bg-purple-900/40 transition-colors cursor-pointer"
+                          className="min-w-0 text-left rounded -m-1 p-1 hover:bg-warning-line transition-colors cursor-pointer"
                           title={t('workflows.approvals.openEntity', 'Open {{type}} #{{id}}', { type: a.entity_type, id: a.entity_id }) as string}
                         >
                           {info}
@@ -511,16 +511,16 @@ export const AdminDashboard: React.FC = () => {
                   const colors: Partial<Record<ActivityType, string>> = {
                     'event_created': 'bg-success',
                     'photos_uploaded': 'bg-info',
-                    'event_archived': 'bg-purple-500',
-                    'archive_restored': 'bg-indigo-500',
+                    'event_archived': 'bg-chart-4',
+                    'archive_restored': 'bg-chart-1',
                     'archive_deleted': 'bg-danger',
                     'bulk_download': 'bg-info',
-                    'email_config_updated': 'bg-yellow-500',
-                    'branding_updated': 'bg-pink-500',
-                    'theme_updated': 'bg-purple-500',
-                    'gallery_password_entry': 'bg-gray-500',
+                    'email_config_updated': 'bg-chart-3',
+                    'branding_updated': 'bg-chart-5',
+                    'theme_updated': 'bg-chart-4',
+                    'gallery_password_entry': 'bg-faint',
                   };
-                  return colors[type] || 'bg-gray-500';
+                  return colors[type] || 'bg-faint';
                 };
 
                 // Format activity message with translations

@@ -185,7 +185,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
           )}
           {averageRating > 0 && (
             <span className="gallery-premium-feedback-indicator" title="Rated">
-              <Star className="w-3.5 h-3.5 text-yellow-500" fill="currentColor" />
+              <Star className="w-3.5 h-3.5 text-rating" fill="currentColor" />
             </span>
           )}
           {commentCount > 0 && (

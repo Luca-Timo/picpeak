@@ -192,18 +192,18 @@ export const MessagesPage: React.FC = () => {
   const custTotal = custQuery.data?.pagination.total;
 
   const accounts: Account[] = useMemo(() => [
-    { id: 'all', name: t('messages.account.all', 'All mail'), color: '#64748b', folders: [
+    { id: 'all', name: t('messages.account.all', 'All mail'), color: 'var(--ui-text-faint)', folders: [
       { id: 'all-in', name: t('messages.folder.inbox', 'Inbox'), icon: Inbox, src: 'received' },
       { id: 'all-sent', name: t('messages.folder.sent', 'Sent'), icon: Send, src: 'queue' },
     ] },
-    { id: 'cust', name: t('messages.account.customers', 'Customers'), addr: identities?.customers || undefined, color: '#2563c9', folders: [
+    { id: 'cust', name: t('messages.account.customers', 'Customers'), addr: identities?.customers || undefined, color: 'var(--chart-1)', folders: [
       { id: 'cust-in', name: t('messages.folder.inbox', 'Inbox'), icon: Inbox, src: 'received', account: 'customers' },
       { id: 'cust-sent', name: t('messages.folder.sent', 'Sent'), icon: Send, src: 'queue', origin: 'manual' },
     ] },
-    { id: 'acct', name: t('messages.account.accounting', 'Accounting'), addr: identities?.accounting || undefined, color: '#12876a', folders: [
+    { id: 'acct', name: t('messages.account.accounting', 'Accounting'), addr: identities?.accounting || undefined, color: 'var(--chart-2)', folders: [
       { id: 'acct-in', name: t('messages.folder.inbox', 'Inbox'), icon: Inbox, src: 'received', account: 'accounting' },
     ] },
-    { id: 'auto', name: t('messages.account.automated', 'Automated'), addr: identities?.automated || undefined, color: '#7a52d6', folders: [
+    { id: 'auto', name: t('messages.account.automated', 'Automated'), addr: identities?.automated || undefined, color: 'var(--chart-4)', folders: [
       { id: 'auto-sent', name: t('messages.folder.sent', 'Sent'), icon: Send, src: 'queue', origin: 'system' },
     ] },
   ], [t, identities]);
@@ -225,7 +225,7 @@ export const MessagesPage: React.FC = () => {
   const folder = useMemo(() => {
     for (const a of accounts) for (const f of a.folders) if (f.id === activeFolder) return { a, f };
     const sf = systemFolders.find((f) => f.id === activeFolder);
-    if (sf) return { a: { id: 'system', name: sf.name, color: '#94a3b8', folders: [] } as Account, f: sf };
+    if (sf) return { a: { id: 'system', name: sf.name, color: 'var(--ui-text-faint)', folders: [] } as Account, f: sf };
     return { a: accounts[0], f: accounts[0].folders[0] };
   }, [accounts, systemFolders, activeFolder]);
 

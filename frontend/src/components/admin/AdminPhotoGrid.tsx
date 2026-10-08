@@ -877,7 +877,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     className="bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 text-xs font-medium text-neutral-700 flex items-center gap-0.5"
                     title={t('admin.photos.yourMarkRating', 'Your rating: {{count}}', { count: photo.my_rating })}
                   >
-                    <Star className="w-3 h-3 text-yellow-500" fill="currentColor" />
+                    <Star className="w-3 h-3 text-rating" fill="currentColor" />
                     {photo.my_rating}
                   </span>
                 )}
@@ -907,7 +907,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                 )}
                 {averageRating > 0 && (
                   <div className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1" title={`Rating: ${Number(averageRating).toFixed(1)}`}>
-                    <Star className="w-3.5 h-3.5 text-yellow-500" fill="currentColor" />
+                    <Star className="w-3.5 h-3.5 text-rating" fill="currentColor" />
                     <span className="text-xs font-medium text-neutral-700">{Number(averageRating).toFixed(1)}</span>
                   </div>
                 )}
@@ -1116,7 +1116,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                       <div className="flex items-center justify-end gap-2">
                         {averageRating > 0 && (
                           <span className="inline-flex items-center gap-0.5" title={`Rating: ${Number(averageRating).toFixed(1)}`}>
-                            <Star className="w-3.5 h-3.5 text-yellow-500" fill="currentColor" />
+                            <Star className="w-3.5 h-3.5 text-rating" fill="currentColor" />
                             {Number(averageRating).toFixed(1)}
                           </span>
                         )}

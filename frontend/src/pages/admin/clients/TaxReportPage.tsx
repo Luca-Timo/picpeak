@@ -595,9 +595,9 @@ export const TaxReportPage: React.FC = () => {
                       <td className="px-2 py-1.5 whitespace-nowrap">
                         <span className={`inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded font-semibold not-italic ${
                           row.type === 'outgoing'
-                            ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+                            ? 'bg-inset text-chart-2'
                             : row.type === 'incoming'
-                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300'
+                              ? 'bg-inset text-chart-1'
                               : 'bg-warning-soft text-warning-text'
                         }`}>
                           {t(`taxReport.type.${row.type}`, row.type)}
@@ -616,7 +616,7 @@ export const TaxReportPage: React.FC = () => {
                             colour scheme distinguishes the row kinds at
                             a glance across both surfaces. */}
                         {row.kind === 'storno' && (
-                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 font-semibold not-italic">
+                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-storno-soft text-storno-text font-semibold not-italic">
                             {t('bills.kind.storno', 'Storno')}
                           </span>
                         )}
@@ -651,7 +651,7 @@ export const TaxReportPage: React.FC = () => {
                           ? t('taxReport.skontoTooltip', 'Paid with Skonto') as string
                           : undefined}>
                         {row.skontoApplied ? (
-                          <span className="text-teal-700 dark:text-teal-300">
+                          <span className="text-chart-2">
                             −{formatMinor(row.skontoAmountMinor, report.currency, intlLocale)}
                           </span>
                         ) : ''}

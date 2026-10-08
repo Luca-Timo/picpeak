@@ -272,7 +272,7 @@ export const CustomerLoginPage: React.FC = () => {
               <a
                 href={`mailto:${settingsData.branding_support_email}`}
                 className="hover:underline"
-                style={{ color: 'var(--color-primary, #5C8762)' }}
+                style={{ color: 'var(--color-accent-dark)' }}
               >
                 {settingsData.branding_support_email}
               </a>

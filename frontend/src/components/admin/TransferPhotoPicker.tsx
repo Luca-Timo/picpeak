@@ -140,7 +140,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
                     key={ev.id}
                     onClick={() => { setSelectedEventId(ev.id); setSelectedEventName(ev.event_name); }}
                     className={`block w-full truncate px-4 py-2 text-left text-sm hover:bg-hover-soft ${
-                      selectedEventId === ev.id ? 'bg-accent-soft font-medium text-accent dark:bg-neutral-800' : 'text-body'
+                      selectedEventId === ev.id ? 'bg-accent-soft font-medium text-on-accent-soft' : 'text-body'
                     }`}
                   >
                     {ev.event_name}

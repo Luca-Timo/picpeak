@@ -38,6 +38,8 @@ export default {
         storno: { DEFAULT: 'var(--ui-storno)', text: 'var(--ui-storno-text)', soft: 'var(--ui-storno-soft)', line: 'var(--ui-storno-line)' },
         // Data colours (tokens.css › Data colours): chart-1 … chart-8, in order.
         chart: { 1: 'var(--chart-1)', 2: 'var(--chart-2)', 3: 'var(--chart-3)', 4: 'var(--chart-4)', 5: 'var(--chart-5)', 6: 'var(--chart-6)', 7: 'var(--chart-7)', 8: 'var(--chart-8)' },
+        // Rating stars (tokens.css › Data colours).
+        rating: 'var(--color-rating)',
         // Admin accent (tokens.css › Accent).
         'accent-strong': 'var(--ui-accent-strong)',
         'accent-fg': 'var(--ui-accent-fg)',
@@ -51,27 +53,6 @@ export default {
         'text-secondary': 'var(--color-muted-text)',
         accent: 'var(--color-accent)',
         'accent-dark': 'var(--color-accent-dark)',
-        primary: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          400: '#4ade80',
-          500: '#22c55e',
-          600: '#5C8762', // Main brand color from scrappbook.de
-          700: '#4a6f4f',
-          800: '#3f5d42',
-          900: '#365238',
-        },
-        sand: {
-          50: '#fdfcfb',
-          100: '#f7f5f2',
-          200: '#f0ebe5',
-          300: '#e6ddd4',
-          400: '#d4c2b0',
-          500: '#c2a68c',
-          600: '#b18b68',
-        },
         neutral: {
           50: '#fafafa',
           100: '#f5f5f5',

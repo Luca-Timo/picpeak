@@ -1046,7 +1046,7 @@ export const CreateEventPage: React.FC = () => {
               </label>
 
               {!formData.require_password && (
-                <div className="rounded-md border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/30 p-3 text-xs text-orange-800 dark:text-orange-300">
+                <div className="rounded-md border border-warning-line bg-warning-soft p-3 text-xs text-warning-text">
                   {t('events.publicGalleryWarning', 'Public galleries are accessible to anyone with the link. Consider enabling download watermarks and monitoring activity.')} 
                 </div>
               )}

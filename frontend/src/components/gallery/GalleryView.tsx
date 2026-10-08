@@ -1901,7 +1901,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
                       key={id}
                       type="button"
                       onClick={() => togglePerson(id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-soft text-accent text-sm"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-soft text-on-accent-soft text-sm hover:brightness-95"
                     >
                       {person.label || t('gallery.people.unnamedCount', {
                         count: person.face_count,
