@@ -169,15 +169,14 @@ export const ColorCustomizationCard: React.FC<ColorCustomizationCardProps> = ({
         <p className="block text-sm font-medium text-body mb-2" id="color-mode-label">
           {t('branding.colorMode', 'Color Mode')}
         </p>
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="color-mode-label">
+        <div className="flex flex-wrap gap-2" role="group" aria-labelledby="color-mode-label">
           {(['light', 'dark', 'auto'] as const).map((mode) => {
             const active = (localTheme.colorMode || 'light') === mode;
             return (
               <button
                 type="button"
                 key={mode}
-                role="radio"
-                aria-checked={active}
+                aria-pressed={active}
                 onClick={() => handleColorModeSelect(mode)}
                 className={tile(active)}
               >
@@ -209,7 +208,7 @@ export const ColorCustomizationCard: React.FC<ColorCustomizationCardProps> = ({
                 'Lock the entire admin and public site to dark or light. The user-facing dark/light toggle is hidden whenever a lock is active. Per-event themes that try to override the colour mode are also forced to follow.'
               )}
             </p>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="force-color-mode-label">
+            <div className="flex flex-wrap gap-2" role="group" aria-labelledby="force-color-mode-label">
               {([
                 { value: null, label: t('branding.forceColorModeNone', 'No force (user choice)') },
                 { value: 'dark', label: t('branding.forceColorModeDark', 'Force dark') },
@@ -220,8 +219,7 @@ export const ColorCustomizationCard: React.FC<ColorCustomizationCardProps> = ({
                   <button
                     type="button"
                     key={String(value)}
-                    role="radio"
-                    aria-checked={active}
+                    aria-pressed={active}
                     onClick={() => onForceColorModeChange(value)}
                     className={tile(active)}
                   >

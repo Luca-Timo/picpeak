@@ -54,8 +54,9 @@ export function colorWarnings(theme: ThemeConfig, status: StatusColors = {}): Co
   const hues = STATUS_KEYS.map((key) => [key, status[key] || DEFAULT_STATUS_COLORS[key]] as const);
   for (const [key, hue] of hues) {
     if (!ok(hue)) continue;
-    // Badge text is the hue darkened; a hue this light washes out on white.
-    check(`status.${key}`, 'statusTooLight', hue, '#ffffff', 2.5);
+    // Badge text is the hue darkened, but buttons and dots put white on the
+    // hue itself: 3:1 is the floor for both (WCAG non-text and bold text).
+    check(`status.${key}`, 'statusTooLight', hue, '#ffffff', 3);
     if (ok(accentDarkColor) && distance(hue, accentDarkColor as string) < SIMILAR) {
       add(`status.${key}`, { code: 'statusLikeAccent' });
     }

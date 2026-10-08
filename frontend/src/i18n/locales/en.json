@@ -3958,7 +3958,7 @@
       "builtIn": "Built-in",
       "followBranding": "Follow Colours",
       "readOnly": "You can see the PDF theme but not change it.",
-      "invalid": "The PDF theme has a margin or colour that is not valid. Fix it before saving.",
+      "invalid": "The PDF theme for {{scopes}} has a margin or colour that is not valid. Fix it before saving.",
       "saveFailedScopes": "Could not save the PDF theme for: {{scopes}}"
     },
     "pdfFonts": {

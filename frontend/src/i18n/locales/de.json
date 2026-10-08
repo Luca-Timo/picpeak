@@ -4427,7 +4427,7 @@
       "builtIn": "Standard",
       "followBranding": "Farben folgen",
       "readOnly": "Sie können das PDF-Design sehen, aber nicht ändern.",
-      "invalid": "Das PDF-Design enthält einen ungültigen Rand oder eine ungültige Farbe. Bitte vor dem Speichern korrigieren.",
+      "invalid": "Das PDF-Design für {{scopes}} enthält einen ungültigen Rand oder eine ungültige Farbe. Bitte vor dem Speichern korrigieren.",
       "saveFailedScopes": "PDF-Design konnte nicht gespeichert werden für: {{scopes}}"
     },
     "pdfFonts": {

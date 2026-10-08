@@ -380,11 +380,16 @@ export const BrandingPage: React.FC = () => {
     }
   };
 
+  // Covers the whole save: branding, theme, PDF font and every PDF scope.
+  const [isSaving, setIsSaving] = useState(false);
   const handleSave = async () => {
     if (pdfTheme.invalidScopes.length > 0) {
-      toast.error(t('branding.pdfTheme.invalid', 'The PDF theme has a margin or colour that is not valid. Fix it before saving.'));
+      toast.error(t('branding.pdfTheme.invalid', 'The PDF theme for {{scopes}} has a margin or colour that is not valid. Fix it before saving.', {
+        scopes: pdfTheme.invalidScopes.map((scope) => t(`branding.pdfTheme.scope.${scope}`, scope)).join(', '),
+      }));
       return;
     }
+    setIsSaving(true);
     try {
       // Sync logo URL from theme to branding settings, but never let an
       // undefined/empty theme.logoUrl wipe a logo that is still configured in
@@ -431,6 +436,8 @@ export const BrandingPage: React.FC = () => {
       setLoadedPdfFontFamily(pdfFontFamily);
     } catch (error) {
       console.error('Failed to save settings:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1315,7 +1322,7 @@ export const BrandingPage: React.FC = () => {
 
         <SettingsSaveBar
           isDirty={isDirty}
-          isSaving={brandingMutation.isPending || themeMutation.isPending}
+          isSaving={isSaving}
           onSave={() => { void handleSave(); }}
           onDiscard={handleDiscard}
         />

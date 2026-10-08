@@ -645,22 +645,23 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                                 </p>
                               </div>
                               
-                              {/* Comment Status Badge */}
-                              <div className="flex items-center gap-1">
+                              {/* Comment Status Badge — the viewer is always dark, so
+                                  the status tints come from the dark palette. */}
+                              <div className="ui-dark flex items-center gap-1">
                                 {!comment.is_approved && !comment.is_hidden && (
-                                  <span className="text-xs bg-rating text-rating px-2 py-1 rounded flex items-center gap-1">
+                                  <span className="text-xs bg-warning-soft text-warning-text px-2 py-1 rounded flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3" />
                                     Pending
                                   </span>
                                 )}
                                 {comment.is_approved && !comment.is_hidden && (
-                                  <span className="text-xs bg-success-soft text-success px-2 py-1 rounded flex items-center gap-1">
+                                  <span className="text-xs bg-success-soft text-success-text px-2 py-1 rounded flex items-center gap-1">
                                     <CheckCircle className="w-3 h-3" />
                                     Approved
                                   </span>
                                 )}
                                 {comment.is_hidden && (
-                                  <span className="text-xs bg-danger-soft text-danger px-2 py-1 rounded flex items-center gap-1">
+                                  <span className="text-xs bg-danger-soft text-danger-text px-2 py-1 rounded flex items-center gap-1">
                                     <XCircle className="w-3 h-3" />
                                     Hidden
                                   </span>
