@@ -329,7 +329,7 @@ export const FeedbackSettings: React.FC<FeedbackSettingsProps> = ({
 
             {/* Keyboard scheme for the lightbox (#1044). Only meaningful once
                 color labels are on — stars alone already use 1-5. */}
-            {settings.allow_color_labels && (
+            {!!settings.allow_color_labels && (
               <div className="space-y-3">
                 <h3 className="text-sm font-medium text-body flex items-center gap-2">
                   <Keyboard className="w-4 h-4" />
