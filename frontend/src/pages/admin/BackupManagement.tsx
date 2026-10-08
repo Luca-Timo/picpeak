@@ -17,7 +17,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card, Loading } from '../../components/common';
+import { Button, Card, Loading, Badge } from '../../components/common';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../hooks';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
@@ -181,7 +181,7 @@ export const BackupManagement: React.FC = () => {
 
             {backupConfig?.backup_enabled && (
               <div className="flex items-center space-x-2">
-                <Clock className="h-5 w-5 text-neutral-400" />
+                <Clock className="h-5 w-5 text-faint" />
                 <span className="text-sm text-soft">
                   {t('backup.status.nextBackup')}: {backupStatus?.nextBackup ? fmtDateTime(backupStatus.nextBackup) : t('backup.status.notScheduled')}
                 </span>
@@ -209,14 +209,9 @@ export const BackupManagement: React.FC = () => {
               )}
             </Button>
 
-            <div className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium ${
-              backupConfig?.backup_enabled
-                ? 'bg-success-soft text-success-text'
-                : 'bg-inset text-body'
-            }`}>
-              <Shield className="h-4 w-4" />
-              <span>{backupConfig?.backup_enabled ? t('backup.status.enabled') : t('backup.status.disabled')}</span>
-            </div>
+            <Badge tone={backupConfig?.backup_enabled ? 'success' : 'neutral'} icon={<Shield />}>
+              {backupConfig?.backup_enabled ? t('backup.status.enabled') : t('backup.status.disabled')}
+            </Badge>
           </div>
         </div>
       </Card>

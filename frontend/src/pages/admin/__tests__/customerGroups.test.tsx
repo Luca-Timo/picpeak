@@ -16,6 +16,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ConfirmDialogProvider } from '../../../components/common/ConfirmDialog';
 
 vi.mock('react-i18next', async () => {
   const actual = await vi.importActual<typeof import('react-i18next')>('react-i18next');
@@ -121,7 +122,9 @@ function renderPageWithClient(url = '/admin/clients/accounts') {
   const utils = render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[url]}>
-        <CustomerManagementPage />
+        <ConfirmDialogProvider>
+          <CustomerManagementPage />
+        </ConfirmDialogProvider>
         <LocationProbe />
         <NavigateProbe />
       </MemoryRouter>

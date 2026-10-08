@@ -2267,7 +2267,8 @@
     "deleteEventConfirmLoss": "Delete \"{{name}}\" with all its photos? This cannot be undone.",
     "noEventsMatchHint": "Nothing matches this search or filter. Clear it to see every gallery.",
     "noEventsYet": "No galleries yet",
-    "noEventsYetHint": "Create a gallery to share photos with a client."
+    "noEventsYetHint": "Create a gallery to share photos with a client.",
+    "downloadLimitResetAction": "Reset downloads"
   },
   "settings": {
     "title": "System Settings",
@@ -5339,7 +5340,8 @@
     "deleteConfirm": {
       "title": "Delete Event Type",
       "message": "Are you sure you want to delete",
-      "warning": "This action cannot be undone. Make sure no events are using this type."
+      "warning": "This action cannot be undone. Make sure no events are using this type.",
+      "action": "Delete event type"
     }
   },
   "backup": {
@@ -6102,7 +6104,9 @@
     "decisionError": "Failed to save your decision",
     "decisionType": "your decision",
     "youApproved": "You approved this photo",
-    "youRejected": "You rejected this photo"
+    "youRejected": "You rejected this photo",
+    "confirmDeleteLoss": "Delete this feedback? The guest's rating or comment is removed for good.",
+    "deleteAction": "Delete feedback"
   },
   "filter": {
     "feedbackFilters": "Feedback Filters",
@@ -7097,7 +7101,9 @@
       "title": "Cancel invitation?",
       "body": "The invitation link will stop working immediately.",
       "success": "Invitation cancelled",
-      "error": "Could not cancel invitation"
+      "error": "Could not cancel invitation",
+      "action": "Cancel invitation",
+      "keep": "Keep invitation"
     },
     "detail": {
       "loadError": "Could not load customer",
@@ -7522,7 +7528,8 @@
         "supplierCountry": "Supplier country",
         "supplierCountryNone": "— unknown —",
         "supplierCountryHint": "Sets the tax treatment automatically: outside your VAT-reclaim countries → foreign VAT (not reclaimable)."
-      }
+      },
+      "loadFailed": "Could not load the incoming invoices"
     },
     "expenseStatus": {
       "open": "Open",
@@ -7630,14 +7637,15 @@
       "lockedHint": "Locked — this expense is on a client invoice.",
       "description": "Description",
       "descriptionHint": "e.g. mileage, per-diem, cash receipt",
-      "createdToast": "Expense added."
+      "createdToast": "Expense added.",
+      "loadFailed": "Could not load the expenses"
     }
   },
   "projects": {
     "title": "Project Overview",
     "subtitle": "Group events into projects and see every email, document, gallery and hour in one cockpit.",
     "search": "Search by name or customer…",
-    "empty": "No projects yet. Create one above, or events you already have were grouped automatically.",
+    "empty": "Create one above, or galleries you already have were grouped automatically.",
     "notFound": "Project not found",
     "noCustomer": "No single customer",
     "rename": "Rename",
@@ -7710,7 +7718,10 @@
       "archived": "Archived"
     },
     "eventCount_one": "{{count}} events",
-    "eventCount_other": "{{count}} events"
+    "eventCount_other": "{{count}} events",
+    "loadFailed": "Could not load the projects",
+    "noMatches": "No projects match this search",
+    "emptyTitle": "No projects yet"
   },
   "calendar": {
     "pageTitle": "Calendar",
@@ -7754,7 +7765,8 @@
       "lockedTooltip": "Already billed — Storno the invoice to edit.",
       "noDescription": "No description.",
       "untitledCustomer": "Hours",
-      "customerLoggingDisabled": "This customer has hour logging disabled. Enable it on the customer's detail page to log hours."
+      "customerLoggingDisabled": "This customer has hour logging disabled. Enable it on the customer's detail page to log hours.",
+      "deleteAction": "Delete hours"
     }
   },
   "hoursLogging": {

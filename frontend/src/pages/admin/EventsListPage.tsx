@@ -622,10 +622,9 @@ export const EventsListPage: React.FC = () => {
               </PermissionGate>
               <PermissionGate permission="events.delete">
                 <Button
-                  variant="outline"
+                  variant="danger"
                   size="sm"
                   onClick={() => bulkDeleteModal.open()}
-                  className="border-danger-line text-danger-text hover:bg-danger-soft"
                 >
                   {t('events.deleteSelected', 'Delete Selected')}
                 </Button>
@@ -644,7 +643,7 @@ export const EventsListPage: React.FC = () => {
                 type="checkbox"
                 checked={selectedEvents.length === events.length && events.length > 0}
                 onChange={handleSelectAll}
-                className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent dark:bg-neutral-700"
+                className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent bg-panel"
               />
             </TableHeaderCell>
             <ColumnMenuHeader
@@ -749,7 +748,7 @@ export const EventsListPage: React.FC = () => {
                       type="checkbox"
                       checked={selectedEvents.includes(event.id)}
                       onChange={() => handleSelectEvent(event.id)}
-                      className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent dark:bg-neutral-700"
+                      className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent bg-panel"
                     />
                   </TableCell>
                   <TableCell>

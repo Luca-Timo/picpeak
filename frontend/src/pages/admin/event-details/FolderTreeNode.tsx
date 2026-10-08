@@ -58,7 +58,7 @@ export const FolderTreeNode: React.FC<{
           {isExpanded ? (
             <FolderOpen className="w-4 h-4 flex-shrink-0 text-accent" />
           ) : (
-            <Folder className="w-4 h-4 flex-shrink-0 text-neutral-500" />
+            <Folder className="w-4 h-4 flex-shrink-0 text-muted" />
           )}
           <span className="truncate">{name}</span>
         </button>

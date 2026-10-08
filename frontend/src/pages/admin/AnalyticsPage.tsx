@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-import { Button, Card, ErrorState, Loading } from '../../components/common';
+import { Button, Card, ErrorState, Loading, Notice } from '../../components/common';
 import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
 import { useQuery } from '@tanstack/react-query';
 import { adminService } from '../../services/admin.service';
@@ -566,17 +566,9 @@ export const AnalyticsPage: React.FC = () => {
 
       {/* Configuration Notice */}
       {umamiConfig.enabled === false && (
-        <Card padding="md" className="mt-6 bg-warning-soft border-warning-line">
-          <div className="flex items-start gap-3">
-            <Activity className="w-5 h-5 text-warning-text flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-warning-text">{t('analytics.notConfigured')}</p>
-              <p className="text-sm text-warning-text mt-1">
-                {t('analytics.configureInstructions')}
-              </p>
-            </div>
-          </div>
-        </Card>
+        <Notice tone="warning" className="mt-6" icon={<Activity className="w-5 h-5" />} title={t('analytics.notConfigured')}>
+          {t('analytics.configureInstructions')}
+        </Notice>
       )}
     </div>
   );

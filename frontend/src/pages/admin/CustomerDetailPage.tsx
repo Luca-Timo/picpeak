@@ -14,11 +14,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import {
-  Mail, MapPin, Phone, Building2, Save, Trash2, AlertTriangle,
+  Mail, MapPin, Phone, Building2, Save, Trash2,
   CheckCircle2, X, FileText, Calendar, KeyRound, ToggleLeft, Settings as SettingsIcon, Megaphone,
 } from 'lucide-react';
 
-import { Button, Card, CountrySelect, Input, Loading, Switch } from '../../components/common';
+import { Badge, Button, Card, CountrySelect, ErrorState, Input, Loading, Switch, useConfirm } from '../../components/common';
 import { FeatureStatusBadge } from '../../features/featureStatus';
 import { SUPPORTED_LANGUAGES } from '../../components/common/LanguageSelector';
 import { DecimalInput } from '../../components/common/DecimalInput';
@@ -71,7 +71,7 @@ export const CustomerDetailPage: React.FC = () => {
   const { flags } = useFeatureFlags();
   const { hasPermission } = usePermissions();
 
-  const { data: customer, isLoading, error } = useQuery({
+  const { data: customer, isLoading, error, isRefetching, refetch } = useQuery({
     queryKey: ['admin-customer', customerId],
     queryFn: () => customerAdminService.get(customerId),
     enabled: Number.isFinite(customerId) && customerId > 0,
@@ -110,8 +110,7 @@ export const CustomerDetailPage: React.FC = () => {
   };
 
   const [form, setForm] = useState<Partial<Pick<CustomerAccountDetail, EditableFields>>>({});
-  const deactivateModal = useModal();
-  const eraseModal = useModal();
+  const confirm = useConfirm();
   // Drives the "Manage galleries" modal launched from the Assigned
   // events card. We hold open-state here (rather than inside the
   // dialog) so the parent decides when to mount/unmount and the
@@ -292,12 +291,11 @@ export const CustomerDetailPage: React.FC = () => {
   }
   if (error || !customer) {
     return (
-      <div>
-        <div className="text-sm text-danger-text flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4" />
-          {t('customers.detail.loadError', 'Could not load customer')}
-        </div>
-      </div>
+      <ErrorState
+        title={t('customers.detail.loadError', 'Could not load customer')}
+        onRetry={() => refetch()}
+        retrying={isRefetching}
+      />
     );
   }
 
@@ -312,26 +310,23 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
         <div className="flex flex-col items-end gap-1">
           {customer.isActive ? (
-            <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-accent)' }}>
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <Badge tone="success" icon={<CheckCircle2 />}>
               {t('customers.status.active', 'Active')}
-            </span>
+            </Badge>
           ) : (
-            <span className="inline-flex items-center gap-1 text-xs text-danger-text">
-              <X className="w-3.5 h-3.5" />
+            <Badge tone="danger" icon={<X />}>
               {t('customers.status.inactive', 'Deactivated')}
-            </span>
+            </Badge>
           )}
           {customer.isPassive ? (
-            <span
-              className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-subtle text-body"
+            <Badge
               title={t(
                 'customers.passive.detailHint',
                 'This customer has no portal access (admin-only record). Click "Send portal invitation" below to email them a sign-up link.',
               ) as string}
             >
               {t('customers.passive.badge', 'Passive — admin only')}
-            </span>
+            </Badge>
           ) : (
             <span className="text-[11px] text-muted">
               {t('customers.passive.activeLabel', 'Has portal access')}
@@ -364,7 +359,7 @@ export const CustomerDetailPage: React.FC = () => {
                 <option key={lang.code} value={lang.code}>{lang.name}</option>
               ))}
             </select>
-            <p className="text-xs text-neutral-500 mt-1">
+            <p className="text-xs text-muted mt-1">
               {t('customers.detail.preferredLanguageHint',
                 'Drives portal UI, quote/invoice PDFs, and billing emails (reminders/dunning). New customers default to the business-profile language ({{lang}}); override here per customer.',
                 { lang: LOCALE_LABELS[profileDefaultLocale] || profileDefaultLocale.toUpperCase() })}
@@ -948,15 +943,18 @@ export const CustomerDetailPage: React.FC = () => {
               variant="outline"
               disabled={triggerMonthlyBillMutation.isPending}
               isLoading={triggerMonthlyBillMutation.isPending}
-              onClick={() => {
+              onClick={async () => {
                 const confirmMsg = form.billingCadence === 'manual'
                   ? t('customers.billing.triggerConfirmManual',
                       'Issue this customer\'s accumulated bill now? The customer receives the email immediately.')
                   : t('customers.billing.triggerConfirm',
                       'Issue this customer\'s monthly bill now? The customer receives the email immediately.');
-                if (window.confirm(confirmMsg as string)) {
-                  triggerMonthlyBillMutation.mutate();
-                }
+                const ok = await confirm({
+                  message: confirmMsg as string,
+                  variant: 'warning',
+                  confirmLabel: t('customers.billing.triggerNow', 'Trigger invoice now'),
+                });
+                if (ok) triggerMonthlyBillMutation.mutate();
               }}
             >
               {t('customers.billing.triggerNow', 'Trigger invoice now')}
@@ -1058,7 +1056,16 @@ export const CustomerDetailPage: React.FC = () => {
             <Button
               variant="outline"
               leftIcon={<Trash2 className="w-4 h-4" />}
-              onClick={() => deactivateModal.open()}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: t('customers.deactivate.title', 'Deactivate customer?'),
+                  message: t('customers.deactivate.body',
+                    'They will no longer be able to log in. You can re-invite them later.'),
+                  variant: 'warning',
+                  confirmLabel: t('customers.deactivate.button', 'Deactivate'),
+                });
+                if (ok) deactivateMutation.mutate();
+              }}
             >
               {t('customers.deactivate.button', 'Deactivate')}
             </Button>
@@ -1077,13 +1084,21 @@ export const CustomerDetailPage: React.FC = () => {
                   → erase) and removes the chance of misclicking through
                   the deactivate button on a live account. */}
               <Button
-                variant="outline"
-                leftIcon={<Trash2 className="w-4 h-4 text-danger-text" />}
-                onClick={() => eraseModal.open()}
+                variant="danger"
+                leftIcon={<Trash2 className="w-4 h-4" />}
+                isLoading={eraseMutation.isPending}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: t('customers.erase.title', 'Erase customer data?'),
+                    message: t('customers.erase.body',
+                      'Removes the customer\'s name, email, phone, address, company and credentials. The account row stays so historical event-access records and audit logs still reference it. This is irreversible — you cannot restore the data afterwards.'),
+                    variant: 'danger',
+                    confirmLabel: t('customers.erase.confirm', 'Erase permanently'),
+                  });
+                  if (ok) eraseMutation.mutate();
+                }}
               >
-                <span className="text-danger-text">
-                  {t('customers.erase.button', 'Erase customer data')}
-                </span>
+                {t('customers.erase.button', 'Erase customer data')}
               </Button>
             </>
           )}
@@ -1098,78 +1113,6 @@ export const CustomerDetailPage: React.FC = () => {
         </Button>
       </div>
 
-      {deactivateModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-xl shadow-lg bg-shell">
-            <div className="p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <AlertTriangle className="w-5 h-5 mt-0.5 text-warning" />
-                <div>
-                  <h2 className="text-lg font-semibold text-heading">
-                    {t('customers.deactivate.title', 'Deactivate customer?')}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted">
-                    {t('customers.deactivate.body',
-                      'They will no longer be able to log in. You can re-activate or fully erase them later.')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => deactivateModal.close()}>
-                  {t('common.cancel', 'Cancel')}
-                </Button>
-                <Button
-                  variant="primary"
-                  isLoading={deactivateMutation.isPending}
-                  onClick={() => { deactivateMutation.mutate(); deactivateModal.close(); }}
-                >
-                  {t('common.confirm', 'Confirm')}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Erase confirm modal — second step after deactivate. Spelled out
-          "irreversible" copy + red Confirm button so the click feels
-          deliberate. The action anonymizes PII in place; assignments
-          and audit-log references are preserved. */}
-      {eraseModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-xl shadow-lg bg-shell">
-            <div className="p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <AlertTriangle className="w-5 h-5 mt-0.5 text-danger-text" />
-                <div>
-                  <h2 className="text-lg font-semibold text-heading">
-                    {t('customers.erase.title', 'Erase customer data?')}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted">
-                    {t('customers.erase.body',
-                      'Removes the customer\'s name, email, phone, address, company and credentials. The account row stays so historical event-access records and audit logs still reference it. This is irreversible — you cannot restore the data afterwards.')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => eraseModal.close()}>
-                  {t('common.cancel', 'Cancel')}
-                </Button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white bg-danger hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-                  disabled={eraseMutation.isPending}
-                  onClick={() => { eraseMutation.mutate(); eraseModal.close(); }}
-                >
-                  {eraseMutation.isPending
-                    ? t('customers.erase.confirmInFlight', 'Erasing…')
-                    : t('customers.erase.confirm', 'Erase permanently')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

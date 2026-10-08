@@ -1253,7 +1253,8 @@
     "deleteConfirm": {
       "title": "Veranstaltungsart löschen",
       "message": "Sind Sie sicher, dass Sie löschen möchten",
-      "warning": "Diese Aktion kann nicht rückgängig gemacht werden. Stellen Sie sicher, dass keine Veranstaltungen diesen Typ verwenden."
+      "warning": "Diese Aktion kann nicht rückgängig gemacht werden. Stellen Sie sicher, dass keine Veranstaltungen diesen Typ verwenden.",
+      "action": "Veranstaltungsart löschen"
     }
   },
   "backup": {
@@ -2805,7 +2806,8 @@
     "deleteEventConfirmLoss": "„{{name}}“ mit allen Fotos löschen? Das kann nicht rückgängig gemacht werden.",
     "noEventsMatchHint": "Nichts passt zu dieser Suche oder diesem Filter. Setzen Sie ihn zurück, um alle Galerien zu sehen.",
     "noEventsYet": "Noch keine Galerien",
-    "noEventsYetHint": "Erstellen Sie eine Galerie, um Fotos mit einem Kunden zu teilen."
+    "noEventsYetHint": "Erstellen Sie eine Galerie, um Fotos mit einem Kunden zu teilen.",
+    "downloadLimitResetAction": "Downloads zurücksetzen"
   },
   "settings": {
     "title": "Systemeinstellungen",
@@ -6047,7 +6049,9 @@
     "decisionError": "Deine Entscheidung konnte nicht gespeichert werden",
     "decisionType": "deine Entscheidung",
     "youApproved": "Du hast dieses Foto freigegeben",
-    "youRejected": "Du hast dieses Foto abgelehnt"
+    "youRejected": "Du hast dieses Foto abgelehnt",
+    "confirmDeleteLoss": "Dieses Feedback löschen? Die Bewertung oder der Kommentar des Gastes wird endgültig entfernt.",
+    "deleteAction": "Feedback löschen"
   },
   "filter": {
     "feedbackFilters": "Feedback-Filter",
@@ -7062,7 +7066,9 @@
       "title": "Einladung stornieren?",
       "body": "Der Einladungslink funktioniert sofort nicht mehr.",
       "success": "Einladung storniert",
-      "error": "Einladung konnte nicht storniert werden"
+      "error": "Einladung konnte nicht storniert werden",
+      "action": "Einladung stornieren",
+      "keep": "Einladung behalten"
     },
     "detail": {
       "loadError": "Kunde konnte nicht geladen werden",
@@ -7487,7 +7493,8 @@
         "supplierCountry": "Lieferantenland",
         "supplierCountryNone": "— unbekannt —",
         "supplierCountryHint": "Setzt die Steuerbehandlung automatisch: ausserhalb Ihrer Vorsteuer-Länder → ausländische MwSt (nicht abziehbar)."
-      }
+      },
+      "loadFailed": "Die eingehenden Rechnungen konnten nicht geladen werden"
     },
     "expenseStatus": {
       "open": "Offen",
@@ -7595,14 +7602,15 @@
       "lockedHint": "Gesperrt — dieser Aufwand ist auf einer Kundenrechnung.",
       "description": "Beschreibung",
       "descriptionHint": "z. B. Kilometer, Spesenpauschale, Barbeleg",
-      "createdToast": "Aufwand hinzugefügt."
+      "createdToast": "Aufwand hinzugefügt.",
+      "loadFailed": "Die Ausgaben konnten nicht geladen werden"
     }
   },
   "projects": {
     "title": "Projektübersicht",
     "subtitle": "Fasse Events zu Projekten zusammen und sieh jede E-Mail, jedes Dokument, jede Galerie und jede Stunde in einem Cockpit.",
     "search": "Nach Name oder Kunde suchen…",
-    "empty": "Noch keine Projekte. Erstellen Sie oben eines, oder vorhandene Events wurden automatisch gruppiert.",
+    "empty": "Erstellen Sie oben eines, oder vorhandene Galerien wurden automatisch gruppiert.",
     "notFound": "Projekt nicht gefunden",
     "noCustomer": "Kein einzelner Kunde",
     "rename": "Umbenennen",
@@ -7675,7 +7683,10 @@
       "archived": "Archiviert"
     },
     "eventCount_one": "{{count}} Event",
-    "eventCount_other": "{{count}} Events"
+    "eventCount_other": "{{count}} Events",
+    "loadFailed": "Die Projekte konnten nicht geladen werden",
+    "noMatches": "Keine Projekte passen zu dieser Suche",
+    "emptyTitle": "Noch keine Projekte"
   },
   "calendar": {
     "pageTitle": "Kalender",
@@ -7719,7 +7730,8 @@
       "lockedTooltip": "Bereits abgerechnet — Rechnung stornieren, um zu bearbeiten.",
       "noDescription": "Keine Beschreibung.",
       "untitledCustomer": "Stunden",
-      "customerLoggingDisabled": "Bei diesem Kunden ist die Stundenerfassung deaktiviert. Aktivieren Sie sie auf der Detailseite des Kunden, um Stunden zu erfassen."
+      "customerLoggingDisabled": "Bei diesem Kunden ist die Stundenerfassung deaktiviert. Aktivieren Sie sie auf der Detailseite des Kunden, um Stunden zu erfassen.",
+      "deleteAction": "Stunden löschen"
     }
   },
   "hoursLogging": {
