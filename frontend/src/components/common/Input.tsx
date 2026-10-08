@@ -7,9 +7,10 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   helperText?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
-  // Inside a gallery: label and helper text follow the gallery theme's text
-  // tokens. The `dark:` variants below only answer the admin's dark mode, so
-  // on a dark gallery theme the admin label colour is dark grey on near-black.
+  // Inside a gallery: the field, its label, icons, helper and error text
+  // follow the gallery theme's tokens. The admin .input reads the UI tokens,
+  // which only answer the admin's dark mode, so on a dark gallery theme it
+  // stayed a white box under a near-black page.
   themed?: boolean;
 }
 
@@ -46,14 +47,14 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <div className="relative">
           {leftIcon && (
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="text-muted">{leftIcon}</span>
+              <span className={themed ? 'text-muted-theme' : 'text-muted'}>{leftIcon}</span>
             </div>
           )}
           <input
             ref={ref}
             id={inputId}
             className={clsx(
-              'input',
+              themed ? 'input-themed' : 'input',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
               error && 'border-danger focus-visible:ring-accent',
@@ -67,12 +68,15 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           />
           {rightIcon && (
             <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-              <span className="text-muted">{rightIcon}</span>
+              <span className={themed ? 'text-muted-theme' : 'text-muted'}>{rightIcon}</span>
             </div>
           )}
         </div>
         {error && (
-          <p id={`${inputId}-error`} className="mt-1.5 text-sm text-danger-text">
+          <p
+            id={`${inputId}-error`}
+            className={clsx('mt-1.5 text-sm', themed ? 'text-status hue-danger' : 'text-danger-text')}
+          >
             {error}
           </p>
         )}

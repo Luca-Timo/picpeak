@@ -133,6 +133,19 @@
     @apply border hover:opacity-80;
   }
 
+  /* Ghost: no fill, text in the surface's own colour. Outside the admin it
+   * follows the operator's gallery theme (a fixed admin grey would vanish on
+   * a dark gallery); `:where(.admin-ui)` below keeps it on the UI tokens in
+   * the admin without outranking a colour utility passed in className. */
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--color-text);
+  }
+
+  .btn-ghost:hover {
+    background-color: color-mix(in srgb, var(--color-text) 8%, transparent);
+  }
+
   .btn-sm {
     @apply h-9 px-3 text-sm;
   }
@@ -569,6 +582,14 @@
     border-color: var(--ui-line-strong);
     color: var(--ui-text-body);
     opacity: 1;
+  }
+
+  :where(.admin-ui) .btn-ghost {
+    color: var(--ui-text-body);
+  }
+
+  :where(.admin-ui) .btn-ghost:hover {
+    background-color: var(--ui-hover);
   }
 
   .admin-ui .btn-outline:hover {

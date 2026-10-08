@@ -121,7 +121,7 @@ export const PhotoLikes: React.FC<PhotoLikesProps> = ({
         // — so the user couldn't tell the like had registered.
         isLiked
           ? 'bg-danger text-white hover:opacity-90'
-          : 'bg-surface text-muted-theme hover:bg-black/10'
+          : 'bg-elevated text-muted-theme hover-surface'
       } ${isSubmitting ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
       aria-label={isLiked ? t('feedback.unlike', 'Unlike') : t('feedback.like', 'Like')}
     >

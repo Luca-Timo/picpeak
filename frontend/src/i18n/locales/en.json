@@ -930,7 +930,8 @@
       "nothingToUpload": "None of the selected files can be uploaded: they are all in hidden or skipped folders.",
       "keptForNext": "Files added while the folders were prepared are still selected: {{count}}."
     },
-    "largeFileReplaceSkipped": "Replace-by-name is not supported for files above the batch size; upload it without replace."
+    "largeFileReplaceSkipped": "Replace-by-name is not supported for files above the batch size; upload it without replace.",
+    "removeFile": "Remove {{name}}"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -1396,7 +1397,9 @@
       "forgetMeConfirmUploads": "Your name will be removed from the photos you uploaded to this gallery.",
       "forgetMe": "Forget me ({{name}})",
       "notYou": "Not you?",
-      "socials": "Social media"
+      "socials": "Social media",
+      "forgetMeTitle": "Forget me?",
+      "forgetMeAction": "Forget me"
     },
     "photosCount_one": "{{count}} photo",
     "photosCount_other": "{{count}} photos",
@@ -1511,6 +1514,10 @@
       "withDate": "Your photographer is still working on the remaining images — the complete gallery will be here by {{date}} at the latest.",
       "noDetails": "Your photographer is still working on the remaining images.",
       "progressLabel": "Photos delivered so far"
+    },
+    "preview": {
+      "title": "Theme preview",
+      "description": "This is how your galleries will look with the current theme settings."
     }
   },
   "categories": {
@@ -6123,7 +6130,9 @@
     "decisionType": "your decision",
     "youApproved": "You approved this photo",
     "youRejected": "You rejected this photo",
-    "deleteAction": "Delete feedback"
+    "deleteAction": "Delete feedback",
+    "panelTitle": "Photo feedback",
+    "closePanel": "Close feedback"
   },
   "filter": {
     "feedbackFilters": "Feedback Filters",
@@ -6443,7 +6452,9 @@
     "setPin": "Set PIN",
     "linkLabel": "Client Access Link",
     "regenerateToken": "Regenerate link",
-    "tokenRegenerated": "Client access link regenerated"
+    "tokenRegenerated": "Client access link regenerated",
+    "hiddenFromGuests": "Hidden from guests",
+    "visibleToGuests": "Visible to guests"
   },
   "export": {
     "button": "Export",

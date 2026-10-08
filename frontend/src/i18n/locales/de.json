@@ -930,7 +930,8 @@
       "nothingToUpload": "Keine der ausgewählten Dateien kann hochgeladen werden: Alle liegen in versteckten oder übersprungenen Ordnern.",
       "keptForNext": "Dateien, die während der Vorbereitung der Ordner hinzukamen, sind noch ausgewählt: {{count}}."
     },
-    "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch."
+    "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch.",
+    "removeFile": "{{name}} entfernen"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -1949,7 +1950,9 @@
       "forgetMeConfirmUploads": "Ihr Name wird von den Fotos entfernt, die Sie in diese Galerie hochgeladen haben.",
       "forgetMe": "Mich vergessen ({{name}})",
       "notYou": "Nicht Sie?",
-      "socials": "Soziale Netzwerke"
+      "socials": "Soziale Netzwerke",
+      "forgetMeTitle": "Mich vergessen?",
+      "forgetMeAction": "Mich vergessen"
     },
     "photosCount_one": "{{count}} Foto",
     "photosCount_other": "{{count}} Fotos",
@@ -2051,6 +2054,10 @@
       "withDate": "Die restlichen Bilder sind noch in Bearbeitung – die vollständige Galerie folgt spätestens am {{date}}.",
       "noDetails": "Die restlichen Bilder sind noch in Bearbeitung.",
       "progressLabel": "Bisher gelieferte Fotos"
+    },
+    "preview": {
+      "title": "Theme-Vorschau",
+      "description": "So sehen Ihre Galerien mit den aktuellen Theme-Einstellungen aus."
     }
   },
   "categories": {
@@ -6068,7 +6075,9 @@
     "decisionType": "deine Entscheidung",
     "youApproved": "Du hast dieses Foto freigegeben",
     "youRejected": "Du hast dieses Foto abgelehnt",
-    "deleteAction": "Feedback löschen"
+    "deleteAction": "Feedback löschen",
+    "panelTitle": "Feedback zum Foto",
+    "closePanel": "Feedback schließen"
   },
   "filter": {
     "feedbackFilters": "Feedback-Filter",
@@ -6234,7 +6243,9 @@
     "setPin": "PIN festlegen",
     "linkLabel": "Kundenzugangs-Link",
     "regenerateToken": "Link neu generieren",
-    "tokenRegenerated": "Kundenzugangs-Link neu generiert"
+    "tokenRegenerated": "Kundenzugangs-Link neu generiert",
+    "hiddenFromGuests": "Für Gäste ausgeblendet",
+    "visibleToGuests": "Für Gäste sichtbar"
   },
   "setup": {
     "title": "Willkommen bei PicPeak",

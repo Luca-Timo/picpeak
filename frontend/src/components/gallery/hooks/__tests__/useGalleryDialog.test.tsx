@@ -1,0 +1,61 @@
+import React, { useRef, useState } from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { useGalleryDialog } from '../useGalleryDialog';
+
+const Dialog: React.FC<{ onClose: () => void; dismissible?: boolean }> = ({ onClose, dismissible }) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useGalleryDialog({ open: true, onClose, panelRef, dismissible });
+  return (
+    <div ref={panelRef} role="dialog" aria-label="Themed">
+      <button type="button">First</button>
+      <button type="button">Last</button>
+    </div>
+  );
+};
+
+const Harness: React.FC<{ dismissible?: boolean }> = ({ dismissible }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>Open</button>
+      {open && <Dialog onClose={() => setOpen(false)} dismissible={dismissible} />}
+    </>
+  );
+};
+
+describe('useGalleryDialog', () => {
+  it('focuses inside, keeps Tab inside, closes on Escape and gives focus back', () => {
+    render(<Harness />);
+    const opener = screen.getByText('Open');
+    opener.focus();
+    fireEvent.click(opener);
+    expect(document.activeElement).toBe(screen.getByText('First'));
+
+    screen.getByText('Last').focus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' });
+    expect(document.activeElement).toBe(screen.getByText('First'));
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('keeps Escape from reaching the lightbox underneath', () => {
+    const lightboxKeys = vi.fn();
+    document.addEventListener('keydown', lightboxKeys);
+    render(<Harness />);
+    fireEvent.click(screen.getByText('Open'));
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(lightboxKeys).not.toHaveBeenCalled();
+    document.removeEventListener('keydown', lightboxKeys);
+  });
+
+  it('ignores Escape when the dialog must be answered', () => {
+    render(<Harness dismissible={false} />);
+    fireEvent.click(screen.getByText('Open'));
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});

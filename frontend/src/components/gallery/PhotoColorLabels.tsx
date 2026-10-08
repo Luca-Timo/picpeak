@@ -158,7 +158,7 @@ export const PhotoColorLabels: React.FC<PhotoColorLabelsProps> = ({
               className={`flex items-center gap-1.5 pl-1.5 pr-2.5 py-1.5 rounded-full text-sm transition-all ${
                 isMine
                   ? 'bg-accent-soft ring-1 ring-accent scale-105'
-                  : 'bg-surface text-muted-theme hover:bg-black/10 hover:scale-105'
+                  : 'bg-elevated text-muted-theme hover-surface hover:scale-105'
               } ${isSubmitting ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
               aria-pressed={isMine}
               // The colour is the only visual difference between these five

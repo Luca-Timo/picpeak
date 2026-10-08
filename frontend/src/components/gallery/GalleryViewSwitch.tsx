@@ -27,7 +27,7 @@ export const GalleryViewSwitch: React.FC<GalleryViewSwitchProps> = ({ view, onCh
     <div
       role="group"
       aria-label={t('gallery.viewSwitch', 'Show photos by')}
-      className={`inline-flex items-center gap-1 p-1 rounded-lg border border-surface ${className}`}
+      className={`inline-flex items-center gap-1 p-1 rounded-lg border border-border-token ${className}`}
       style={{ backgroundColor: 'var(--color-background)' }}
     >
       {options.map(({ value, label, Icon }) => {

@@ -144,7 +144,7 @@ const MasonryPhoto: React.FC<MasonryPhotoProps> = ({
       // (see above), so its placeholder must not animate: the default
       // `.skeleton` is `animate-pulse`, and hundreds of far-off tiles would
       // keep the compositor busy for the life of the page (issue 1733).
-      skeletonClassName="w-full h-full rounded-lg bg-neutral-200"
+      skeletonClassName="w-full h-full rounded-lg bg-border-token"
       imageProps={{
         src: photo.thumbnail_url || photo.url,
         alt: photo.filename,
@@ -392,7 +392,7 @@ export const MasonryGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
           // Render a simple grid while calculating to get container width
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {photos.slice(0, 8).map((photo) => (
-              <div key={photo.id} className="aspect-square bg-neutral-200 rounded-lg animate-pulse" />
+              <div key={photo.id} className="aspect-square bg-border-token rounded-lg animate-pulse" />
             ))}
           </div>
         ) : photos.map((photo, index) => {
@@ -459,7 +459,7 @@ export const MasonryGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
         {isCalculating ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {photos.slice(0, 8).map((photo) => (
-              <div key={photo.id} className="aspect-square bg-neutral-200 rounded-lg animate-pulse" />
+              <div key={photo.id} className="aspect-square bg-border-token rounded-lg animate-pulse" />
             ))}
           </div>
         ) : photos.map((photo, index) => {
@@ -555,7 +555,7 @@ export const MasonryGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
               onClick={() => onPhotoClick(index)}
               onDownload={(e) => onDownload(photo, e)}
               onToggleSelect={() => onPhotoSelect && onPhotoSelect(photo.id)}
-              className={`photo-card group cursor-pointer relative overflow-hidden rounded-lg bg-neutral-100 ${spanClasses}`}
+              className={`photo-card group cursor-pointer relative overflow-hidden rounded-lg bg-elevated ${spanClasses}`}
               // Issue 1733: the grid's 200px rows and the span classes size
               // the cell, not the image, so the box survives both a skipped
               // tile and a released one. No intrinsic size, as in Grid.
@@ -605,7 +605,7 @@ export const MasonryGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
         // 62 photos downloading twice, plus 17 left on the larger file.
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {photos.slice(0, 8).map((photo) => (
-            <div key={photo.id} className="aspect-square bg-neutral-200 rounded-lg animate-pulse" />
+            <div key={photo.id} className="aspect-square bg-border-token rounded-lg animate-pulse" />
           ))}
         </div>
       ) : photoColumns.map((column, columnIndex) => (
