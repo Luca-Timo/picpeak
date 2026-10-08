@@ -184,10 +184,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
   };
 
   return (
-    <div
-      className="customer-surface min-h-screen flex items-center justify-center px-4 py-8"
-      style={{ backgroundColor: 'var(--color-background, #fafafa)' }}
-    >
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-background">
       <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
           <img
@@ -213,8 +210,8 @@ export const CustomerAcceptInvitePage: React.FC = () => {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="flex items-start gap-2 p-3 rounded-lg" style={{ backgroundColor: 'var(--color-elevated, #f5f5f5)' }}>
-                <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--color-accent)' }} />
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-elevated">
+                <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-accent" />
                 <div className="text-sm text-theme">
                   {t('customer.acceptInvite.emailWillBe', 'Your account email will be ')}
                   <span className="font-medium">{invitation.email}</span>
@@ -229,9 +226,9 @@ export const CustomerAcceptInvitePage: React.FC = () => {
               </div>
 
               {errors.form && (
-                <div role="alert" className="flex items-start gap-2 p-3 rounded-lg border" style={{ borderColor: 'var(--color-surface-border)' }}>
-                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-status hue-danger" />
-                  <span className="text-sm text-theme">{errors.form}</span>
+                <div role="alert" className="flex items-start gap-2 p-3 rounded-lg border status-chip status-line hue-danger">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm">{errors.form}</span>
                 </div>
               )}
 
@@ -249,12 +246,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                     <select
                       value={form.salutation}
                       onChange={(e) => update('salutation', e.target.value)}
-                      className="w-full rounded-lg border px-3 h-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-                      style={{
-                        backgroundColor: 'var(--color-surface)',
-                        borderColor: 'var(--color-surface-border)',
-                        color: 'var(--color-text)',
-                      }}
+                      className="input-themed"
                     >
                       {SALUTATION_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>{t(o.labelKey, o.fallback)}</option>
@@ -266,6 +258,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.acceptInvite.displayName', 'Display name')} <span className="text-status hue-danger">*</span>
                     </label>
                     <Input
+                      themed
                       value={form.display_name}
                       onChange={(e) => update('display_name', e.target.value)}
                       error={errors.display_name}
@@ -277,6 +270,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.firstName', 'First name')}
                     </label>
                     <Input
+                      themed
                       id="invite-first-name"
                       name="given-name"
                       autoComplete="given-name"
@@ -289,6 +283,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.lastName', 'Last name')}
                     </label>
                     <Input
+                      themed
                       id="invite-last-name"
                       name="family-name"
                       autoComplete="family-name"
@@ -313,6 +308,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.phone', 'Phone')}
                     </label>
                     <Input
+                      themed
                       id="invite-phone"
                       name="tel"
                       type="tel"
@@ -326,6 +322,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.companyName', 'Company name')}
                     </label>
                     <Input
+                      themed
                       id="invite-company"
                       name="organization"
                       autoComplete="organization"
@@ -338,6 +335,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.vatId', 'VAT ID')}
                     </label>
                     <Input
+                      themed
                       id="invite-vat"
                       name="vat-id"
                       value={form.vat_id}
@@ -361,6 +359,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.addressLine1', 'Address line 1')}
                     </label>
                     <Input
+                      themed
                       id="invite-address-line1"
                       name="address-line1"
                       autoComplete="billing address-line1"
@@ -373,6 +372,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.addressLine2', 'Address line 2')}
                     </label>
                     <Input
+                      themed
                       id="invite-address-line2"
                       name="address-line2"
                       autoComplete="billing address-line2"
@@ -385,6 +385,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.postalCode', 'Postal code')}
                     </label>
                     <Input
+                      themed
                       id="invite-postal-code"
                       name="postal-code"
                       autoComplete="billing postal-code"
@@ -398,6 +399,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.city', 'City')}
                     </label>
                     <Input
+                      themed
                       id="invite-city"
                       name="address-level2"
                       autoComplete="billing address-level2"
@@ -410,6 +412,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.profile.field.state', 'State / region')}
                     </label>
                     <Input
+                      themed
                       id="invite-state"
                       name="address-level1"
                       autoComplete="billing address-level1"
@@ -442,6 +445,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.acceptInvite.password', 'Password')} <span className="text-status hue-danger">*</span>
                     </label>
                     <Input
+                      themed
                       type="password"
                       value={form.password}
                       onChange={(e) => update('password', e.target.value)}
@@ -454,6 +458,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       {t('customer.acceptInvite.confirm', 'Confirm password')} <span className="text-status hue-danger">*</span>
                     </label>
                     <Input
+                      themed
                       type="password"
                       value={form.confirm}
                       onChange={(e) => update('confirm', e.target.value)}

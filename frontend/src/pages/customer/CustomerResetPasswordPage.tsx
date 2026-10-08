@@ -101,10 +101,7 @@ export const CustomerResetPasswordPage: React.FC = () => {
   };
 
   return (
-    <div
-      className="customer-surface min-h-screen flex items-center justify-center px-4 py-8"
-      style={{ backgroundColor: 'var(--color-background, #fafafa)' }}
-    >
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-background">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img
@@ -127,8 +124,8 @@ export const CustomerResetPasswordPage: React.FC = () => {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="flex items-start gap-2 p-3 rounded-lg" style={{ backgroundColor: 'var(--color-elevated, #f5f5f5)' }}>
-                <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'var(--color-accent)' }} />
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-elevated">
+                <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-accent" />
                 <div className="text-sm text-theme">
                   {t('customer.resetPassword.forEmail', 'Setting a new password for ')}
                   <span className="font-medium">{reset.email}</span>
@@ -137,9 +134,9 @@ export const CustomerResetPasswordPage: React.FC = () => {
               </div>
 
               {errors.form && (
-                <div role="alert" className="flex items-start gap-2 p-3 rounded-lg border" style={{ borderColor: 'var(--color-surface-border)' }}>
-                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-status hue-danger" />
-                  <span className="text-sm text-theme">{errors.form}</span>
+                <div role="alert" className="flex items-start gap-2 p-3 rounded-lg border status-chip status-line hue-danger">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm">{errors.form}</span>
                 </div>
               )}
 
@@ -148,11 +145,12 @@ export const CustomerResetPasswordPage: React.FC = () => {
                   {t('customer.resetPassword.password', 'New password')}
                 </label>
                 <Input
+                  themed
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
                   error={errors.password}
-                  leftIcon={<Lock className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Lock className="w-5 h-5" />}
                   autoComplete="new-password"
                   autoFocus
                 />
@@ -166,11 +164,12 @@ export const CustomerResetPasswordPage: React.FC = () => {
                   {t('customer.resetPassword.confirm', 'Confirm new password')}
                 </label>
                 <Input
+                  themed
                   type="password"
                   value={form.confirm}
                   onChange={(e) => setForm((p) => ({ ...p, confirm: e.target.value }))}
                   error={errors.confirm}
-                  leftIcon={<Lock className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Lock className="w-5 h-5" />}
                   autoComplete="new-password"
                 />
               </div>
