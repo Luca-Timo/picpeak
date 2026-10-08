@@ -10066,7 +10066,6 @@
     "refreshPreview": "Vorschau aktualisieren",
     "previewTitle": "Newsletter-Vorschau",
     "sendTest": "Test",
-    "queueButton": "Kampagne einreihen",
     "queueBlocked": "Betreff, Inhalt und mindestens ein Empfänger werden zum Senden benötigt.",
     "queueTitle": "Diese Kampagne senden?",
     "queueBody": "Damit werden {{count}} Kunden mit {{rate}} pro Minute angeschrieben (rund {{minutes}} Min.). Sobald der Versand läuft, lässt sich das nicht rückgängig machen.",

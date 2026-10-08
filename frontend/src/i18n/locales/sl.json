@@ -9487,7 +9487,6 @@
     "refreshPreview": "Osveži predogled",
     "previewTitle": "Predogled e-novic",
     "sendTest": "Preizkus",
-    "queueButton": "Dodaj kampanjo v čakalno vrsto",
     "queueBlocked": "Pred pošiljanjem so potrebni zadeva, vsebina in vsaj en prejemnik.",
     "queueTitle": "Pošljem to kampanjo?",
     "queueBody": "S tem boste poslali e-pošto {{count}} strankam s hitrostjo {{rate}} na minuto (približno {{minutes}} min). Ko se pošiljanje začne, dejanja ni mogoče razveljaviti.",

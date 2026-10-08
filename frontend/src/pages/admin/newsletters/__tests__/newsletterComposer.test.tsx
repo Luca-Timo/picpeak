@@ -227,7 +227,7 @@ describe('newsletter composer', () => {
     await screen.findByTestId('recipient-summary');
     await waitFor(() => expect(resolveSpy).toHaveBeenCalled());
 
-    expect(screen.getByRole('button', { name: /Queue campaign/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Send campaign/i })).toBeDisabled();
   });
 
   it('disables the queue button when the body is empty', async () => {
@@ -238,7 +238,7 @@ describe('newsletter composer', () => {
     // missing bodyHtml, not by an empty recipient list.
     await waitFor(() => expect(summary).toHaveTextContent('42 recipients'));
 
-    expect(screen.getByRole('button', { name: /Queue campaign/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Send campaign/i })).toBeDisabled();
   });
 
   it('disables the queue button when the subject is empty', async () => {
@@ -249,14 +249,14 @@ describe('newsletter composer', () => {
     // missing subject, not by an empty recipient list.
     await waitFor(() => expect(summary).toHaveTextContent('42 recipients'));
 
-    expect(screen.getByRole('button', { name: /Queue campaign/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Send campaign/i })).toBeDisabled();
   });
 
   it('confirms with the recipient count and rate before queueing', async () => {
     renderComposer();
     await screen.findByTestId('recipient-summary');
 
-    await userEvent.click(screen.getByRole('button', { name: /Queue campaign/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Send campaign/i }));
 
     await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
     const opts = confirmSpy.mock.calls[0][0] as { message: string; confirmLabel: string };
@@ -272,7 +272,7 @@ describe('newsletter composer', () => {
     renderComposer();
     await screen.findByTestId('recipient-summary');
 
-    await userEvent.click(screen.getByRole('button', { name: /Queue campaign/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Send campaign/i }));
 
     await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
     expect(queueSpy).not.toHaveBeenCalled();

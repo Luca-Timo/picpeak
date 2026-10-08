@@ -486,7 +486,8 @@ export const NewsletterComposerPage: React.FC<{ campaignId: number }> = ({ campa
             </p>
           </div>
 
-          {/* Test + queue live with the recipient rule they act on. */}
+          {/* The test send and the send check live with the recipient rule they
+              act on; the send itself is the header's primary action. */}
           <div className="mt-6 pt-4 border-t border-line space-y-3">
             <div className="flex gap-2 items-end">
               <div className="flex-1">
@@ -546,14 +547,6 @@ export const NewsletterComposerPage: React.FC<{ campaignId: number }> = ({ campa
               </div>
             )}
 
-            <Button
-              onClick={queueCampaign}
-              disabled={!canQueue}
-              className="w-full"
-              leftIcon={<Send className="w-4 h-4" />}
-            >
-              {t('newsletters.queueButton', 'Queue campaign')}
-            </Button>
             {!canQueue && (
               <p className="text-xs text-muted">
                 {t('newsletters.queueBlocked',

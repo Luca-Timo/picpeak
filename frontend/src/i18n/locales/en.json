@@ -10100,7 +10100,6 @@
     "refreshPreview": "Refresh preview",
     "previewTitle": "Newsletter preview",
     "sendTest": "Test",
-    "queueButton": "Queue campaign",
     "queueBlocked": "A subject, a body and at least one recipient are needed before sending.",
     "queueTitle": "Send this campaign?",
     "queueBody": "This will email {{count}} customers at {{rate}} per minute (roughly {{minutes}} min). It cannot be undone once messages start going out.",
