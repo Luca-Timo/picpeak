@@ -394,7 +394,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
                 <Icon className={`h-8 w-8 mb-2 mx-auto ${
                   formData.backup_destination_type === type.id
                     ? 'text-accent'
-                    : 'text-neutral-400'
+                    : 'text-faint'
                 }`} />
                 <h4 className="font-medium text-heading">{type.name}</h4>
                 <p className="text-xs text-muted mt-1">{type.description}</p>
@@ -560,7 +560,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowSecrets(prev => ({ ...prev, s3_secret_key: !prev.s3_secret_key }))}
-                      className="absolute top-1/2 -translate-y-1/2 right-2 text-neutral-400 hover:text-body"
+                      className="absolute top-1/2 -translate-y-1/2 right-2 text-faint hover:text-body"
                     >
                       {showSecrets.s3_secret_key ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
@@ -708,7 +708,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
             />
             <div className="ml-3">
               <div className="flex items-center space-x-2">
-                <Database className="h-4 w-4 text-neutral-400" />
+                <Database className="h-4 w-4 text-faint" />
                 <span className="text-sm font-medium text-body">{t('backup.configuration.whatToBackup.database')}</span>
               </div>
               <p className="text-xs text-muted">{t('backup.configuration.whatToBackup.databaseHelp')}</p>
@@ -724,7 +724,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
             />
             <div className="ml-3">
               <div className="flex items-center space-x-2">
-                <Image className="h-4 w-4 text-neutral-400" />
+                <Image className="h-4 w-4 text-faint" />
                 <span className="text-sm font-medium text-body">{t('backup.configuration.whatToBackup.photos')}</span>
               </div>
               <p className="text-xs text-muted">{t('backup.configuration.whatToBackup.photosHelp')}</p>
@@ -740,7 +740,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
             />
             <div className="ml-3">
               <div className="flex items-center space-x-2">
-                <FileArchive className="h-4 w-4 text-neutral-400" />
+                <FileArchive className="h-4 w-4 text-faint" />
                 <span className="text-sm font-medium text-body">{t('backup.configuration.whatToBackup.archives')}</span>
               </div>
               <p className="text-xs text-muted">{t('backup.configuration.whatToBackup.archivesHelp')}</p>
@@ -756,7 +756,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
             />
             <div className="ml-3">
               <div className="flex items-center space-x-2">
-                <Image className="h-4 w-4 text-neutral-400" />
+                <Image className="h-4 w-4 text-faint" />
                 <span className="text-sm font-medium text-body">{t('backup.configuration.whatToBackup.thumbnails')}</span>
               </div>
               <p className="text-xs text-muted">{t('backup.configuration.whatToBackup.thumbnailsHelp')}</p>

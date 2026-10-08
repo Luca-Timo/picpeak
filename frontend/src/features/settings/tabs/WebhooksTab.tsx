@@ -238,7 +238,7 @@ export const WebhooksTab: React.FC = () => {
                   rows={3}
                   className="w-full px-3 py-2 border border-line-strong dark:bg-neutral-800 rounded text-sm font-mono"
                 />
-                <p className="text-xs text-neutral-500 mt-1">
+                <p className="text-xs text-muted mt-1">
                   {t('settings.webhooks.filterHelp', 'Dot-path → expected value. All keys must match (AND). Use an array for "any of".')} <code>{'{"type": ["event.published", "event.archived"]}'}</code>
                 </p>
                 {filterError && <p className="text-xs text-danger-text mt-1">{filterError}</p>}
@@ -255,7 +255,7 @@ export const WebhooksTab: React.FC = () => {
                   rows={3}
                   className="w-full px-3 py-2 border border-line-strong dark:bg-neutral-800 rounded text-sm font-mono"
                 />
-                <p className="text-xs text-neutral-500 mt-1">
+                <p className="text-xs text-muted mt-1">
                   {t('settings.webhooks.templateHelp', 'Replaces the default JSON envelope as the request body. ${dot.path} substitution from the payload only — no logic, no expressions.')}
                 </p>
               </div>
@@ -299,10 +299,10 @@ export const WebhooksTab: React.FC = () => {
                     <tr key={wh.id} className="border-b border-line-faint last:border-0 align-top">
                       <td className="py-3 pr-3 font-medium">{wh.name}</td>
                       <td className="py-3 pr-3 text-xs font-mono text-soft max-w-xs truncate" title={wh.url}>{wh.url}</td>
-                      <td className="py-3 pr-3 text-xs text-neutral-500">
+                      <td className="py-3 pr-3 text-xs text-muted">
                         {t('settings.webhooks.eventsSubscribed', { count: Array.isArray(wh.events) ? wh.events.length : 0 })}
                       </td>
-                      <td className="py-3 pr-3 text-xs text-neutral-500">
+                      <td className="py-3 pr-3 text-xs text-muted">
                         {lastEither === 'success' && lastSuccess && (
                           <span className="flex items-center gap-1 text-success-text">
                             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -315,7 +315,7 @@ export const WebhooksTab: React.FC = () => {
                             {fmtDateTime(lastFailure)}
                           </span>
                         )}
-                        {lastEither === 'none' && <span className="text-neutral-400">—</span>}
+                        {lastEither === 'none' && <span className="text-faint">—</span>}
                       </td>
                       <td className="py-3 pr-3">
                         <button

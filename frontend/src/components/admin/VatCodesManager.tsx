@@ -53,7 +53,7 @@ const VatModal: React.FC<{ vat?: VatCode; accounts: LedgerAccount[]; onClose: ()
       <div className="mt-20 w-full max-w-sm rounded-xl bg-shell shadow-xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-heading">{isEdit ? t('ledger.vat.editTitle', 'Edit VAT code') : t('ledger.vat.addTitle', 'Add VAT code')}</h2>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-faint hover:text-soft"><X className="w-5 h-5" /></button>
         </div>
         <div className="px-5 py-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -173,8 +173,8 @@ export const VatCodesManager: React.FC = () => {
                   <td className="py-1.5 pr-3 text-muted">{t(`ledger.vatDirection.${v.direction}`, v.direction)}</td>
                   <td className="py-1.5 pr-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setVatModal({ vat: v })} className="p-1 text-neutral-500 hover:text-body"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => { if (window.confirm(t('ledger.vat.confirmDelete', 'Delete this VAT code?') as string)) delVat.mutate(v.id); }} className="p-1 text-neutral-400 hover:text-danger-text"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => setVatModal({ vat: v })} className="p-1 text-muted hover:text-body"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => { if (window.confirm(t('ledger.vat.confirmDelete', 'Delete this VAT code?') as string)) delVat.mutate(v.id); }} className="p-1 text-faint hover:text-danger-text"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>

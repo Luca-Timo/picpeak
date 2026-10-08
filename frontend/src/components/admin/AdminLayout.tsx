@@ -43,7 +43,7 @@ export const AdminLayout: React.FC = () => {
       <div className="min-h-screen bg-canvas flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-accent-dark border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-neutral-600">Loading...</p>
+          <p className="text-soft">Loading...</p>
         </div>
       </div>
     );

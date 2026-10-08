@@ -30,7 +30,7 @@ export const ReceivedEmailsPanel: React.FC = () => {
   if (items.length === 0) {
     return (
       <Card className="p-8 text-center">
-        <Inbox className="w-10 h-10 mx-auto mb-3 text-neutral-400" />
+        <Inbox className="w-10 h-10 mx-auto mb-3 text-faint" />
         <p className="text-sm text-soft">{t('email.received.empty', 'No received emails yet. Enable incoming mail and configure the mailbox.')}</p>
       </Card>
     );
@@ -54,7 +54,7 @@ export const ReceivedEmailsPanel: React.FC = () => {
               <td className="px-4 py-2 text-heading">
                 <span className="truncate inline-block max-w-[18rem] align-middle">{r.subject || '—'}</span>
                 {r.attachment_count > 0 && (
-                  <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-neutral-500">
+                  <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-muted">
                     <Paperclip className="w-3 h-3" />{r.attachment_count}
                     {r.inbound_document_id && <Link to="/admin/accounting/inbox" className="ml-1 text-accent hover:underline">{t('email.received.inbox', 'inbox')}</Link>}
                   </span>
@@ -69,7 +69,7 @@ export const ReceivedEmailsPanel: React.FC = () => {
       {pg && pg.totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-line-faint text-sm">
           <Button size="sm" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>{t('common.previous', 'Previous')}</Button>
-          <span className="text-neutral-500">{page} / {pg.totalPages}</span>
+          <span className="text-muted">{page} / {pg.totalPages}</span>
           <Button size="sm" variant="outline" onClick={() => setPage((p) => Math.min(pg.totalPages, p + 1))} disabled={page >= pg.totalPages}>{t('common.next', 'Next')}</Button>
         </div>
       )}

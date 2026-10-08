@@ -190,7 +190,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
             className="p-1 rounded hover:bg-hover-soft flex-shrink-0"
             aria-label={t('common.close', 'Close')}
           >
-            <X className="w-5 h-5 text-neutral-500" />
+            <X className="w-5 h-5 text-muted" />
           </button>
         </div>
 
@@ -200,7 +200,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-2">
               {t('customers.assignedEvents.currentLabel', 'Assigned galleries')}
-              <span className="ml-1.5 normal-case text-neutral-400">({selected.length})</span>
+              <span className="ml-1.5 normal-case text-faint">({selected.length})</span>
             </label>
             {selected.length === 0 ? (
               <p className="text-sm text-muted italic">
@@ -213,7 +213,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
                     key={s.id}
                     className="inline-flex items-center gap-2 pl-2 pr-1 py-1 rounded-full text-sm bg-subtle text-heading border border-line"
                   >
-                    <CalendarIcon className="w-3.5 h-3.5 text-neutral-500" />
+                    <CalendarIcon className="w-3.5 h-3.5 text-muted" />
                     <span className="truncate max-w-[220px]">{s.eventName}</span>
                     <button
                       type="button"
@@ -222,7 +222,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
                       aria-label={t('customers.assignedEvents.removeAria', 'Remove {{name}}', { name: s.eventName })}
                       className="p-0.5 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700"
                     >
-                      <X className="w-3.5 h-3.5 text-neutral-500" />
+                      <X className="w-3.5 h-3.5 text-muted" />
                     </button>
                   </li>
                 ))}
@@ -236,7 +236,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
               {t('customers.assignedEvents.searchLabel', 'Add a gallery')}
             </label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faint pointer-events-none" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -260,7 +260,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
                   aria-label={t('customers.assignedEvents.clearSearchAria', 'Clear search')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-hover disabled:opacity-50"
                 >
-                  <X className="w-3.5 h-3.5 text-neutral-500" />
+                  <X className="w-3.5 h-3.5 text-muted" />
                 </button>
               )}
             </div>
@@ -291,7 +291,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
                         className="w-full text-left px-3 py-2 flex items-center justify-between gap-3 hover:bg-hover"
                       >
                         <span className="flex items-center gap-2 min-w-0">
-                          <CalendarIcon className="w-4 h-4 flex-shrink-0 text-neutral-400" />
+                          <CalendarIcon className="w-4 h-4 flex-shrink-0 text-faint" />
                           <span className="truncate text-sm font-medium text-heading">
                             {ev.event_name}
                           </span>

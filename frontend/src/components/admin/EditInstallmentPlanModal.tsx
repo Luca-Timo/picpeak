@@ -162,7 +162,7 @@ export const EditInstallmentPlanModal: React.FC<EditInstallmentPlanModalProps> =
             type="button"
             onClick={onClose}
             disabled={save.isPending}
-            className="text-neutral-400 hover:text-neutral-600 disabled:opacity-50"
+            className="text-faint hover:text-soft disabled:opacity-50"
             aria-label={t('common.close', 'Close') as string}
           >
             <X className="w-5 h-5" />

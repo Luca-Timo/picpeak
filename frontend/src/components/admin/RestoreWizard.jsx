@@ -190,8 +190,8 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
   const renderSourceSelection = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('backup.restore.source.title')}</h3>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('backup.restore.source.subtitle')}</p>
+        <h3 className="text-lg font-semibold text-heading mb-2">{t('backup.restore.source.title')}</h3>
+        <p className="text-sm text-soft">{t('backup.restore.source.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -200,14 +200,14 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           className={`p-6 rounded-lg border-2 transition-all ${
             restoreData.source === 'local'
               ? 'border-primary bg-accent-dark/15'
-              : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300 dark:hover:border-neutral-500'
+              : 'border-line hover:border-line-strong'
           }`}
         >
           <HardDrive className={`h-12 w-12 mb-3 mx-auto ${
-            restoreData.source === 'local' ? 'text-primary' : 'text-neutral-400'
+            restoreData.source === 'local' ? 'text-primary' : 'text-faint'
           }`} />
-          <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.source.local.name')}</h4>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t('backup.restore.source.local.description')}</p>
+          <h4 className="font-medium text-heading">{t('backup.restore.source.local.name')}</h4>
+          <p className="text-xs text-muted mt-1">{t('backup.restore.source.local.description')}</p>
         </button>
 
         <button
@@ -215,14 +215,14 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           className={`p-6 rounded-lg border-2 transition-all ${
             restoreData.source === 's3'
               ? 'border-primary bg-accent-dark/15'
-              : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300 dark:hover:border-neutral-500'
+              : 'border-line hover:border-line-strong'
           }`}
         >
           <Cloud className={`h-12 w-12 mb-3 mx-auto ${
-            restoreData.source === 's3' ? 'text-primary' : 'text-neutral-400'
+            restoreData.source === 's3' ? 'text-primary' : 'text-faint'
           }`} />
-          <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.source.s3.name')}</h4>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t('backup.restore.source.s3.description')}</p>
+          <h4 className="font-medium text-heading">{t('backup.restore.source.s3.name')}</h4>
+          <p className="text-xs text-muted mt-1">{t('backup.restore.source.s3.description')}</p>
         </button>
 
         <button
@@ -230,21 +230,21 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           className={`p-6 rounded-lg border-2 transition-all ${
             restoreData.source === 'upload'
               ? 'border-primary bg-accent-dark/15'
-              : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300 dark:hover:border-neutral-500'
+              : 'border-line hover:border-line-strong'
           }`}
         >
           <Upload className={`h-12 w-12 mb-3 mx-auto ${
-            restoreData.source === 'upload' ? 'text-primary' : 'text-neutral-400'
+            restoreData.source === 'upload' ? 'text-primary' : 'text-faint'
           }`} />
-          <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.source.upload.name')}</h4>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t('backup.restore.source.upload.description')}</p>
+          <h4 className="font-medium text-heading">{t('backup.restore.source.upload.name')}</h4>
+          <p className="text-xs text-muted mt-1">{t('backup.restore.source.upload.description')}</p>
         </button>
       </div>
 
       {/* Source-specific configuration */}
       {restoreData.source === 's3' && (
         <Card className="p-4 space-y-4">
-          <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.source.configuration.s3')}</h4>
+          <h4 className="font-medium text-heading">{t('backup.restore.source.configuration.s3')}</h4>
           <div className="grid grid-cols-2 gap-4">
             <Input
               placeholder={t('backup.restore.source.configuration.endpoint')}
@@ -293,24 +293,24 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               className={`p-6 rounded-lg border-2 transition-all ${
                 restoreData.uploadType === 'picpeak'
                   ? 'border-primary bg-accent-dark/15'
-                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300 dark:hover:border-neutral-500'
+                  : 'border-line hover:border-line-strong'
               }`}
             >
               <FileArchive className={`h-10 w-10 mb-2 mx-auto ${restoreData.uploadType === 'picpeak' ? 'text-primary' : 'text-neutral-400'}`} />
-              <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.source.upload.picpeak.name', '.picpeak backup')}</h4>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t('backup.restore.source.upload.picpeak.description', 'Portable full backup — restores everything (full override, keeps your current account).')}</p>
+              <h4 className="font-medium text-heading">{t('backup.restore.source.upload.picpeak.name', '.picpeak backup')}</h4>
+              <p className="text-xs text-muted mt-1">{t('backup.restore.source.upload.picpeak.description', 'Portable full backup — restores everything (full override, keeps your current account).')}</p>
             </button>
             <button
               onClick={() => setRestoreData(prev => ({ ...prev, uploadType: 'manifest' }))}
               className={`p-6 rounded-lg border-2 transition-all ${
                 restoreData.uploadType === 'manifest'
                   ? 'border-primary bg-accent-dark/15'
-                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300 dark:hover:border-neutral-500'
+                  : 'border-line hover:border-line-strong'
               }`}
             >
               <Upload className={`h-10 w-10 mb-2 mx-auto ${restoreData.uploadType === 'manifest' ? 'text-primary' : 'text-neutral-400'}`} />
-              <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.source.upload.manifest.name', 'Manifest + files')}</h4>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t('backup.restore.source.upload.manifest.description', 'Upload a manifest and its backup files (legacy format).')}</p>
+              <h4 className="font-medium text-heading">{t('backup.restore.source.upload.manifest.name', 'Manifest + files')}</h4>
+              <p className="text-xs text-muted mt-1">{t('backup.restore.source.upload.manifest.description', 'Upload a manifest and its backup files (legacy format).')}</p>
             </button>
           </div>
 
@@ -319,8 +319,8 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           {restoreData.uploadType === 'manifest' && (
             <Card className="p-4">
               <div className="text-center py-8">
-                <Upload className="h-12 w-12 mx-auto mb-3 text-neutral-400" />
-                <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('backup.restore.source.upload.manifestComingSoon', 'Manifest Upload functionality coming soon')}</p>
+                <Upload className="h-12 w-12 mx-auto mb-3 text-faint" />
+                <p className="text-sm text-soft">{t('backup.restore.source.upload.manifestComingSoon', 'Manifest Upload functionality coming soon')}</p>
               </div>
             </Card>
           )}
@@ -332,8 +332,8 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
   const renderBackupSelection = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('backup.restore.backup.title')}</h3>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('backup.restore.backup.subtitle')}</p>
+        <h3 className="text-lg font-semibold text-heading mb-2">{t('backup.restore.backup.title')}</h3>
+        <p className="text-sm text-soft">{t('backup.restore.backup.subtitle')}</p>
       </div>
 
       {loadingBackups ? (
@@ -341,7 +341,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
       ) : availableBackups?.length === 0 ? (
         <Card className="p-8 text-center">
           <FileArchive className="h-12 w-12 mx-auto mb-3 text-neutral-300 dark:text-neutral-600" />
-          <p className="text-neutral-500 dark:text-neutral-400">{t('backup.restore.backup.noBackupsFound')}</p>
+          <p className="text-muted">{t('backup.restore.backup.noBackupsFound')}</p>
         </Card>
       ) : (
         <div className="space-y-3">
@@ -367,10 +367,10 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                     )}
                   </div>
                   <div>
-                    <p className="font-medium text-neutral-900 dark:text-neutral-100">
+                    <p className="font-medium text-heading">
                       {fmtDate(backup.created_at)} {t('backup.restore.backup.at')} {fmtTime(backup.created_at)}
                     </p>
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    <p className="text-sm text-muted">
                       {t('backup.dashboard.backupType', { type: backup.backup_type })} • {formatBytes(backup.total_size || 0)}
                     </p>
                   </div>
@@ -404,7 +404,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                     </span>
                   )}
                   {backup.encrypted && (
-                    <Shield className="h-5 w-5 text-neutral-400" />
+                    <Shield className="h-5 w-5 text-faint" />
                   )}
                 </div>
               </div>
@@ -466,8 +466,8 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
   const renderRestoreOptions = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('backup.restore.options.title')}</h3>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('backup.restore.options.subtitle')}</p>
+        <h3 className="text-lg font-semibold text-heading mb-2">{t('backup.restore.options.title')}</h3>
+        <p className="text-sm text-soft">{t('backup.restore.options.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -480,16 +480,16 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               className={`p-4 rounded-lg border-2 text-left transition-all ${
                 restoreData.restoreType === type.id
                   ? 'border-primary bg-accent-dark/15'
-                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300 dark:hover:border-neutral-500'
+                  : 'border-line hover:border-line-strong'
               }`}
             >
               <div className="flex items-start space-x-3">
                 <Icon className={`h-6 w-6 mt-1 ${
-                  restoreData.restoreType === type.id ? 'text-primary' : 'text-neutral-400'
+                  restoreData.restoreType === type.id ? 'text-primary' : 'text-faint'
                 }`} />
                 <div className="flex-1">
-                  <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{type.name}</h4>
-                  <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">{type.description}</p>
+                  <h4 className="font-medium text-heading">{type.name}</h4>
+                  <p className="text-sm text-soft mt-1">{type.description}</p>
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
                     <AlertTriangle className="inline h-3 w-3 mr-1" />
                     {type.warning}
@@ -503,7 +503,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
 
       {/* Additional Options */}
       <Card className="p-4 space-y-4">
-        <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.options.additionalOptions.title')}</h4>
+        <h4 className="font-medium text-heading">{t('backup.restore.options.additionalOptions.title')}</h4>
 
         <label className="flex items-start space-x-3">
           <input
@@ -513,11 +513,11 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               ...prev,
               skipPreBackup: e.target.checked
             }))}
-            className="mt-1 h-4 w-4 text-primary focus:ring-primary border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-700"
+            className="mt-1 h-4 w-4 text-primary focus:ring-primary border-line-strong rounded bg-inset"
           />
           <div>
-            <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{t('backup.restore.options.additionalOptions.skipPreBackup')}</p>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="text-sm font-medium text-body">{t('backup.restore.options.additionalOptions.skipPreBackup')}</p>
+            <p className="text-xs text-muted">
               {t('backup.restore.options.additionalOptions.skipPreBackupHelp')}
             </p>
           </div>
@@ -531,11 +531,11 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               ...prev,
               force: e.target.checked
             }))}
-            className="mt-1 h-4 w-4 text-primary focus:ring-primary border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-700"
+            className="mt-1 h-4 w-4 text-primary focus:ring-primary border-line-strong rounded bg-inset"
           />
           <div>
-            <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{t('backup.restore.options.additionalOptions.force')}</p>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="text-sm font-medium text-body">{t('backup.restore.options.additionalOptions.force')}</p>
+            <p className="text-xs text-muted">
               {t('backup.restore.options.additionalOptions.forceHelp')}
             </p>
           </div>
@@ -547,8 +547,8 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
   const renderConfirmation = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('backup.restore.confirmation.title')}</h3>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.subtitle')}</p>
+        <h3 className="text-lg font-semibold text-heading mb-2">{t('backup.restore.confirmation.title')}</h3>
+        <p className="text-sm text-soft">{t('backup.restore.confirmation.subtitle')}</p>
       </div>
 
       {validationResult ? (
@@ -587,17 +587,17 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           {/* Space Check */}
           {validationResult.spaceCheck && (
             <Card className="p-4">
-              <h4 className="font-medium text-neutral-900 dark:text-neutral-100 mb-3">{t('backup.restore.confirmation.spaceCheck.title')}</h4>
+              <h4 className="font-medium text-heading mb-3">{t('backup.restore.confirmation.spaceCheck.title')}</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.spaceCheck.required')}:</span>
-                  <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                  <span className="text-soft">{t('backup.restore.confirmation.spaceCheck.required')}:</span>
+                  <span className="font-medium text-heading">
                     {validationResult.spaceCheck.requiredFormatted || formatBytes(validationResult.spaceCheck.required || 0)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.spaceCheck.available')}:</span>
-                  <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                  <span className="text-soft">{t('backup.restore.confirmation.spaceCheck.available')}:</span>
+                  <span className="font-medium text-heading">
                     {validationResult.spaceCheck.availableFormatted ||
                      (validationResult.spaceCheck.available != null ? formatBytes(validationResult.spaceCheck.available) : t('common.unknown', 'Unknown'))}
                   </span>
@@ -614,25 +614,25 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
 
           {/* Summary */}
           <Card className="p-4">
-            <h4 className="font-medium text-neutral-900 dark:text-neutral-100 mb-3">{t('backup.restore.confirmation.summary.title')}</h4>
+            <h4 className="font-medium text-heading mb-3">{t('backup.restore.confirmation.summary.title')}</h4>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.summary.source')}:</dt>
-                <dd className="font-medium text-neutral-900 dark:text-neutral-100 capitalize">{restoreData.source}</dd>
+                <dt className="text-soft">{t('backup.restore.confirmation.summary.source')}:</dt>
+                <dd className="font-medium text-heading capitalize">{restoreData.source}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.summary.backupDate')}:</dt>
-                <dd className="font-medium text-neutral-900 dark:text-neutral-100">
+                <dt className="text-soft">{t('backup.restore.confirmation.summary.backupDate')}:</dt>
+                <dd className="font-medium text-heading">
                   {fmtDateTime(restoreData.selectedBackup.created_at)}
                 </dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.summary.restoreType')}:</dt>
-                <dd className="font-medium text-neutral-900 dark:text-neutral-100 capitalize">{restoreData.restoreType}</dd>
+                <dt className="text-soft">{t('backup.restore.confirmation.summary.restoreType')}:</dt>
+                <dd className="font-medium text-heading capitalize">{restoreData.restoreType}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.summary.preBackup')}:</dt>
-                <dd className="font-medium text-neutral-900 dark:text-neutral-100">{restoreData.skipPreBackup ? t('backup.restore.confirmation.summary.skipped') : t('backup.restore.confirmation.summary.enabled')}</dd>
+                <dt className="text-soft">{t('backup.restore.confirmation.summary.preBackup')}:</dt>
+                <dd className="font-medium text-heading">{restoreData.skipPreBackup ? t('backup.restore.confirmation.summary.skipped') : t('backup.restore.confirmation.summary.enabled')}</dd>
               </div>
             </dl>
           </Card>
@@ -655,7 +655,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
       ) : (
         <div className="text-center py-8">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.validation.checking')}</p>
+          <p className="mt-2 text-sm text-soft">{t('backup.restore.confirmation.validation.checking')}</p>
         </div>
       )}
     </div>
@@ -689,11 +689,11 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('backup.restore.progress.title')}</h3>
+          <h3 className="text-lg font-semibold text-heading mb-2">{t('backup.restore.progress.title')}</h3>
           <p className={`text-sm ${
             lastRunFailed
               ? 'text-red-700 dark:text-red-300 font-medium'
-              : 'text-neutral-600 dark:text-neutral-400'
+              : 'text-soft'
           }`}>
             {subtitle}
           </p>
@@ -725,17 +725,17 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
         <Card className="p-6">
           <div className="space-y-4">
             <div className="flex justify-between text-sm">
-              <span className="text-neutral-600 dark:text-neutral-400">{t('backup.restore.progress.overallProgress')}</span>
-              <span className="font-medium text-neutral-900 dark:text-neutral-100">{progress.percentage || 0}%</span>
+              <span className="text-soft">{t('backup.restore.progress.overallProgress')}</span>
+              <span className="font-medium text-heading">{progress.percentage || 0}%</span>
             </div>
-            <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-3">
+            <div className="w-full bg-fill rounded-full h-3">
               <div
                 className="bg-primary h-3 rounded-full transition-all duration-500"
                 style={{ width: `${progress.percentage || 0}%` }}
               />
             </div>
             {progress.currentFile && (
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              <p className="text-sm text-soft">
                 {t('backup.restore.progress.current')}: {progress.currentFile}
               </p>
             )}
@@ -744,7 +744,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
 
         {/* Status Details */}
         <Card className="p-6">
-          <h4 className="font-medium text-neutral-900 dark:text-neutral-100 mb-4">{t('backup.restore.progress.statusDetails')}</h4>
+          <h4 className="font-medium text-heading mb-4">{t('backup.restore.progress.statusDetails')}</h4>
           <div className="space-y-3">
             {progress.steps?.map((step, idx) => (
               <div key={idx} className="flex items-center space-x-3">
@@ -758,13 +758,13 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                   <Clock className="h-5 w-5 text-neutral-300 dark:text-neutral-600" />
                 )}
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{step.name}</p>
+                  <p className="text-sm font-medium text-heading">{step.name}</p>
                   {step.message && (
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{step.message}</p>
+                    <p className="text-xs text-muted">{step.message}</p>
                   )}
                 </div>
                 {step.duration && (
-                  <span className="text-xs text-neutral-500 dark:text-neutral-400">{step.duration}</span>
+                  <span className="text-xs text-muted">{step.duration}</span>
                 )}
               </div>
             ))}
@@ -774,7 +774,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
         {/* Logs */}
         {progress.logs && progress.logs.length > 0 && (
           <Card className="p-6">
-            <h4 className="font-medium text-neutral-900 dark:text-neutral-100 mb-4">{t('backup.restore.progress.restoreLogs')}</h4>
+            <h4 className="font-medium text-heading mb-4">{t('backup.restore.progress.restoreLogs')}</h4>
             <div className="bg-neutral-900 rounded-lg p-4 max-h-64 overflow-y-auto">
               <pre className="text-xs text-neutral-300 font-mono">
                 {progress.logs.join('\n')}
@@ -849,7 +849,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                       ? 'bg-primary'
                       : currentStep === stepIdx
                       ? 'bg-primary'
-                      : 'bg-neutral-300 dark:bg-neutral-600'
+                      : 'bg-fill-strong'
                     }
                   `}>
                     {currentStep > stepIdx ? (
@@ -861,13 +861,13 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                   {stepIdx !== steps.length - 1 && (
                     <div className={`
                       absolute top-4 w-full h-0.5
-                      ${currentStep > stepIdx ? 'bg-primary' : 'bg-neutral-300 dark:bg-neutral-600'}
+                      ${currentStep > stepIdx ? 'bg-primary' : 'bg-fill-strong'}
                     `} style={{ left: '2rem', right: '-2rem' }} />
                   )}
                 </div>
                 <span className={`
                   mt-2 text-xs font-medium
-                  ${currentStep >= stepIdx ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-500 dark:text-neutral-400'}
+                  ${currentStep >= stepIdx ? 'text-heading' : 'text-muted'}
                 `}>
                   {step.title}
                 </span>

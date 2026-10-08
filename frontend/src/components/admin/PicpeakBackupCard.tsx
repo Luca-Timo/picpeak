@@ -69,7 +69,7 @@ export const PicpeakExportCard: React.FC = () => {
         <label className="flex items-center gap-2 text-sm text-body">
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-neutral-300"
+            className="h-4 w-4 rounded border-line-strong"
             checked={includePhotos}
             onChange={(e) => setIncludePhotos(e.target.checked)}
           />

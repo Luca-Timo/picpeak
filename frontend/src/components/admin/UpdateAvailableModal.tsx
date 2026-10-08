@@ -154,7 +154,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-neutral-400 hover:text-body"
+            className="text-faint hover:text-body"
             aria-label={t('common.close', 'Close')}
           >
             <X className="w-5 h-5" />
@@ -174,7 +174,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
               <SelfUpdatePanel />
             </div>
             {instructionsLoading && (
-              <p className="text-sm text-neutral-500">{t('common.loading', 'Loading…')}</p>
+              <p className="text-sm text-muted">{t('common.loading', 'Loading…')}</p>
             )}
             {!instructionsLoading && instructions?.instructions && (
               <ManualUpdateSteps active={selfUpdateActive}>
@@ -230,7 +230,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
               {t('admin.updates.releaseNotes', 'Release notes')}
             </h3>
             {changelogLoading && (
-              <p className="text-sm text-neutral-500">{t('common.loading', 'Loading…')}</p>
+              <p className="text-sm text-muted">{t('common.loading', 'Loading…')}</p>
             )}
             {changelogError && (
               <p className="text-sm text-danger-text">
@@ -238,7 +238,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
               </p>
             )}
             {changelog?.releases.length === 0 && !changelogLoading && (
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-muted">
                 {t('admin.updates.noReleases', 'No release notes available.')}
               </p>
             )}
@@ -257,13 +257,13 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
                       >
                         <div className="flex items-center gap-2 text-left">
                           {isOpen
-                            ? <ChevronDown className="w-4 h-4 text-neutral-500" />
-                            : <ChevronRight className="w-4 h-4 text-neutral-500" />}
+                            ? <ChevronDown className="w-4 h-4 text-muted" />
+                            : <ChevronRight className="w-4 h-4 text-muted" />}
                           <span className="text-sm font-medium text-heading">
                             {release.name}
                           </span>
                           {release.publishedAt && (
-                            <span className="text-xs text-neutral-500">
+                            <span className="text-xs text-muted">
                               {formatDate(release.publishedAt)}
                             </span>
                           )}
@@ -288,7 +288,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
                         </div>
                       )}
                       {isOpen && !release.body && (
-                        <div className="px-4 pb-4 pt-1 text-sm text-neutral-500 italic">
+                        <div className="px-4 pb-4 pt-1 text-sm text-muted italic">
                           {t('admin.updates.noNotes', 'No release notes provided.')}
                         </div>
                       )}

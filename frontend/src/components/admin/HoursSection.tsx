@@ -536,7 +536,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
                             deleteMutation.mutate(e.id);
                           }
                         }}
-                        className="text-xs text-danger-text hover:underline disabled:text-neutral-400 disabled:cursor-not-allowed"
+                        className="text-xs text-danger-text hover:underline disabled:text-faint disabled:cursor-not-allowed"
                         title={locked ? t('customers.hours.locked',
                           'Locked: invoice already armed for send') as string : undefined}
                       >

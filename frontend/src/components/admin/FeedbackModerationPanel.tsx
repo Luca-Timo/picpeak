@@ -80,7 +80,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
     <Card className={className}>
       <div className={compact ? 'p-4' : 'p-6'}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-neutral-900">
+          <h2 className="text-lg font-semibold text-heading">
             {t('feedback.pendingModeration', 'Pending Moderation')}
           </h2>
           {hasPending && (
@@ -118,7 +118,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
                             {formatDateTime(item.created_at)}
                           </span>
                         </div>
-                        <p className="mt-1 text-sm text-neutral-700">{item.comment_text || item.comment}</p>
+                        <p className="mt-1 text-sm text-body">{item.comment_text || item.comment}</p>
                         {item.photo_id && (
                           <div className="mt-2 flex items-center gap-2">
                             <div className="w-16 h-16 overflow-hidden rounded">
@@ -128,7 +128,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
                                 className="w-16 h-16 object-cover rounded"
                               />
                             </div>
-                            <p className="text-xs text-neutral-500">
+                            <p className="text-xs text-muted">
                               {t('feedback.onPhoto', 'On photo')}: {item.filename || item.photo_filename || `#${item.photo_id}`}
                             </p>
                           </div>
@@ -194,7 +194,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
         )}
 
         {/* Quick link to full feedback page */}
-        <div className="mt-4 pt-4 border-t border-neutral-200">
+        <div className="mt-4 pt-4 border-t border-line">
           <a
             href={`/admin/events/${eventId}/feedback`}
             className="text-sm text-accent hover:opacity-80 font-medium flex items-center gap-1"

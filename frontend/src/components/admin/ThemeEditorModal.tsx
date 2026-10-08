@@ -193,7 +193,7 @@ export const ThemeEditorModal: React.FC<ThemeEditorModalProps> = ({
                 
                 {/* Gallery Preview */}
                 <div>
-                  <h3 className="text-sm font-medium text-neutral-700 mb-3">
+                  <h3 className="text-sm font-medium text-body mb-3">
                     {t('branding.livePreview')}
                   </h3>
                   <GalleryPreview 
@@ -208,7 +208,7 @@ export const ThemeEditorModal: React.FC<ThemeEditorModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-neutral-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-line flex items-center justify-between">
           <Button
             variant="outline"
             leftIcon={<RotateCcw className="w-4 h-4" />}

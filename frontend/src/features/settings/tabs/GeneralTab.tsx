@@ -85,7 +85,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
                 value={accountForm.username}
                 onChange={handleAccountChange('username')}
                 placeholder="admin"
-                leftIcon={<User className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<User className="w-5 h-5 text-faint" />}
                 error={accountErrors.username}
               />
               <p className="text-xs text-muted mt-1">
@@ -103,7 +103,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
                 value={accountForm.email}
                 onChange={handleAccountChange('email')}
                 placeholder="admin@example.com"
-                leftIcon={<Mail className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Mail className="w-5 h-5 text-faint" />}
                 error={accountErrors.email}
               />
               <p className="text-xs text-muted mt-1">
@@ -121,7 +121,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
                 value={accountForm.creditName}
                 onChange={handleAccountChange('creditName')}
                 maxLength={100}
-                leftIcon={<Camera className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Camera className="w-5 h-5 text-faint" />}
                 error={accountErrors.credit_name}
               />
               <p className="text-xs text-muted mt-1">
@@ -152,7 +152,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
               value={generalSettings.site_url}
               onChange={(e) => setGeneralSettings(prev => ({ ...prev, site_url: e.target.value }))}
               placeholder="https://yourdomain.com"
-              leftIcon={<Globe className="w-5 h-5 text-neutral-400" />}
+              leftIcon={<Globe className="w-5 h-5 text-faint" />}
               disabled={generalSettings.site_url_env_pinned}
               error={siteUrlError}
             />

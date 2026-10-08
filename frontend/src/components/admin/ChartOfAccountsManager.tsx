@@ -54,7 +54,7 @@ const AccountModal: React.FC<{ account?: LedgerAccount; onClose: () => void; onD
       <div className="mt-20 w-full max-w-sm rounded-xl bg-shell shadow-xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-heading">{isEdit ? t('ledger.account.editTitle', 'Edit account') : t('ledger.account.addTitle', 'Add account')}</h2>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-faint hover:text-soft"><X className="w-5 h-5" /></button>
         </div>
         <div className="px-5 py-4 space-y-3">
           <div><label className={labelCls}>{t('ledger.account.number', 'Account number')}</label><Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="6700" /></div>
@@ -191,8 +191,8 @@ export const ChartOfAccountsManager: React.FC = () => {
                     <td className="py-1.5 pr-3 text-muted">{t(`ledger.accountType.${a.type}`, a.type)}</td>
                     <td className="py-1.5 pr-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setAccountModal({ account: a })} className="p-1 text-neutral-500 hover:text-body"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => { if (window.confirm(t('ledger.account.confirmDelete', 'Delete this account?') as string)) delAccount.mutate(a.id); }} className="p-1 text-neutral-400 hover:text-danger-text"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => setAccountModal({ account: a })} className="p-1 text-muted hover:text-body"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => { if (window.confirm(t('ledger.account.confirmDelete', 'Delete this account?') as string)) delAccount.mutate(a.id); }} className="p-1 text-faint hover:text-danger-text"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>

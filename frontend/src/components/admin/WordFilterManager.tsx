@@ -228,7 +228,7 @@ export const WordFilterManager: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('settings.moderation.searchFilters', 'Search filters...')}
-              leftIcon={<Search className="w-5 h-5 text-neutral-400" />}
+              leftIcon={<Search className="w-5 h-5 text-faint" />}
             />
           </div>
 

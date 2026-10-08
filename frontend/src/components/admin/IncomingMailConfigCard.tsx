@@ -111,7 +111,7 @@ export const IncomingMailConfigCard: React.FC = () => {
             value={cfg.imap_host}
             onChange={(e) => set('imap_host', e.target.value)}
             placeholder="imap.example.com"
-            leftIcon={<Server className="w-5 h-5 text-neutral-400" />}
+            leftIcon={<Server className="w-5 h-5 text-faint" />}
           />
         </div>
 
@@ -137,7 +137,7 @@ export const IncomingMailConfigCard: React.FC = () => {
             onChange={(e) => set('imap_user', e.target.value)}
             autoComplete="off"
             placeholder="rechnungen@yourdomain.com"
-            leftIcon={<User className="w-5 h-5 text-neutral-400" />}
+            leftIcon={<User className="w-5 h-5 text-faint" />}
           />
         </div>
 
@@ -150,9 +150,9 @@ export const IncomingMailConfigCard: React.FC = () => {
               onChange={(e) => set('imap_pass', e.target.value)}
               autoComplete="new-password"
               placeholder={t('email.enterPassword', 'Enter password')}
-              leftIcon={<Lock className="w-5 h-5 text-neutral-400" />}
+              leftIcon={<Lock className="w-5 h-5 text-faint" />}
             />
-            <button type="button" onClick={passwordVisibilityModal.toggle} className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-600">
+            <button type="button" onClick={passwordVisibilityModal.toggle} className="absolute right-3 top-3 text-faint hover:text-soft">
               {passwordVisibilityModal.isOpen ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>

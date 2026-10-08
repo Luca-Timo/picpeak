@@ -113,7 +113,7 @@ export const PdfFontsCard: React.FC = () => {
               <span className="text-xs text-soft">
                 {font.files.map((f) => t(`branding.pdfFonts.face.${STYLE_FACE[f.style]}`, FACE_LABELS[STYLE_FACE[f.style]] || f.style)).join(' · ')}
               </span>
-              {!font.isActive && <span className="text-xs text-neutral-500">{t('branding.pdfFonts.archived', 'Archived')}</span>}
+              {!font.isActive && <span className="text-xs text-muted">{t('branding.pdfFonts.archived', 'Archived')}</span>}
               <span className="flex-1 text-xs text-soft truncate" title={font.licenceNote}>{font.licenceNote}</span>
               {font.isActive && (
                 <PermissionGate permission="settings.banking">

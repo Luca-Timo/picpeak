@@ -222,7 +222,7 @@ export const CategoryManager: React.FC = () => {
                       <button
                         onClick={() => handleMove(index, -1)}
                         disabled={index === 0 || reorderMutation.isPending}
-                        className="p-0.5 text-faint hover:text-accent-dark disabled:opacity-30 disabled:hover:text-neutral-400 transition-colors"
+                        className="p-0.5 text-faint hover:text-accent-dark disabled:opacity-30 disabled:hover:text-faint transition-colors"
                         title={t('categories.moveUp', 'Move up')}
                         aria-label={t('categories.moveUp', 'Move up')}
                       >
@@ -231,7 +231,7 @@ export const CategoryManager: React.FC = () => {
                       <button
                         onClick={() => handleMove(index, 1)}
                         disabled={index === ordered.length - 1 || reorderMutation.isPending}
-                        className="p-0.5 text-faint hover:text-accent-dark disabled:opacity-30 disabled:hover:text-neutral-400 transition-colors"
+                        className="p-0.5 text-faint hover:text-accent-dark disabled:opacity-30 disabled:hover:text-faint transition-colors"
                         title={t('categories.moveDown', 'Move down')}
                         aria-label={t('categories.moveDown', 'Move down')}
                       >

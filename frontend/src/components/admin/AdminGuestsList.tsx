@@ -396,7 +396,7 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
                         <button
                           type="button"
                           onClick={() => setSelectedGuest(guest)}
-                          className="p-1 text-neutral-500 hover:text-accent"
+                          className="p-1 text-muted hover:text-accent"
                           title={t('admin.guests.view', 'View details')}
                         >
                           <Eye className="w-4 h-4" />
@@ -404,7 +404,7 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
                         <div className="relative group">
                           <button
                             type="button"
-                            className="p-1 text-neutral-500 hover:text-accent"
+                            className="p-1 text-muted hover:text-accent"
                             title={t('admin.guests.export', 'Export')}
                           >
                             <Download className="w-4 h-4" />
@@ -424,7 +424,7 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
                         <button
                           type="button"
                           onClick={() => handleDelete(guest)}
-                          className="p-1 text-neutral-500 hover:text-danger-text"
+                          className="p-1 text-muted hover:text-danger-text"
                           title={t('admin.guests.forgetGuest', 'Remove guest')}
                         >
                           <Trash2 className="w-4 h-4" />

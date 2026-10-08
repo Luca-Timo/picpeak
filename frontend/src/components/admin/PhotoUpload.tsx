@@ -468,7 +468,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
           role="status"
           className="flex items-start gap-2 rounded-lg border border-line bg-neutral-50 dark:bg-neutral-800/60 p-3 text-sm text-body"
         >
-          <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-neutral-500" />
+          <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted" />
           <p>{t('upload.alreadyRunning', 'An upload is already running. It has to finish before the next one can start.')}</p>
         </div>
       )}
@@ -524,7 +524,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
           id="replace-by-name"
           checked={replaceByName}
           onChange={(e) => setReplaceByName(e.target.checked)}
-          className="rounded border-neutral-300 text-accent focus:ring-accent"
+          className="rounded border-line-strong text-accent focus:ring-accent"
         />
         <label htmlFor="replace-by-name" className="text-sm text-body">
           {t('upload.replaceByName', 'Replace existing photos with same name')}
@@ -641,7 +641,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
                 className="flex items-center justify-between p-2 bg-subtle rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <Image className="w-5 h-5 text-neutral-400" />
+                  <Image className="w-5 h-5 text-faint" />
                   <div>
                     <p className="text-sm font-medium text-body truncate max-w-xs">
                       {file.name}

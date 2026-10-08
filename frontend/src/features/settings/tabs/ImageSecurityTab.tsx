@@ -165,9 +165,9 @@ export const ImageSecurityTab: React.FC = () => {
                 type="checkbox"
                 checked={settings.enable_devtools_protection}
                 onChange={(e) => handleChange('enable_devtools_protection', e.target.checked)}
-                className="w-4 h-4 text-accent border-neutral-300 rounded focus:ring-accent"
+                className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent"
               />
-              <Monitor className="w-4 h-4 ml-2 mr-1 text-neutral-500" />
+              <Monitor className="w-4 h-4 ml-2 mr-1 text-muted" />
               <span className="text-sm text-body">
                 {t('settings.imageSecurity.enableDevtools', 'Enable DevTools detection by default')}
               </span>
@@ -178,9 +178,9 @@ export const ImageSecurityTab: React.FC = () => {
                 type="checkbox"
                 checked={settings.enable_canvas_rendering}
                 onChange={(e) => handleChange('enable_canvas_rendering', e.target.checked)}
-                className="w-4 h-4 text-accent border-neutral-300 rounded focus:ring-accent"
+                className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent"
               />
-              <Image className="w-4 h-4 ml-2 mr-1 text-neutral-500" />
+              <Image className="w-4 h-4 ml-2 mr-1 text-muted" />
               <span className="text-sm text-body">
                 {t('settings.imageSecurity.enableCanvas', 'Enable canvas rendering in the lightbox by default (advanced protection)')}
               </span>
@@ -288,7 +288,7 @@ export const ImageSecurityTab: React.FC = () => {
                 type="checkbox"
                 checked={settings.security_monitoring_enabled}
                 onChange={(e) => handleChange('security_monitoring_enabled', e.target.checked)}
-                className="w-4 h-4 text-accent border-neutral-300 rounded focus:ring-accent"
+                className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent"
               />
               <span className="ml-2 text-sm text-neutral-700 dark:text-neutral-300 dark:text-neutral-300">
                 {t('settings.imageSecurity.enableMonitoring', 'Enable security monitoring')}
@@ -300,7 +300,7 @@ export const ImageSecurityTab: React.FC = () => {
                 type="checkbox"
                 checked={settings.block_suspicious_ips}
                 onChange={(e) => handleChange('block_suspicious_ips', e.target.checked)}
-                className="w-4 h-4 text-accent border-neutral-300 rounded focus:ring-accent"
+                className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent"
               />
               <span className="ml-2 text-sm text-neutral-700 dark:text-neutral-300 dark:text-neutral-300">
                 {t('settings.imageSecurity.blockSuspiciousIps', 'Automatically block suspicious IPs')}
@@ -312,7 +312,7 @@ export const ImageSecurityTab: React.FC = () => {
                 type="checkbox"
                 checked={settings.log_security_events_to_db}
                 onChange={(e) => handleChange('log_security_events_to_db', e.target.checked)}
-                className="w-4 h-4 text-accent border-neutral-300 rounded focus:ring-accent"
+                className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent"
               />
               <span className="ml-2 text-sm text-neutral-700 dark:text-neutral-300 dark:text-neutral-300">
                 {t('settings.imageSecurity.logEvents', 'Log security events to database')}

@@ -382,7 +382,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                   }}
                   label={t('settings.storage.softLimitInputLabel')}
                   helperText={t('settings.storage.softLimitHelper')}
-                  rightIcon={<span className="text-xs font-semibold text-neutral-500 uppercase">GB</span>}
+                  rightIcon={<span className="text-xs font-semibold text-muted uppercase">GB</span>}
                 />
                 <p className="text-xs text-muted">
                   {t('settings.storage.limitNotEnforced')}
@@ -454,7 +454,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                     }}
                     label={t('settings.storage.overrideCapacityLabel')}
                     helperText={t('settings.storage.overrideCapacityHelper')}
-                    rightIcon={<span className="text-xs font-semibold text-neutral-500 uppercase">GB</span>}
+                    rightIcon={<span className="text-xs font-semibold text-muted uppercase">GB</span>}
                     disabled={overrideControlled}
                   />
                   <Input
@@ -478,7 +478,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                     }}
                     label={t('settings.storage.overrideAvailableLabel')}
                     helperText={t('settings.storage.overrideAvailableHelper')}
-                    rightIcon={<span className="text-xs font-semibold text-neutral-500 uppercase">GB</span>}
+                    rightIcon={<span className="text-xs font-semibold text-muted uppercase">GB</span>}
                     disabled={overrideControlled}
                   />
                 </div>

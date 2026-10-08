@@ -209,7 +209,7 @@ export const MfaSettingsCard: React.FC = () => {
                   if (regenerateError) setRegenerateError(null);
                 }}
                 placeholder={t('settings.mfa.codePlaceholder')}
-                leftIcon={<KeyRound className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<KeyRound className="w-5 h-5 text-faint" />}
                 error={regenerateError || undefined}
                 autoComplete="one-time-code"
               />
@@ -254,7 +254,7 @@ export const MfaSettingsCard: React.FC = () => {
             <img
               src={setupData.qr}
               alt={t('settings.mfa.qrAlt')}
-              className="w-44 h-44 rounded-lg border border-line bg-white p-2"
+              className="w-44 h-44 rounded-lg border border-line bg-panel p-2"
             />
             <div className="space-y-2">
               <p className="text-sm text-soft">{t('settings.mfa.manualEntry')}</p>
@@ -277,7 +277,7 @@ export const MfaSettingsCard: React.FC = () => {
                 if (enableError) setEnableError(null);
               }}
               placeholder={t('settings.mfa.codePlaceholder')}
-              leftIcon={<KeyRound className="w-5 h-5 text-neutral-400" />}
+              leftIcon={<KeyRound className="w-5 h-5 text-faint" />}
               error={enableError || undefined}
               inputMode="numeric"
               autoComplete="one-time-code"

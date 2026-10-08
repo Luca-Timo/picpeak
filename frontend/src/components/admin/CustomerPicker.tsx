@@ -202,7 +202,7 @@ export const CustomerPicker: React.FC<CustomerPickerProps> = ({
                   <span className="font-medium">
                     {c.companyName || c.displayName || c.email}
                   </span>
-                  <span className="text-neutral-500 ml-2">{c.email}</span>
+                  <span className="text-muted ml-2">{c.email}</span>
                   {c.groups && c.groups.length > 0 && (
                     <span className="ml-2 inline-flex align-middle">
                       <CustomerGroupChipList groups={c.groups} max={2} expandable={false} />

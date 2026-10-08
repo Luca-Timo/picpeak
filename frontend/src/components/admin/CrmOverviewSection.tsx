@@ -189,7 +189,7 @@ export const CrmOverviewSection: React.FC = () => {
               to="/admin/clients/quotes?status=declined"
             />
             <StatCard
-              icon={<Clock className="w-5 h-5 text-neutral-500" />}
+              icon={<Clock className="w-5 h-5 text-muted" />}
               label={t('quotes.status.expired', 'Expired')}
               value={d.quotes.expired}
               to="/admin/clients/quotes?status=expired"
@@ -242,7 +242,7 @@ export const CrmOverviewSection: React.FC = () => {
               to="/admin/clients/bills?status=overdue"
             />
             <StatCard
-              icon={<XCircle className="w-5 h-5 text-neutral-500" />}
+              icon={<XCircle className="w-5 h-5 text-muted" />}
               label={t('bills.status.cancelled', 'Cancelled')}
               value={d.invoices.cancelled}
               to="/admin/clients/bills?status=cancelled"

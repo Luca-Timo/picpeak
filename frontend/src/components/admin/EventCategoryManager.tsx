@@ -274,7 +274,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                     <button
                       onClick={() => handleMove(index, -1)}
                       disabled={index === 0 || busy}
-                      className="p-0.5 text-faint hover:text-accent-dark disabled:opacity-30 disabled:hover:text-neutral-400 transition-colors"
+                      className="p-0.5 text-faint hover:text-accent-dark disabled:opacity-30 disabled:hover:text-faint transition-colors"
                       title={t('categories.moveUp', 'Move up')}
                       aria-label={t('categories.moveUp', 'Move up')}
                     >
@@ -283,7 +283,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                     <button
                       onClick={() => handleMove(index, 1)}
                       disabled={index === ordered.length - 1 || busy}
-                      className="p-0.5 text-faint hover:text-accent-dark disabled:opacity-30 disabled:hover:text-neutral-400 transition-colors"
+                      className="p-0.5 text-faint hover:text-accent-dark disabled:opacity-30 disabled:hover:text-faint transition-colors"
                       title={t('categories.moveDown', 'Move down')}
                       aria-label={t('categories.moveDown', 'Move down')}
                     >
@@ -327,7 +327,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                         })}
                         className={`p-1 transition-colors ${
                           category.is_folder
-                            ? 'text-accent hover:text-neutral-400'
+                            ? 'text-accent hover:text-faint'
                             : 'text-faint hover:text-accent'
                         }`}
                         title={
@@ -353,7 +353,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                         className={`p-1 transition-colors ${
                           category.allow_downloads === false
                             ? 'text-faint hover:text-success-text'
-                            : 'text-success-text hover:text-neutral-400'
+                            : 'text-success-text hover:text-faint'
                         }`}
                         title={
                           category.allow_downloads === false
@@ -435,7 +435,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                         className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                           isSelected
                             ? 'border-accent-dark ring-2 ring-accent ring-offset-2'
-                            : 'border-transparent hover:border-neutral-300'
+                            : 'border-transparent hover:border-line-strong'
                         }`}
                       >
                         <div className="aspect-square bg-inset">

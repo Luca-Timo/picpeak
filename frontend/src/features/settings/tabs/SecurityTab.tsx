@@ -276,7 +276,7 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
                   value={securitySettings.recaptcha_site_key}
                   onChange={(e) => setSecuritySettings(prev => ({ ...prev, recaptcha_site_key: e.target.value }))}
                   placeholder={t('settings.security.siteKey')}
-                  leftIcon={<Key className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Key className="w-5 h-5 text-faint" />}
                 />
               </div>
               <div>
@@ -288,7 +288,7 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
                   value={securitySettings.recaptcha_secret_key}
                   onChange={(e) => setSecuritySettings(prev => ({ ...prev, recaptcha_secret_key: e.target.value }))}
                   placeholder={t('settings.security.secretKey')}
-                  leftIcon={<Key className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Key className="w-5 h-5 text-faint" />}
                 />
               </div>
             </>

@@ -46,11 +46,11 @@ export const BulkArchiveModal: React.FC<BulkArchiveModalProps> = ({
           <div className="mb-6">
             <div className="flex items-start gap-3 mb-4">
               <AlertTriangle className="w-5 h-5 text-warning-text flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-neutral-700">
+              <div className="text-sm text-body">
                 <p className="mb-2">
                   {t('events.bulkArchive.intro', 'You are about to archive {{count}} events. This action will:', { count })}
                 </p>
-                <ul className="list-disc list-inside space-y-1 text-neutral-600">
+                <ul className="list-disc list-inside space-y-1 text-soft">
                   <li>{t('events.bulkArchive.effectZip', 'Create a ZIP archive of all photos for each event')}</li>
                   <li>{t('events.bulkArchive.effectInaccessible', 'Make the galleries inaccessible to guests')}</li>
                   <li>{t('events.bulkArchive.effectDelisted', 'Remove the events from active listings')}</li>
@@ -59,14 +59,14 @@ export const BulkArchiveModal: React.FC<BulkArchiveModalProps> = ({
               </div>
             </div>
 
-            <div className="border border-neutral-200 rounded-lg max-h-48 overflow-y-auto">
+            <div className="border border-line rounded-lg max-h-48 overflow-y-auto">
               <div className="p-3">
-                <h3 className="text-sm font-medium text-neutral-700 mb-2">
+                <h3 className="text-sm font-medium text-body mb-2">
                   {t('events.bulkArchive.listHeading', 'Events to be archived:')}
                 </h3>
                 <ul className="space-y-1">
                   {selectedEvents.map((event) => (
-                    <li key={event.id} className="text-sm text-neutral-600">
+                    <li key={event.id} className="text-sm text-soft">
                       • {event.event_name} ({event.event_type})
                     </li>
                   ))}

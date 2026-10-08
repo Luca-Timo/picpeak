@@ -150,7 +150,7 @@ export const PhotoFilterPanel: React.FC<PhotoFilterPanelProps> = ({
               type="checkbox"
               checked={filters.hasLikes || false}
               onChange={() => handleCheckboxChange('hasLikes')}
-              className="rounded border-neutral-300 text-accent focus:ring-accent"
+              className="rounded border-line-strong text-accent focus:ring-accent"
               disabled={isLoading}
             />
             <Heart className="w-4 h-4 text-danger" />
@@ -167,7 +167,7 @@ export const PhotoFilterPanel: React.FC<PhotoFilterPanelProps> = ({
               type="checkbox"
               checked={filters.hasFavorites || false}
               onChange={() => handleCheckboxChange('hasFavorites')}
-              className="rounded border-neutral-300 text-accent focus:ring-accent"
+              className="rounded border-line-strong text-accent focus:ring-accent"
               disabled={isLoading}
             />
             <Bookmark className="w-4 h-4 text-rating" />
@@ -184,7 +184,7 @@ export const PhotoFilterPanel: React.FC<PhotoFilterPanelProps> = ({
               type="checkbox"
               checked={filters.hasComments || false}
               onChange={() => handleCheckboxChange('hasComments')}
-              className="rounded border-neutral-300 text-accent focus:ring-accent"
+              className="rounded border-line-strong text-accent focus:ring-accent"
               disabled={isLoading}
             />
             <MessageCircle className="w-4 h-4 text-info" />

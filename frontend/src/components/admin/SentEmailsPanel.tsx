@@ -58,7 +58,7 @@ export const SentEmailsPanel: React.FC = () => {
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="relative flex-1 min-w-[220px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
           <input
             type="text"
             placeholder={t('email.sentEmails.searchPlaceholder', 'Search by recipient or type…') as string}

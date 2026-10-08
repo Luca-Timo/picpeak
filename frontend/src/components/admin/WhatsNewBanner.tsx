@@ -90,7 +90,7 @@ export const WhatsNewBanner: React.FC = () => {
                 <Sparkles className="w-5 h-5 text-success-text" />
                 {t('admin.whatsnew.modalTitle', "What's new")}
               </h3>
-              <button onClick={detailsModal.close} className="p-1 text-neutral-400 hover:text-body">
+              <button onClick={detailsModal.close} className="p-1 text-faint hover:text-body">
                 <X className="w-5 h-5" />
               </button>
             </div>

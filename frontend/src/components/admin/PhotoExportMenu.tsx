@@ -162,7 +162,7 @@ export const PhotoExportMenu: React.FC<PhotoExportMenuProps> = ({
           inline-flex items-center gap-2 px-4 py-2 rounded-lg border font-medium text-sm
           transition-colors
           ${isDisabled
-            ? 'bg-subtle text-neutral-400 border-line cursor-not-allowed'
+            ? 'bg-subtle text-faint border-line cursor-not-allowed'
             : 'bg-panel text-body border-line-strong hover:bg-hover'
           }
         `}

@@ -203,13 +203,13 @@ export const ApiTokensTab: React.FC = () => {
                     <tr key={token.id} className="border-b border-line-faint last:border-0">
                       <td className="py-3 pr-3 font-medium">{token.name}</td>
                       <td className="py-3 pr-3 text-soft">{token.scopes}</td>
-                      <td className="py-3 pr-3 font-mono text-xs text-neutral-500">
+                      <td className="py-3 pr-3 font-mono text-xs text-muted">
                         pp_live_{token.preview || '••••'}…
                       </td>
-                      <td className="py-3 pr-3 text-neutral-500">
+                      <td className="py-3 pr-3 text-muted">
                         {token.last_used_at ? fmtDateTime(token.last_used_at) : '—'}
                       </td>
-                      <td className="py-3 pr-3 text-neutral-500">
+                      <td className="py-3 pr-3 text-muted">
                         {fmtDate(token.created_at)}
                       </td>
                       <td className="py-3 pr-3">

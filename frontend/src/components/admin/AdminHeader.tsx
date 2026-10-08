@@ -233,7 +233,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick, onOpenSea
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={onMenuClick}
-              className="lg:hidden text-neutral-500 hover:text-neutral-700"
+              className="lg:hidden text-muted hover:text-body"
             >
               <Menu className="w-6 h-6" />
             </button>

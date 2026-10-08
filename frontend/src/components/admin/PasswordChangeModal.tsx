@@ -106,7 +106,7 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
               onClick={onClose}
               className="p-1 hover:bg-hover rounded-lg transition-colors"
             >
-              <X className="w-5 h-5 text-neutral-500" />
+              <X className="w-5 h-5 text-muted" />
             </button>
           </div>
 
@@ -124,7 +124,7 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
                   onChange={handleInputChange('currentPassword')}
                   error={errors.currentPassword}
                   placeholder={t('passwordChange.currentPasswordPlaceholder')}
-                  leftIcon={<Lock className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Lock className="w-5 h-5 text-faint" />}
                 />
                 <button
                   type="button"
@@ -132,8 +132,8 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
                   className="absolute right-3 top-2 p-1 hover:bg-hover rounded"
                 >
                   {showPasswords.current ? 
-                    <EyeOff className="w-4 h-4 text-neutral-500" /> : 
-                    <Eye className="w-4 h-4 text-neutral-500" />
+                    <EyeOff className="w-4 h-4 text-muted" /> : 
+                    <Eye className="w-4 h-4 text-muted" />
                   }
                 </button>
               </div>
@@ -152,7 +152,7 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
                   onChange={handleInputChange('newPassword')}
                   error={errors.newPassword}
                   placeholder={t('passwordChange.newPasswordPlaceholder')}
-                  leftIcon={<Lock className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Lock className="w-5 h-5 text-faint" />}
                 />
                 <button
                   type="button"
@@ -160,8 +160,8 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
                   className="absolute right-3 top-2 p-1 hover:bg-hover rounded"
                 >
                   {showPasswords.new ? 
-                    <EyeOff className="w-4 h-4 text-neutral-500" /> : 
-                    <Eye className="w-4 h-4 text-neutral-500" />
+                    <EyeOff className="w-4 h-4 text-muted" /> : 
+                    <Eye className="w-4 h-4 text-muted" />
                   }
                 </button>
               </div>
@@ -180,7 +180,7 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
                   onChange={handleInputChange('confirmPassword')}
                   error={errors.confirmPassword}
                   placeholder={t('passwordChange.confirmPasswordPlaceholder')}
-                  leftIcon={<Lock className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Lock className="w-5 h-5 text-faint" />}
                 />
                 <button
                   type="button"
@@ -188,8 +188,8 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
                   className="absolute right-3 top-2 p-1 hover:bg-hover rounded"
                 >
                   {showPasswords.confirm ? 
-                    <EyeOff className="w-4 h-4 text-neutral-500" /> : 
-                    <Eye className="w-4 h-4 text-neutral-500" />
+                    <EyeOff className="w-4 h-4 text-muted" /> : 
+                    <Eye className="w-4 h-4 text-muted" />
                   }
                 </button>
               </div>

@@ -66,7 +66,7 @@ export const BackupIntegrityCard: React.FC = () => {
             ) : report ? (
               <ShieldAlert className="w-5 h-5 text-danger-text" />
             ) : (
-              <ShieldCheck className="w-5 h-5 text-neutral-400" />
+              <ShieldCheck className="w-5 h-5 text-faint" />
             )}
             <h3 className="text-lg font-semibold text-heading">
               {t('backup.integrity.title', 'Document integrity')}

@@ -66,7 +66,7 @@ export const GuestInviteDialog: React.FC<GuestInviteDialogProps> = ({ eventId, o
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-neutral-500 hover:text-heading"
+            className="p-1 text-muted hover:text-heading"
           >
             <X className="w-5 h-5" />
           </button>
@@ -157,7 +157,7 @@ export const GuestInviteDialog: React.FC<GuestInviteDialogProps> = ({ eventId, o
                             <button
                               type="button"
                               onClick={() => copy(invite)}
-                              className="p-1.5 text-neutral-500 hover:text-accent"
+                              className="p-1.5 text-muted hover:text-accent"
                               title={t('admin.guests.copyLink', 'Copy link')}
                             >
                               {copiedId === invite.id ? (
@@ -169,7 +169,7 @@ export const GuestInviteDialog: React.FC<GuestInviteDialogProps> = ({ eventId, o
                             <button
                               type="button"
                               onClick={() => revokeMutation.mutate(invite.id)}
-                              className="p-1.5 text-neutral-500 hover:text-danger-text"
+                              className="p-1.5 text-muted hover:text-danger-text"
                               title={t('admin.guests.revokeInvite', 'Revoke')}
                             >
                               <Trash2 className="w-4 h-4" />

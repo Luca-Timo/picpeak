@@ -588,7 +588,7 @@ export const LineItemsTable: React.FC<Props> = ({
                   }`}>
                     <td className={`px-2 py-2 text-soft align-top ${dim}`}>
                       <div className="flex items-center gap-1">
-                        {sub && <CornerDownRight className="w-3.5 h-3.5 text-neutral-400" aria-hidden />}
+                        {sub && <CornerDownRight className="w-3.5 h-3.5 text-faint" aria-hidden />}
                         <span>{displayNumbers[idx]}</span>
                       </div>
                     </td>

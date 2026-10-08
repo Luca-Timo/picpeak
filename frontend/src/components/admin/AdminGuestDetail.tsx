@@ -87,7 +87,7 @@ export const AdminGuestDetail: React.FC<AdminGuestDetailProps> = ({ eventId, gue
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-neutral-500 hover:text-heading"
+            className="p-1 text-muted hover:text-heading"
           >
             <X className="w-5 h-5" />
           </button>
@@ -167,7 +167,7 @@ export const AdminGuestDetail: React.FC<AdminGuestDetailProps> = ({ eventId, gue
                   className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
                     tab === k
                       ? 'border-accent text-accent'
-                      : 'border-transparent text-neutral-500 hover:text-heading'
+                      : 'border-transparent text-muted hover:text-heading'
                   }`}
                 >
                   {t(`admin.guests.detail.${k}`, k)}

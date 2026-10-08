@@ -212,7 +212,7 @@ export const ShortUrlsCard: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => handleCopy(row)}
-                  className="p-2 text-neutral-500 hover:text-accent"
+                  className="p-2 text-muted hover:text-accent"
                   title={t('common.copy', 'Copy') as string}
                   aria-label={t('common.copy', 'Copy') as string}
                 >
@@ -222,7 +222,7 @@ export const ShortUrlsCard: React.FC<Props> = ({ eventId }) => {
                   type="button"
                   onClick={() => handleDelete(row)}
                   disabled={deleteMutation.isPending}
-                  className="p-2 text-neutral-500 hover:text-danger-text"
+                  className="p-2 text-muted hover:text-danger-text"
                   title={t('common.delete', 'Delete') as string}
                   aria-label={t('common.delete', 'Delete') as string}
                 >

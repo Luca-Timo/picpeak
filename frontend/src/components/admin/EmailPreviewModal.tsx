@@ -32,7 +32,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-neutral-400 hover:text-body transition-colors"
+            className="text-faint hover:text-body transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -71,7 +71,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           {viewMode === 'html' ? (
-            <div className="bg-white border border-line rounded-lg shadow-sm">
+            <div className="bg-panel border border-line rounded-lg shadow-sm">
               <iframe
                 srcDoc={htmlContent}
                 className="w-full h-[600px] border-0"

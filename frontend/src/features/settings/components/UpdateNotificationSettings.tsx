@@ -184,7 +184,7 @@ export const UpdateNotificationSettings: React.FC<UpdateNotificationSettingsProp
             type="checkbox"
             checked={localEnabled}
             onChange={(e) => handleToggleEnabled(e.target.checked)}
-            className="w-4 h-4 text-accent bg-neutral-100 border-neutral-300 rounded focus:ring-accent"
+            className="w-4 h-4 text-accent bg-inset border-line-strong rounded focus:ring-accent"
           />
           <div>
             <p className="font-medium text-heading">
@@ -205,7 +205,7 @@ export const UpdateNotificationSettings: React.FC<UpdateNotificationSettingsProp
             label={t('settings.updateNotifications.recipients', 'Email Recipients')}
             placeholder={t('settings.updateNotifications.recipientsPlaceholder', 'admin@example.com, other@example.com')}
             helperText={t('settings.updateNotifications.recipientsHelper', 'Comma-separated email addresses. Leave empty to send to all admin users.')}
-            leftIcon={<Mail className="w-4 h-4 text-neutral-400" />}
+            leftIcon={<Mail className="w-4 h-4 text-faint" />}
             disabled={!localEnabled}
           />
         </div>

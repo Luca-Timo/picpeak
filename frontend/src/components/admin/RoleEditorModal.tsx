@@ -237,7 +237,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
                       return (
                         <label
                           key={p.name}
-                          className={`flex items-start gap-2 px-3 py-2 border-t border-neutral-100 dark:border-neutral-700/60 ${readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/40'}`}
+                          className={`flex items-start gap-2 px-3 py-2 border-t border-neutral-100 dark:border-neutral-700/60 ${readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-hover-soft dark:hover:bg-neutral-700/40'}`}
                           title={p.description || undefined}
                         >
                           <input

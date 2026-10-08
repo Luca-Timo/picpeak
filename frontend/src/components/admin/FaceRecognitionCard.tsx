@@ -291,7 +291,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
   return (
     <Frame>
       <div className="flex items-start gap-3 mb-4">
-        <Users className="text-neutral-400 mt-0.5" size={20} />
+        <Users className="text-faint mt-0.5" size={20} />
         <div>
           <h3 className="text-lg font-medium text-heading">
             {t('admin.faces.title', { defaultValue: 'People in this gallery' })}
@@ -378,7 +378,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
           rather than discovering it in their storage graph. */}
       {data.enabled && (
         <div className="flex gap-2 p-3 mt-3 rounded-lg bg-subtle text-xs text-soft">
-          <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-neutral-400" />
+          <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-faint" />
           <p>
             {t('admin.faces.previewNotice', {
               defaultValue: 'Scanning works on the preview-sized copy of each photo. Galleries that have not generated previews yet will create them during the first scan, which uses additional CPU and disk space.',
@@ -455,7 +455,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
                     page and their own gallery disagree, with no explanation. */}
                 {typeof status.people_visible_to_guests === 'number'
                   && status.people_visible_to_guests !== status.people && (
-                  <span className="text-neutral-400">
+                  <span className="text-faint">
                     {' '}
                     {t('admin.faces.visibleToGuests', {
                       count: status.people_visible_to_guests,
@@ -492,7 +492,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
                 not have: Split is how a wrong merge gets unpicked. */}
             {!status.in_progress && (data.consolidation?.merged ?? 0) > 0 && (
               <p className="mt-2 flex items-start gap-2 text-xs text-soft">
-                <Users size={14} className="mt-0.5 shrink-0 text-neutral-400" />
+                <Users size={14} className="mt-0.5 shrink-0 text-faint" />
                 <span>
                   {t('admin.faces.consolidated', {
                     count: data.consolidation!.merged,

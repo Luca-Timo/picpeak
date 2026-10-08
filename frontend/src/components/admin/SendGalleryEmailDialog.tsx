@@ -71,7 +71,7 @@ export const SendGalleryEmailDialog: React.FC<SendGalleryEmailDialogProps> = ({
           </h2>
           <button
             onClick={onClose}
-            className="text-neutral-400 hover:text-body"
+            className="text-faint hover:text-body"
             aria-label={t('common.close', 'Close')}
           >
             <X className="w-5 h-5" />

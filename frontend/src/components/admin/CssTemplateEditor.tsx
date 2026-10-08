@@ -138,7 +138,7 @@ export const CssTemplateEditor: React.FC = () => {
               >
                 {t('cssTemplates.template', 'Template')} {slot}
                 {template && (
-                  <span className="ml-2 text-neutral-400">
+                  <span className="ml-2 text-faint">
                     ({template.name})
                   </span>
                 )}
@@ -173,7 +173,7 @@ export const CssTemplateEditor: React.FC = () => {
                   type="checkbox"
                   checked={activeTemplate.is_enabled}
                   onChange={(e) => updateLocalTemplate({ is_enabled: e.target.checked })}
-                  className="rounded border-neutral-300 text-accent focus:ring-accent"
+                  className="rounded border-line-strong text-accent focus:ring-accent"
                 />
                 <span className="text-sm font-medium text-body">
                   {t('cssTemplates.enableTemplate', 'Enable this template')}
@@ -197,7 +197,7 @@ export const CssTemplateEditor: React.FC = () => {
                   spellCheck={false}
                   placeholder="/* Enter your custom CSS here */"
                 />
-                <div className="absolute bottom-3 right-3 text-xs text-neutral-400">
+                <div className="absolute bottom-3 right-3 text-xs text-faint">
                   {(activeTemplate.css_content?.length || 0).toLocaleString()} / 102,400 {t('common.characters', 'characters')}
                 </div>
               </div>

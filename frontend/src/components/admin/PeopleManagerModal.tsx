@@ -411,7 +411,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
               })}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="p-2 -m-2 text-neutral-400 hover:text-body">
+          <button type="button" onClick={onClose} className="p-2 -m-2 text-faint hover:text-body">
             <X size={20} />
           </button>
         </div>
@@ -745,7 +745,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                               className="text-sm text-left text-heading hover:underline"
                             >
                               {person.label || (
-                                <span className="text-neutral-400 italic">
+                                <span className="text-faint italic">
                                   {t('admin.people.unnamed', { defaultValue: 'Add a name' })}
                                 </span>
                               )}
@@ -773,7 +773,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                             disabled={busy}
                             title={t('admin.people.contextAction', { defaultValue: 'See this person in their photo' })}
                             onClick={() => setViewing({ person, index: -1 })}
-                            className="p-2 text-neutral-400 hover:text-body rounded"
+                            className="p-2 text-faint hover:text-body rounded"
                           >
                             <Maximize2 size={16} />
                           </button>
@@ -782,7 +782,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                             disabled={busy}
                             title={t('admin.people.coverAction', { defaultValue: 'Choose which photo represents this person' })}
                             onClick={() => setCoverFor(person)}
-                            className="p-2 text-neutral-400 hover:text-body rounded"
+                            className="p-2 text-faint hover:text-body rounded"
                           >
                             <ImageIcon size={16} />
                           </button>
@@ -791,7 +791,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                             disabled={busy}
                             title={t('admin.people.splitAction', { defaultValue: 'Split out photos that are someone else' })}
                             onClick={() => { setSplitting(person); setSplitFaceIds([]); }}
-                            className="p-2 text-neutral-400 hover:text-body rounded"
+                            className="p-2 text-faint hover:text-body rounded"
                           >
                             <Scissors size={16} />
                           </button>

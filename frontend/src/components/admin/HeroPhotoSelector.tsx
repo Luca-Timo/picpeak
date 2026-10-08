@@ -41,7 +41,7 @@ export const HeroPhotoSelector: React.FC<HeroPhotoSelectorProps> = ({
           {t('events.heroPhoto')}
         </label>
         {currentHeroPhoto ? (
-          <div className="relative w-full h-48 rounded-lg overflow-hidden bg-neutral-100">
+          <div className="relative w-full h-48 rounded-lg overflow-hidden bg-inset">
             <AuthenticatedImage
               src={currentHeroPhoto.thumbnail_url || currentHeroPhoto.url}
               alt={currentHeroPhoto.filename}
@@ -49,7 +49,7 @@ export const HeroPhotoSelector: React.FC<HeroPhotoSelectorProps> = ({
             />
           </div>
         ) : (
-          <p className="text-sm text-neutral-500">{t('events.noHeroPhotoSelected')}</p>
+          <p className="text-sm text-muted">{t('events.noHeroPhotoSelected')}</p>
         )}
       </div>
     );
@@ -65,7 +65,7 @@ export const HeroPhotoSelector: React.FC<HeroPhotoSelectorProps> = ({
       </p>
       
       {currentHeroPhoto ? (
-        <div className="relative w-full h-48 rounded-lg overflow-hidden bg-neutral-100 mb-2">
+        <div className="relative w-full h-48 rounded-lg overflow-hidden bg-inset mb-2">
           <AuthenticatedImage
             src={currentHeroPhoto.thumbnail_url || currentHeroPhoto.url}
             alt={currentHeroPhoto.filename}
@@ -76,7 +76,7 @@ export const HeroPhotoSelector: React.FC<HeroPhotoSelectorProps> = ({
               variant="secondary"
               size="sm"
               onClick={() => setIsOpen(true)}
-              className="bg-white/90 hover:bg-white"
+              className="bg-white/90 hover:bg-panel"
             >
               {t('common.change')}
             </Button>
@@ -85,7 +85,7 @@ export const HeroPhotoSelector: React.FC<HeroPhotoSelectorProps> = ({
               size="sm"
               onClick={handleRemove}
               leftIcon={<X className="w-4 h-4" />}
-              className="bg-white/90 hover:bg-white"
+              className="bg-white/90 hover:bg-panel"
             >
               {t('common.remove')}
             </Button>
@@ -121,7 +121,7 @@ export const HeroPhotoSelector: React.FC<HeroPhotoSelectorProps> = ({
             
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
               {photos.length === 0 ? (
-                <p className="text-center text-neutral-500 py-8">
+                <p className="text-center text-muted py-8">
                   {t('events.noPhotosAvailable')}
                 </p>
               ) : (
@@ -133,10 +133,10 @@ export const HeroPhotoSelector: React.FC<HeroPhotoSelectorProps> = ({
                       className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                         photo.id === selectedPhotoId
                           ? 'border-accent-dark ring-2 ring-accent ring-offset-2'
-                          : 'border-transparent hover:border-neutral-300'
+                          : 'border-transparent hover:border-line-strong'
                       }`}
                     >
-                      <div className="aspect-square bg-neutral-100">
+                      <div className="aspect-square bg-inset">
                         <AuthenticatedImage
                           src={photo.thumbnail_url || photo.url}
                           alt={photo.filename}

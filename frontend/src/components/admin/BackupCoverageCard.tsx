@@ -99,13 +99,13 @@ const Header: React.FC<{
       <div>
         <div className="flex items-center gap-2 mb-1">
           {loading || refreshing ? (
-            <Loader2 className="w-5 h-5 text-neutral-400 animate-spin" />
+            <Loader2 className="w-5 h-5 text-faint animate-spin" />
           ) : healthy ? (
             <ShieldCheck className="w-5 h-5 text-success-text" />
           ) : report ? (
             <ShieldAlert className="w-5 h-5 text-warning-text" />
           ) : (
-            <ShieldCheck className="w-5 h-5 text-neutral-400" />
+            <ShieldCheck className="w-5 h-5 text-faint" />
           )}
           <h3 className="text-lg font-semibold text-heading">
             {t('backup.coverage.title', 'Backup coverage')}

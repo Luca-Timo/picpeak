@@ -209,7 +209,7 @@ export const CustomerAccountPicker: React.FC<Props> = ({ value, onChange, disabl
       <>
       {/* Search input */}
       <div className="relative">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
         <input
           type="text"
           value={query}

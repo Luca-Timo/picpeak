@@ -58,13 +58,13 @@ export const PhotoFilters: React.FC<PhotoFiltersProps> = ({
             placeholder={t('gallery.searchByFilename', 'Search by filename...')}
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            leftIcon={<Search className="w-5 h-5 text-neutral-400" />}
+            leftIcon={<Search className="w-5 h-5 text-faint" />}
           />
         </div>
 
         {/* Category Filter */}
         <div className="flex items-center gap-2">
-          <Filter className="w-5 h-5 text-neutral-400" />
+          <Filter className="w-5 h-5 text-faint" />
           <select
             value={selectedCategory === null ? '' : selectedCategory || ''}
             onChange={(e) => {
@@ -94,7 +94,7 @@ export const PhotoFilters: React.FC<PhotoFiltersProps> = ({
             empties the list, and the filter would stay on with no way out. */}
         {onCreditChange && (credits.length > 0 || !!selectedCredit) && (
           <div className="flex items-center gap-2">
-            <UserRound className="w-5 h-5 text-neutral-400" aria-hidden="true" />
+            <UserRound className="w-5 h-5 text-faint" aria-hidden="true" />
             <select
               value={selectedCredit ?? ''}
               onChange={(e) => onCreditChange(e.target.value === '' ? undefined : e.target.value)}
@@ -122,7 +122,7 @@ export const PhotoFilters: React.FC<PhotoFiltersProps> = ({
 
         {showMediaFilter && onMediaTypeChange && (
           <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-neutral-400" />
+            <Filter className="w-5 h-5 text-faint" />
             <select
               value={mediaType}
               onChange={(e) => onMediaTypeChange(e.target.value as 'all' | 'photo' | 'video')}

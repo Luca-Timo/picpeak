@@ -128,13 +128,13 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="max-w-lg w-full">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-neutral-900">
+          <h2 className="text-xl font-semibold text-heading">
             {t('events.rename.title', 'Rename Event')}
           </h2>
           <button
             onClick={onClose}
             disabled={isRenaming}
-            className="text-neutral-400 hover:text-neutral-600 disabled:opacity-50"
+            className="text-faint hover:text-soft disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -199,20 +199,20 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
           <div className="space-y-4 py-8">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="w-10 h-10 text-accent animate-spin" />
-              <p className="text-neutral-700 font-medium">{renameStatus}</p>
+              <p className="text-body font-medium">{renameStatus}</p>
             </div>
           </div>
         ) : (
           // Input form
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-neutral-600 mb-3">
+              <p className="text-sm text-soft mb-3">
                 {t('events.rename.currentName', 'Current name:')} <span className="font-medium">{eventName}</span>
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
+              <label className="block text-sm font-medium text-body mb-1">
                 {t('events.rename.newName', 'New Event Name')}
               </label>
               <Input
@@ -220,7 +220,7 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder={t('events.rename.enterNewName', 'Enter new event name')}
-                leftIcon={<Type className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Type className="w-5 h-5 text-faint" />}
                 autoFocus
               />
             </div>
@@ -237,7 +237,7 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
 
             {/* Validation status */}
             {isValidating && (
-              <div className="flex items-center gap-2 text-sm text-neutral-500">
+              <div className="flex items-center gap-2 text-sm text-muted">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 {t('events.rename.checkingAvailability', 'Checking availability...')}
               </div>
@@ -252,20 +252,20 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
 
             {/* Resend email option */}
             {customerEmail && (
-              <div className="pt-2 border-t border-neutral-200">
+              <div className="pt-2 border-t border-line">
                 <label className="flex items-start gap-2">
                   <input
                     type="checkbox"
                     checked={resendEmail}
                     onChange={(e) => setResendEmail(e.target.checked)}
-                    className="mt-1 w-4 h-4 text-accent border-neutral-300 rounded focus:ring-accent"
+                    className="mt-1 w-4 h-4 text-accent border-line-strong rounded focus:ring-accent"
                   />
                   <div>
-                    <span className="text-sm font-medium text-neutral-700 flex items-center gap-1">
+                    <span className="text-sm font-medium text-body flex items-center gap-1">
                       <Mail className="w-4 h-4" />
                       {t('events.rename.resendEmail', 'Resend invitation email with new gallery link')}
                     </span>
-                    <p className="text-xs text-neutral-500 mt-1">
+                    <p className="text-xs text-muted mt-1">
                       {t('events.rename.emailTo', 'Send updated gallery access email to')} {customerEmail}
                     </p>
                   </div>

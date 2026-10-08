@@ -114,7 +114,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
             >
               {t('transfers.picker.lightbox', 'Lightbox')}
             </Button>
-            <button onClick={onClose} className="rounded p-1 text-neutral-500 hover:bg-hover-soft">
+            <button onClick={onClose} className="rounded p-1 text-muted hover:bg-hover-soft">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -153,7 +153,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
           {/* Photo grid */}
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {!selectedEventId ? (
-              <div className="flex h-full items-center justify-center text-neutral-400">
+              <div className="flex h-full items-center justify-center text-faint">
                 <div className="text-center">
                   <ImageIcon className="mx-auto mb-2 h-10 w-10" />
                   <p>{t('transfers.picker.pickEvent', 'Pick an event to browse its photos')}</p>
@@ -162,7 +162,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
             ) : photosLoading ? (
               <Loading />
             ) : !photos || photos.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-neutral-400">
+              <div className="flex h-full items-center justify-center text-faint">
                 {t('transfers.picker.noPhotos', 'No photos in this event')}
               </div>
             ) : (
@@ -182,7 +182,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
                         <AdminAuthenticatedImage src={photo.thumbnail_url} alt={photo.filename} className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-subtle">
-                          <ImageIcon className="h-6 w-6 text-neutral-400" />
+                          <ImageIcon className="h-6 w-6 text-faint" />
                         </div>
                       )}
                       {isExcluded && (

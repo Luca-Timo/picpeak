@@ -102,7 +102,7 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
                 q.status === 'accepted' || q.status === 'converted' ? 'bg-success-soft text-success-text'
                   : q.status === 'declined' ? 'bg-danger-soft text-danger-text'
                   : q.status === 'sent' ? 'bg-info-soft text-info-text'
-                  : 'bg-neutral-100 text-neutral-700'
+                  : 'bg-inset text-body'
               }`}>{t(`quotes.status.${q.status}`, q.status)}</span>
             </li>
           ))}
@@ -156,8 +156,8 @@ const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
                   : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-info-soft text-info-text'
                   : c.status === 'sent' ? 'bg-warning-soft text-warning-text'
                   : c.status === 'declined' ? 'bg-danger-soft text-danger-text'
-                  : c.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
-                  : 'bg-neutral-100 text-neutral-700'
+                  : c.status === 'cancelled' ? 'bg-fill text-soft'
+                  : 'bg-inset text-body'
               }`}>{t(`contracts.status.${c.status}`, c.status)}</span>
             </li>
           ))}
@@ -220,8 +220,8 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
                   inv.status === 'paid' ? 'bg-success-soft text-success-text'
                     : inv.status === 'overdue' ? 'bg-danger-soft text-danger-text'
                     : inv.status === 'sent' ? 'bg-info-soft text-info-text'
-                    : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
-                    : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
+                    : inv.status === 'cancelled' ? 'bg-fill text-soft'
+                    : inv.status === 'skipped' ? 'bg-inset text-muted italic'
                     : 'bg-warning-soft text-warning-text'
                 }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
               )}

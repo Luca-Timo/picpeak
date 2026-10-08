@@ -176,7 +176,7 @@ export const SsoTab: React.FC = () => {
               <button
                 type="button"
                 onClick={copyRedirectUri}
-                className="flex-shrink-0 rounded-md border border-line bg-inset p-2 text-muted hover:text-neutral-700 transition-colors"
+                className="flex-shrink-0 rounded-md border border-line bg-inset p-2 text-muted hover:text-body transition-colors"
                 aria-label={t('common.copy', 'Copy')}
                 title={t('common.copy', 'Copy')}
               >
@@ -295,7 +295,7 @@ export const SsoTab: React.FC = () => {
       <Card>
         <div className="p-6 space-y-4">
           <div className="flex items-center gap-2">
-            <UserCog className="w-5 h-5 text-neutral-500" />
+            <UserCog className="w-5 h-5 text-muted" />
             <h2 className="text-lg font-semibold text-heading">
               {t('settings.sso.roleMapping.title', 'Role mapping')}
             </h2>
@@ -365,7 +365,7 @@ export const SsoTab: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setMappingRows((prev) => (prev ? prev.filter((_, i) => i !== index) : prev))}
-                      className="flex-shrink-0 rounded-md p-2 text-neutral-400 hover:text-danger-text transition-colors"
+                      className="flex-shrink-0 rounded-md p-2 text-faint hover:text-danger-text transition-colors"
                       aria-label={t('common.delete', 'Delete')}
                       title={t('common.delete', 'Delete')}
                     >
@@ -408,7 +408,7 @@ export const SsoTab: React.FC = () => {
       <Card>
         <div className="p-6 space-y-4">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-neutral-500" />
+            <ShieldAlert className="w-5 h-5 text-muted" />
             <h2 className="text-lg font-semibold text-heading">
               {t('settings.sso.policy.title', 'Login policy')}
             </h2>

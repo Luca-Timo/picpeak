@@ -96,7 +96,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
           </h2>
           <button
             onClick={onClose}
-            className="text-neutral-400 hover:text-body"
+            className="text-faint hover:text-body"
           >
             <X className="w-5 h-5" />
           </button>
@@ -104,7 +104,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
 
         {!resultPassword ? (
           <>
-            <p className="text-neutral-600 mb-4">
+            <p className="text-soft mb-4">
               {t('events.passwordReset.description', { eventName })}
             </p>
 
@@ -171,12 +171,12 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-neutral-500" />
+                    <Mail className="w-4 h-4 text-muted" />
                     <span className="text-sm font-medium text-body">
                       {t('events.passwordReset.sendEmail')}
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-500 mt-1">
+                  <p className="text-xs text-muted mt-1">
                     {t('events.passwordReset.sendEmailHelp')}
                   </p>
                 </div>
@@ -232,7 +232,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
             {resultWasGenerated && (
               <>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-sm font-medium text-body mb-2">
                     {t('events.passwordReset.generatedLabel')}
                   </label>
                   <div className="flex gap-2">

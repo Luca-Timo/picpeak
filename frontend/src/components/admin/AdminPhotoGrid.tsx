@@ -716,13 +716,13 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                   className="w-full h-full object-cover"
                   loading="lazy"
                   fallback={
-                    <div className="w-full h-full flex items-center justify-center text-neutral-400">
+                    <div className="w-full h-full flex items-center justify-center text-faint">
                       <Eye className="w-8 h-8" />
                     </div>
                   }
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-neutral-400">
+                <div className="w-full h-full flex items-center justify-center text-faint">
                   <Eye className="w-8 h-8" />
                 </div>
               )}
@@ -776,7 +776,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
             {/* Category Badge - move to top-left and prevent overlap with select checkbox */}
             {defaultCategoryLabel(t, photo) && (
               <div className={`absolute left-2 ${isHidden ? 'top-9' : 'top-2'} pointer-events-none`}>
-                <span className="px-2 py-1 text-xs font-medium bg-white/90 text-neutral-700 rounded max-w-[70%] whitespace-nowrap overflow-hidden text-ellipsis">
+                <span className="px-2 py-1 text-xs font-medium bg-white/90 text-body rounded max-w-[70%] whitespace-nowrap overflow-hidden text-ellipsis">
                   {defaultCategoryLabel(t, photo)}
                 </span>
               </div>
@@ -802,7 +802,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); void retryPosterFrame(photo.id); }}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/90 text-neutral-700 text-[10px] font-medium"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/90 text-body text-[10px] font-medium"
                   title={t('admin.photos.noPosterFrameRetry', 'Take the poster frame again') as string}
                 >
                   <RefreshCw className="w-2.5 h-2.5" />
@@ -874,7 +874,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                 )}
                 {!!photo.my_rating && (
                   <span
-                    className="bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 text-xs font-medium text-neutral-700 flex items-center gap-0.5"
+                    className="bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 text-xs font-medium text-body flex items-center gap-0.5"
                     title={t('admin.photos.yourMarkRating', 'Your rating: {{count}}', { count: photo.my_rating })}
                   >
                     <Star className="w-3 h-3 text-rating" fill="currentColor" />
@@ -893,7 +893,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     title={t('admin.photos.approvedBy', 'Approved: {{value}}', { value: approvedCount })}
                   >
                     <ThumbsUp className="w-3.5 h-3.5 text-success-text" aria-hidden="true" />
-                    <span className="text-xs font-medium text-neutral-700">{approvedCount}</span>
+                    <span className="text-xs font-medium text-body">{approvedCount}</span>
                   </div>
                 )}
                 {rejectedCount > 0 && (
@@ -902,19 +902,19 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     title={t('admin.photos.rejectedBy', 'Rejected: {{value}}', { value: rejectedCount })}
                   >
                     <ThumbsDown className="w-3.5 h-3.5 text-danger-text" aria-hidden="true" />
-                    <span className="text-xs font-medium text-neutral-700">{rejectedCount}</span>
+                    <span className="text-xs font-medium text-body">{rejectedCount}</span>
                   </div>
                 )}
                 {averageRating > 0 && (
                   <div className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1" title={`Rating: ${Number(averageRating).toFixed(1)}`}>
                     <Star className="w-3.5 h-3.5 text-rating" fill="currentColor" />
-                    <span className="text-xs font-medium text-neutral-700">{Number(averageRating).toFixed(1)}</span>
+                    <span className="text-xs font-medium text-body">{Number(averageRating).toFixed(1)}</span>
                   </div>
                 )}
                 {commentCount > 0 && (
                   <div className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1" title={`${commentCount} comments`}>
                     <MessageSquare className="w-3.5 h-3.5 text-accent" fill="currentColor" />
-                    <span className="text-xs font-medium text-neutral-700">{commentCount}</span>
+                    <span className="text-xs font-medium text-body">{commentCount}</span>
                   </div>
                 )}
               </div>
@@ -1004,13 +1004,13 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                             className="w-full h-full object-cover"
                             loading="lazy"
                             fallback={
-                              <div className="w-full h-full flex items-center justify-center text-neutral-400">
+                              <div className="w-full h-full flex items-center justify-center text-faint">
                                 <Eye className="w-4 h-4" />
                               </div>
                             }
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-neutral-400">
+                          <div className="w-full h-full flex items-center justify-center text-faint">
                             <Eye className="w-4 h-4" />
                           </div>
                         )}
@@ -1083,7 +1083,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     {photo.credit_name ? (
                       <span className="block truncate" title={photo.credit_name}>{photo.credit_name}</span>
                     ) : photo.uploaded_by === 'guest' ? (
-                      <span className="text-neutral-400">{t('admin.photos.credit.unnamedGuest')}</span>
+                      <span className="text-faint">{t('admin.photos.credit.unnamedGuest')}</span>
                     ) : '—'}
                   </td>
 

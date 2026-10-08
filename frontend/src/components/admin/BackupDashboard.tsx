@@ -373,7 +373,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Database className="h-5 w-5 text-neutral-400" />
+                <Database className="h-5 w-5 text-faint" />
                 <span className="text-body">Database</span>
               </div>
               <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -385,7 +385,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
 
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Image className="h-5 w-5 text-neutral-400" />
+                <Image className="h-5 w-5 text-faint" />
                 <span className="text-body">{t('backup.configuration.whatToBackup.photos')}</span>
               </div>
               <span className="text-sm text-muted">
@@ -395,7 +395,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
 
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <FileArchive className="h-5 w-5 text-neutral-400" />
+                <FileArchive className="h-5 w-5 text-faint" />
                 <span className="text-body">{t('backup.configuration.whatToBackup.archives')}</span>
               </div>
               <span className="text-sm text-muted">
@@ -414,7 +414,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
               ) : config?.backup_destination_type === 'rsync' ? (
                 <Server className="h-5 w-5 text-chart-4" />
               ) : (
-                <HardDrive className="h-5 w-5 text-neutral-500" />
+                <HardDrive className="h-5 w-5 text-muted" />
               )}
               <div>
                 <p className="font-medium text-heading">
@@ -437,7 +437,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
             {config?.backup_retention_days && (
               <div className="mt-4 p-3 bg-inset rounded-lg">
                 <div className="flex items-center space-x-2">
-                  <Info className="h-4 w-4 text-neutral-400" />
+                  <Info className="h-4 w-4 text-faint" />
                   <span className="text-sm text-body">
                     {t('backup.configuration.schedule.retentionDays')} {config.backup_retention_days} {t('backup.configuration.schedule.retentionHelp').replace('days (older backups will be automatically deleted)', '')}
                   </span>

@@ -66,7 +66,7 @@ const Toggle: React.FC<ToggleProps> = ({ enabled, onChange, label, hint, icon: I
       style={enabled ? { backgroundColor: 'var(--color-accent, #5C8762)' } : undefined}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}
+        className={`inline-block h-4 w-4 transform rounded-full bg-panel transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}
       />
     </button>
   </label>
