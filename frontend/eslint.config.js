@@ -125,6 +125,8 @@ export default tseslint.config([
     // Colours, everywhere in the app: one source (src/styles/tokens.css).
     files: ['src/**/*.{ts,tsx,jsx}'],
     ignores: ['src/**/__tests__/**', 'src/**/*.test.{ts,tsx}'],
+    // The .jsx files have no other config block, so JSX parsing is set here.
+    languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: { 'ui-tokens': uiTokensPlugin },
     rules: { 'ui-tokens/no-raw-palette': 'error' },
   },
