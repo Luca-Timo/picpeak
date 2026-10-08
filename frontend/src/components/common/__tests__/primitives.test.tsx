@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { ConfirmDialogProvider, useConfirm } from '../ConfirmDialog';
 import { vi, describe, it, expect } from 'vitest';
 import { Badge } from '../Badge';
+import { Button } from '../Button';
 import { Notice } from '../Notice';
 import { Modal } from '../Modal';
 import { Tabs } from '../Tabs';
@@ -29,6 +30,17 @@ describe('Badge', () => {
   it('has an outline look for states that are not there yet', () => {
     render(<Badge tone="neutral" appearance="outline">Roadmap</Badge>);
     expect(screen.getByText('Roadmap').className).toContain('border-line-strong');
+  });
+});
+
+describe('Button', () => {
+  it('ghost does not hard-code an admin text colour, so it follows a dark gallery theme', () => {
+    render(<Button variant="ghost">Cancel</Button>);
+    const button = screen.getByRole('button', { name: 'Cancel' });
+    expect(button.className).toContain('btn-ghost');
+    // text-body / hover:bg-hover are admin UI tokens: on a gallery (no .dark
+    // class) they stay light-mode grey on whatever surface the theme paints.
+    expect(button.className).not.toMatch(/\btext-body\b|\bhover:bg-hover\b/);
   });
 });
 

@@ -34,7 +34,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       primary: 'btn-primary',
       secondary: 'btn-secondary',
       outline: 'btn-outline',
-      ghost: 'bg-transparent hover:bg-hover text-body',
+      // .btn-ghost reads the gallery theme, or the UI tokens inside the
+      // admin (.admin-ui); a utility in className still wins over either.
+      ghost: 'btn-ghost',
       danger: 'btn-danger',
     };
 
