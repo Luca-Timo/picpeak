@@ -196,7 +196,7 @@ export const PhotoDecision: React.FC<PhotoDecisionProps> = ({
           // the form opens upward. Phones keep it near the top: the soft
           // keyboard covers the lower half and the toolbar wraps to a height
           // that varies with the enabled buttons.
-          className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:bottom-full sm:mb-2 sm:w-72 p-3 rounded-lg shadow-xl bg-surface border border-surface z-40 space-y-2"
+          className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:bottom-full sm:mb-2 sm:w-72 p-3 rounded-lg shadow-xl bg-surface border border-surface z-40 space-y-2"
           onSubmit={(e) => {
             e.preventDefault();
             void submit({ decision: 'rejected', reason: reasonDraft });
