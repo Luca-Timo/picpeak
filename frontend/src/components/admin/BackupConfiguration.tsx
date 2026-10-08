@@ -14,7 +14,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Button, Card, Input } from '../common';
+import { Button, Card, Input, Switch } from '../common';
 import { SettingsSaveBar } from './SettingsSaveBar';
 import { api } from '../../config/api';
 import { backupErrorCode, backupErrorText } from '../../utils/backupErrors';
@@ -354,15 +354,11 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
               {t('backup.configuration.enableBackupHelp')}
             </p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={formData.backup_enabled}
-              onChange={(e) => handleChange('backup_enabled', e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-fill peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 dark:after:border-neutral-500 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-strong"></div>
-          </label>
+          <Switch
+            checked={!!formData.backup_enabled}
+            onChange={(next) => handleChange('backup_enabled', next)}
+            ariaLabel={t('backup.configuration.enableBackup')}
+          />
         </div>
       </Card>
 

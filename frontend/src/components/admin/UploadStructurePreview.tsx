@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowRight, EyeOff, Folder, Image as ImageIcon, Info, Layers, Loader2, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
+import { Switch } from '../common';
 import type { FolderNodeStatus } from '../../services/folders.service';
 import type { PreviewFolderNode, UploadPreview } from '../../utils/uploadStructure';
 
@@ -87,21 +88,12 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
 
   return (
     <div className="space-y-3" data-testid="upload-structure-preview">
-      <label className="flex items-start gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          role="switch"
-          checked={keepStructure}
-          onChange={(e) => onKeepStructureChange(e.target.checked)}
-          className="mt-0.5 rounded border-line-strong text-accent focus:ring-accent"
-        />
-        <span>
-          <span className="block text-sm font-medium text-heading">{t('upload.structure.keepStructure', 'Keep folder structure')}</span>
-          <span className="block text-xs text-soft">
-            {t('upload.structure.keepStructureHelp', "Subfolders become gallery folders. The default comes from the event's Folders setting.")}
-          </span>
-        </span>
-      </label>
+      <Switch
+        checked={keepStructure}
+        onChange={onKeepStructureChange}
+        label={t('upload.structure.keepStructure', 'Keep folder structure')}
+        description={t('upload.structure.keepStructureHelp', "Subfolders become gallery folders. The default comes from the event's Folders setting.")}
+      />
 
       {keepStructure && singleRoot && (
         <label className="flex items-start gap-3 cursor-pointer">

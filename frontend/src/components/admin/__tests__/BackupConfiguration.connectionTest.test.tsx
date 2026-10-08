@@ -164,9 +164,11 @@ describe('BackupConfiguration rsync connection test', () => {
 });
 
 describe('automatic-backup switch', () => {
-  it('colours the track with a defined token when on', () => {
+  it('colours the track with a defined token when on', async () => {
     renderForm();
-    const track = screen.getByRole('checkbox', { name: '' }).nextElementSibling as HTMLElement;
-    expect(track.className).toContain('peer-checked:bg-accent-strong');
+    const track = screen.getByRole('switch', { name: /enableBackup/ });
+    await userEvent.click(track);
+    expect(track).toBeChecked();
+    expect(track.className).toContain('bg-accent-strong');
   });
 });

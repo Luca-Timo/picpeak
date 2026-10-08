@@ -27,6 +27,7 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Plus } from 'lucide-react';
 import { Button, Input, LocalizedDateInput } from '../common';
+import { DecimalInput } from '../common/DecimalInput';
 import type { PaymentTermInstallment } from '../../services/quotes.service';
 import { useInstallmentDefaults } from '../../hooks/useInstallmentDefaults';
 
@@ -195,13 +196,10 @@ export const InstallmentsPanel: React.FC<InstallmentsPanelProps> = ({
                   <label className="block text-xs text-muted mb-1">
                     {t('installments.percent', '%')}
                   </label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.01"
+                  <DecimalInput
+                    className="input"
                     value={row.percent}
-                    onChange={(e) => update(idx, { percent: Number(e.target.value) })}
+                    onChange={(n) => update(idx, { percent: Number.isFinite(n) ? n : 0 })}
                     disabled={disabled}
                   />
                 </div>
