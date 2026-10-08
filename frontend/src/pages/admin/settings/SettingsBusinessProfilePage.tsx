@@ -295,7 +295,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
           open blocks is held until the next opening. */}
       <Card>
         <div className="flex items-center gap-2 mb-1">
-          <Clock className="w-5 h-5 text-neutral-500" />
+          <Clock className="w-5 h-5 text-muted" />
           <h3 className="font-semibold text-heading">{t('businessProfile.businessHours.title', 'Business hours')}</h3>
         </div>
         <p className="text-sm text-soft mb-4">
@@ -327,7 +327,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
           the legal line below comes from the fields already on this page. */}
       <Card>
         <div className="flex items-center gap-2 mb-1">
-          <Mail className="w-5 h-5 text-neutral-500" />
+          <Mail className="w-5 h-5 text-muted" />
           <h3 className="font-semibold text-heading">
             {t('businessProfile.emailSignature.title', 'Email signature')}
           </h3>
@@ -585,7 +585,7 @@ const BusinessHoursEditor: React.FC<{
                     ariaLabel={t('businessProfile.businessHours.startTime', 'Opening time') as string}
                     className="w-32 shrink-0"
                   />
-                  <span className="text-neutral-400">–</span>
+                  <span className="text-faint">–</span>
                   <TimeField
                     value={block.end}
                     onChange={(v) => updateBlock(iso, idx, { end: v })}
@@ -596,7 +596,7 @@ const BusinessHoursEditor: React.FC<{
                     type="button"
                     onClick={() => removeBlock(iso, idx)}
                     aria-label={t('common.remove', 'Remove') as string}
-                    className="p-1.5 text-neutral-400 hover:text-danger-text"
+                    className="p-1.5 text-faint hover:text-danger-text"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -618,7 +618,7 @@ const BusinessHoursEditor: React.FC<{
               <button
                 type="button"
                 onClick={() => copyToAll(iso)}
-                className="shrink-0 inline-flex items-center gap-1 pt-2 text-xs text-neutral-500 hover:text-body"
+                className="shrink-0 inline-flex items-center gap-1 pt-2 text-xs text-muted hover:text-body"
               >
                 <Copy className="w-3.5 h-3.5" />
                 {t('businessProfile.businessHours.copyToAll', 'Copy to all days')}
@@ -694,14 +694,14 @@ const PdfLogoUploader: React.FC<PdfLogoUploaderProps> = ({ profile, setProfile }
         />
         {profile.logoPath && (
           <>
-            <span className="text-xs text-neutral-500 font-mono break-all">{profile.logoPath}</span>
+            <span className="text-xs text-muted font-mono break-all">{profile.logoPath}</span>
             <Button variant="outline" size="sm" onClick={onClear} disabled={uploading}>
               {t('common.remove', 'Remove')}
             </Button>
           </>
         )}
       </div>
-      <p className="text-xs text-neutral-500 mt-1">
+      <p className="text-xs text-muted mt-1">
         {t('businessProfile.field.pdfLogoUploadHelp',
           'Used on every quote and invoice PDF. SVG is accepted and rasterised to PNG automatically. When empty, the renderer falls back to the global Branding logo.')}
       </p>
@@ -825,7 +825,7 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({ accounts }) =
       {openForm === 'new' && renderForm('new', () => create.mutate(), create.isPending)}
 
       {accounts.length === 0 ? (
-        <p className="text-sm text-neutral-500">{t('businessProfile.noBanks', 'No bank accounts configured yet.')}</p>
+        <p className="text-sm text-muted">{t('businessProfile.noBanks', 'No bank accounts configured yet.')}</p>
       ) : (
         <ul className="divide-y divide-line">
           {accounts.map((b) => (
@@ -835,7 +835,7 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({ accounts }) =
                   <div className="font-medium text-sm text-heading">{b.label || b.iban}
                     {b.isDefault && <Star className="inline w-4 h-4 ml-1 text-warning" />}
                   </div>
-                  <div className="text-xs text-neutral-500 font-mono">{b.iban.replace(/(.{4})/g, '$1 ').trim()}{b.currency ? ` · ${b.currency}` : ''}</div>
+                  <div className="text-xs text-muted font-mono">{b.iban.replace(/(.{4})/g, '$1 ').trim()}{b.currency ? ` · ${b.currency}` : ''}</div>
                 </div>
                 <div className="flex gap-2">
                   {!b.isDefault && (

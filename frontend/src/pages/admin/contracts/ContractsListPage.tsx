@@ -98,7 +98,7 @@ export const ContractsListPage: React.FC = () => {
       <Card padding="lg">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
             <input
               type="text"
               placeholder={t('contracts.list.searchPlaceholder', 'Search by number, title or customer…') as string}
@@ -168,8 +168,8 @@ export const ContractsListPage: React.FC = () => {
                               : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-info-soft text-info-text'
                               : c.status === 'sent' || c.status === 'awaiting_data' ? 'bg-warning-soft text-warning-text'
                               : c.status === 'declined' ? 'bg-danger-soft text-danger-text'
-                              : c.status === 'cancelled' || c.status === 'expired' ? 'bg-neutral-200 text-neutral-600'
-                              : 'bg-neutral-100 text-neutral-700'
+                              : c.status === 'cancelled' || c.status === 'expired' ? 'bg-fill text-soft'
+                              : 'bg-inset text-body'
                           }`}>{contractStatusLabel(t, c.status, c.signerProgress)}</span>
                         </td>
                       </tr>

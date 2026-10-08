@@ -816,7 +816,7 @@ export const ContractForm = forwardRef<ContractFormHandle, ContractFormProps>(({
           <h3 className="text-sm font-semibold mb-2">
             {t('contracts.editor.eventSection', 'Event (optional)')}
           </h3>
-          <p className="text-xs text-neutral-500 mb-3">
+          <p className="text-xs text-muted mb-3">
             {t('contracts.editor.eventHelp',
               'Snapshotted onto the contract and propagated to any event / invoice generated from it. Set this so the customer portal and dunning emails show the right "Wedding Doe / Müller" label.')}
           </p>
@@ -930,7 +930,7 @@ export const ContractForm = forwardRef<ContractFormHandle, ContractFormProps>(({
             {t(`contracts.sections.${section}`, section)}
           </h2>
           {blocksBySection[section].length === 0 ? (
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-muted">
               {t('contracts.editor.noBlocksInSection', 'No blocks for this section yet.')}
             </p>
           ) : (
@@ -956,7 +956,7 @@ export const ContractForm = forwardRef<ContractFormHandle, ContractFormProps>(({
                       )}
                     </div>
                     {b.description && (
-                      <p className="text-xs text-neutral-500 mt-1">{b.description}</p>
+                      <p className="text-xs text-muted mt-1">{b.description}</p>
                     )}
                   </div>
                   <div className="flex flex-col gap-1">

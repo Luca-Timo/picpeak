@@ -673,7 +673,7 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
                 );
               })}
             </select>
-            <p className="text-xs text-neutral-500 mt-1">
+            <p className="text-xs text-muted mt-1">
               {t('bills.field.bankAccountHelp',
                 'Overrides the profile default for this invoice only. Leave on default to inherit the currency-matched account from Settings → Business profile.')}
             </p>
@@ -764,7 +764,7 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
               'Disable Skonto for this invoice (suppresses the early-payment-discount block on the PDF and the "Paid with Skonto" buttons in the admin email / record-payment dialog).')}
           </span>
         </label>
-        <p className="text-xs text-neutral-500 mt-2">
+        <p className="text-xs text-muted mt-2">
           {t('bills.field.paymentTermHelp',
             'Net days + Skonto for this invoice. Leave blank to inherit from the source quote or the global CRM defaults.')}
         </p>

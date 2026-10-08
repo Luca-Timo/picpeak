@@ -381,7 +381,7 @@ export const CMSPage: React.FC = () => {
               <span
                 aria-hidden="true"
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  publicSiteEnabled ? 'bg-accent-dark' : 'bg-neutral-300'
+                  publicSiteEnabled ? 'bg-accent-dark' : 'bg-fill-strong'
                 }`}
               >
                 <span

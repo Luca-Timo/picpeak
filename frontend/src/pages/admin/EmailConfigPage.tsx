@@ -675,7 +675,7 @@ export const EmailConfigPage: React.FC = () => {
                   value={smtpConfig.smtp_host}
                   onChange={(e) => setSmtpConfig(prev => ({ ...prev, smtp_host: e.target.value }))}
                   placeholder="smtp.gmail.com"
-                  leftIcon={<Server className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Server className="w-5 h-5 text-faint" />}
                 />
               </div>
 
@@ -740,7 +740,7 @@ export const EmailConfigPage: React.FC = () => {
                   value={smtpConfig.smtp_user}
                   onChange={(e) => setSmtpConfig(prev => ({ ...prev, smtp_user: e.target.value }))}
                   placeholder="your-email@gmail.com"
-                  leftIcon={<User className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<User className="w-5 h-5 text-faint" />}
                 />
               </div>
 
@@ -754,12 +754,12 @@ export const EmailConfigPage: React.FC = () => {
                     value={smtpConfig.smtp_pass}
                     onChange={(e) => setSmtpConfig(prev => ({ ...prev, smtp_pass: e.target.value }))}
                     placeholder={t('email.enterPassword')}
-                    leftIcon={<Lock className="w-5 h-5 text-neutral-400" />}
+                    leftIcon={<Lock className="w-5 h-5 text-faint" />}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-600"
+                    className="absolute right-3 top-3 text-faint hover:text-soft"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -775,7 +775,7 @@ export const EmailConfigPage: React.FC = () => {
                   value={smtpConfig.from_email}
                   onChange={(e) => setSmtpConfig(prev => ({ ...prev, from_email: e.target.value }))}
                   placeholder="noreply@yourdomain.com"
-                  leftIcon={<Mail className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Mail className="w-5 h-5 text-faint" />}
                 />
               </div>
 
@@ -821,7 +821,7 @@ export const EmailConfigPage: React.FC = () => {
                   value={testEmail}
                   onChange={(e) => setTestEmail(e.target.value)}
                   placeholder="test@example.com"
-                  leftIcon={<Mail className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Mail className="w-5 h-5 text-faint" />}
                 />
               </div>
 
@@ -873,7 +873,7 @@ export const EmailConfigPage: React.FC = () => {
           <Card padding="md">
             <div className="flex items-center justify-between gap-4 mb-4">
               <div className="flex items-center gap-2">
-                <Palette className="w-5 h-5 text-neutral-500" />
+                <Palette className="w-5 h-5 text-muted" />
                 <h2 className="text-lg font-semibold text-heading">{t('email.brandingTitle')}</h2>
               </div>
               {/* One-click copy from Branding theme so email + site share an

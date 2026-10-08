@@ -688,13 +688,13 @@ export const ContractDetailPage: React.FC = () => {
                   .filter((inc) => inc.included)
                   .map((inc) => (
                     <li key={inc.id} className="flex items-center gap-2">
-                      <span className="text-xs uppercase tracking-wide text-neutral-500 w-24">{inc.section}</span>
+                      <span className="text-xs uppercase tracking-wide text-muted w-24">{inc.section}</span>
                       <span>{inc.block?.name || `Block ${inc.blockId}`}</span>
                     </li>
                   ))}
               </ul>
             ) : (
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-muted">
                 {t('contracts.detail.noBlocks', 'No blocks included.')}
               </p>
             )}
@@ -815,7 +815,7 @@ export const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractI
       {t('contracts.detail.integrity.mismatch', 'Hash mismatch — file altered')}
     </span>
   ) : (
-    <span className="text-xs text-neutral-500">{t('contracts.detail.integrity.notCheckable', 'Not checkable')}</span>
+    <span className="text-xs text-muted">{t('contracts.detail.integrity.notCheckable', 'Not checkable')}</span>
   ));
 
   return (
@@ -845,7 +845,7 @@ export const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractI
           </Button>
         </div>
       </div>
-      <p className="text-xs text-neutral-500 mb-3">
+      <p className="text-xs text-muted mb-3">
         {t('contracts.detail.integrity.helpReport',
           'Re-reads every file of this contract — both PDFs, the signing certificate, each signature image and attachment — and re-checks the frozen content, the attachment list and the signing log against what was recorded when each was made. A mismatch names the item that changed.')}
       </p>
@@ -867,15 +867,15 @@ export const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractI
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-sm font-medium">
                     {t(`contracts.detail.integrity.check.${c.check}`, c.check)}
-                    {c.subject && <span className="ml-1 font-normal text-neutral-500">· {c.subject}</span>}
+                    {c.subject && <span className="ml-1 font-normal text-muted">· {c.subject}</span>}
                   </span>
                   {verdict(c)}
                 </div>
-                {c.note && c.note !== 'missing' && <p className="text-[11px] text-neutral-500">{c.note}</p>}
+                {c.note && c.note !== 'missing' && <p className="text-[11px] text-muted">{c.note}</p>}
                 <dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-0.5 text-[11px] font-mono">
-                  <dt className="text-neutral-500">{t('contracts.detail.integrity.expected', 'expected')}</dt>
+                  <dt className="text-muted">{t('contracts.detail.integrity.expected', 'expected')}</dt>
                   <dd className="break-all">{c.expected || '—'}</dd>
-                  <dt className="text-neutral-500">{t('contracts.detail.integrity.actual', 'actual')}</dt>
+                  <dt className="text-muted">{t('contracts.detail.integrity.actual', 'actual')}</dt>
                   <dd className={c.ok === false ? 'break-all text-danger-text' : 'break-all'}>{c.actual || '—'}</dd>
                 </dl>
               </li>
@@ -980,7 +980,7 @@ const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
         <h2 className="font-semibold mb-2">
           {t('contracts.detail.auditTrail', 'Audit trail')}
         </h2>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-muted">
           {t('contracts.detail.auditEmpty', 'No audit-log entries yet.')}
         </p>
       </Card>
@@ -993,7 +993,7 @@ const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
         <ScrollText className="w-4 h-4" />
         {t('contracts.detail.auditTrail', 'Audit trail')}
       </h2>
-      <p className="text-xs text-neutral-500 mb-3">
+      <p className="text-xs text-muted mb-3">
         {t('contracts.detail.auditTrailHelp',
           'Every event recorded on this contract. The list is append-only and is the source of truth if the contract is challenged.')}
       </p>
@@ -1024,14 +1024,14 @@ const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
             <li key={e.id} className="flex items-start gap-3 text-sm border-l-2 border-accent-dark pl-3">
               <div className="flex-1 min-w-0">
                 <div className="font-medium">{label}</div>
-                <div className="text-xs text-neutral-500">
+                <div className="text-xs text-muted">
                   {e.actor_name || e.actor_type || 'system'}
                   {metaChips.length > 0 && (
                     <span className="ml-2 font-mono">· {metaChips.join(' · ')}</span>
                   )}
                 </div>
               </div>
-              <div className="text-xs text-neutral-500 whitespace-nowrap font-mono">
+              <div className="text-xs text-muted whitespace-nowrap font-mono">
                 {fmtDateTime(e.created_at)}
               </div>
             </li>

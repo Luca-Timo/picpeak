@@ -330,7 +330,7 @@ export const NewsletterComposerPage: React.FC<{ campaignId: number }> = ({ campa
         {/* ---- 2. Recipients ---- */}
         <Card>
           <div className="flex items-center gap-2 mb-4">
-            <Users className="w-5 h-5 text-neutral-500" />
+            <Users className="w-5 h-5 text-muted" />
             <h3 className="font-semibold text-heading">
               {t('newsletters.section.recipients', 'Recipients & send')}
             </h3>
@@ -568,7 +568,7 @@ export const NewsletterComposerPage: React.FC<{ campaignId: number }> = ({ campa
       <Card className="mt-6">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2">
-            <Eye className="w-5 h-5 text-neutral-500" />
+            <Eye className="w-5 h-5 text-muted" />
             <h3 className="font-semibold text-heading">
               {t('newsletters.section.preview', 'Preview')}
             </h3>

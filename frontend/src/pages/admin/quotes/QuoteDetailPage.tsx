@@ -428,9 +428,9 @@ export const QuoteDetailPage: React.FC = () => {
                 </tbody>
               </table>
               <div className="flex flex-col items-end gap-1 mt-4 text-sm">
-                <div className="flex gap-6"><span className="text-neutral-600">{t('crm.lineItems.subtotal', 'Subtotal')}:</span>
+                <div className="flex gap-6"><span className="text-soft">{t('crm.lineItems.subtotal', 'Subtotal')}:</span>
                   <span className="tabular-nums w-28 text-right">{formatMoney(Number(q.netAmountMinor || 0) / 100, q.currency)}</span></div>
-                <div className="flex gap-6"><span className="text-neutral-600">{t('crm.lineItems.vat', 'VAT')} ({Number(q.vatRate || 0).toFixed(1)}%):</span>
+                <div className="flex gap-6"><span className="text-soft">{t('crm.lineItems.vat', 'VAT')} ({Number(q.vatRate || 0).toFixed(1)}%):</span>
                   <span className="tabular-nums w-28 text-right">{formatMoney(Number(q.vatAmountMinor || 0) / 100, q.currency)}</span></div>
                 <div className="flex gap-6 font-semibold text-base"><span>{t('crm.lineItems.total', 'Total')}:</span>
                   <span className="tabular-nums w-28 text-right">{formatMoney(Number(q.totalAmountMinor || 0) / 100, q.currency)}</span></div>

@@ -87,7 +87,7 @@ export const BillsListPage: React.FC = () => {
       <Card padding="lg">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
             <input
               type="text"
               placeholder={t('bills.searchPlaceholder', 'Search by number or customer…') as string}
@@ -193,8 +193,8 @@ export const BillsListPage: React.FC = () => {
                               inv.status === 'paid' ? 'bg-success-soft text-success-text'
                                 : inv.status === 'overdue' ? 'bg-danger-soft text-danger-text'
                                 : inv.status === 'sent' ? 'bg-info-soft text-info-text'
-                                : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
-                                : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
+                                : inv.status === 'cancelled' ? 'bg-fill text-soft'
+                                : inv.status === 'skipped' ? 'bg-inset text-muted italic'
                                 : 'bg-warning-soft text-warning-text'
                             }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
                           )}
@@ -291,7 +291,7 @@ const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) =
           </button>
         </div>
         <div className="p-5 space-y-4">
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-muted">
             {t('bills.importHelp',
               'Attach a PDF from a previous billing system. The customer sees this original document in their portal — picpeak does not regenerate it.')}
           </p>
@@ -305,7 +305,7 @@ const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) =
               <div className="flex items-center gap-2 text-sm">
                 <span className="px-2 py-1 rounded bg-subtle">{customerLabel}</span>
                 <button type="button" onClick={() => { setCustomerId(null); setCustomerLabel(''); }}
-                  className="text-xs text-neutral-500 hover:underline">
+                  className="text-xs text-muted hover:underline">
                   {t('common.change', 'Change')}
                 </button>
               </div>
@@ -325,12 +325,12 @@ const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) =
                           }}
                           className="w-full text-left px-3 py-1.5 text-sm hover:bg-hover-soft">
                           {c.companyName || c.displayName || c.email}
-                          <span className="text-xs text-neutral-500 ml-2">{c.email}</span>
+                          <span className="text-xs text-muted ml-2">{c.email}</span>
                         </button>
                       </li>
                     ))}
                     {(customerOptions as any[]).length === 0 && (
-                      <li className="px-3 py-2 text-xs text-neutral-500">{t('bills.noMatch', 'No matches')}</li>
+                      <li className="px-3 py-2 text-xs text-muted">{t('bills.noMatch', 'No matches')}</li>
                     )}
                   </ul>
                 )}
@@ -404,7 +404,7 @@ const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) =
               className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-accent-strong file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
             />
             {file && (
-              <p className="text-xs text-neutral-500 mt-1">{file.name} · {(file.size / 1024).toFixed(1)} KB</p>
+              <p className="text-xs text-muted mt-1">{file.name} · {(file.size / 1024).toFixed(1)} KB</p>
             )}
           </div>
         </div>

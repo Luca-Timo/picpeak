@@ -467,7 +467,7 @@ export const BillDetailPage: React.FC = () => {
           <Card>
             <h3 className="font-semibold mb-3">{t('bills.section.paymentLog', 'Payment log')}</h3>
             {data.payments.length === 0 ? (
-              <p className="text-sm text-neutral-500">{t('bills.noPayments', 'No payments recorded yet.')}</p>
+              <p className="text-sm text-muted">{t('bills.noPayments', 'No payments recorded yet.')}</p>
             ) : (
               <table className="w-full text-sm">
                 <thead><tr className="border-b border-line">

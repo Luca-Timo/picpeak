@@ -75,7 +75,7 @@ export const QuotesListPage: React.FC = () => {
       <Card padding="lg">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
             <input
               type="text"
               placeholder={t('quotes.searchPlaceholder', 'Search by number, customer, event…') as string}
@@ -137,7 +137,7 @@ export const QuotesListPage: React.FC = () => {
                             q.status === 'accepted' || q.status === 'converted' ? 'bg-success-soft text-success-text'
                               : q.status === 'declined' ? 'bg-danger-soft text-danger-text'
                               : q.status === 'sent' ? 'bg-info-soft text-info-text'
-                              : 'bg-neutral-100 text-neutral-700'
+                              : 'bg-inset text-body'
                           }`}>{t(`quotes.status.${q.status}`, q.status)}</span>
                         </td>
                       </tr>

@@ -178,7 +178,7 @@ export const NewsletterListPage: React.FC = () => {
                           type="button"
                           onClick={() => remove(c)}
                           aria-label={t('newsletters.deleteAria', 'Delete {{name}}', { name: c.name }) as string}
-                          className="text-neutral-400 hover:text-danger-text"
+                          className="text-faint hover:text-danger-text"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
