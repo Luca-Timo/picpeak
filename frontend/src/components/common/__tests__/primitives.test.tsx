@@ -5,6 +5,7 @@ import { ConfirmDialogProvider, useConfirm } from '../ConfirmDialog';
 import { vi, describe, it, expect } from 'vitest';
 import { Badge } from '../Badge';
 import { Button } from '../Button';
+import { Input } from '../Input';
 import { Notice } from '../Notice';
 import { Modal } from '../Modal';
 import { Tabs } from '../Tabs';
@@ -41,6 +42,21 @@ describe('Button', () => {
     // text-body / hover:bg-hover are admin UI tokens: on a gallery (no .dark
     // class) they stay light-mode grey on whatever surface the theme paints.
     expect(button.className).not.toMatch(/\btext-body\b|\bhover:bg-hover\b/);
+  });
+});
+
+describe('Input', () => {
+  it('themed reads the gallery theme for the field, not only for the label', () => {
+    render(<Input themed label="Your name" error="Name is required" />);
+    const field = screen.getByLabelText('Your name');
+    expect(field.className).toContain('input-themed');
+    expect(field.className).not.toMatch(/(^|\s)input(\s|$)/);
+    expect(screen.getByText('Name is required').className).toContain('hue-danger');
+  });
+
+  it('keeps the admin field without themed', () => {
+    render(<Input label="Email" />);
+    expect(screen.getByLabelText('Email').className).toMatch(/(^|\s)input(\s|$)/);
   });
 });
 
