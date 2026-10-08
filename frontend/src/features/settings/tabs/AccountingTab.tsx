@@ -211,7 +211,7 @@ export const AccountingTab: React.FC = () => {
             </div>
           </div>
         )}
-        <p className="text-xs text-warning-text">{t('settings.accounting.disclaimer', 'Rates and VAT/tax treatment are guidance only — verify with your Treuhaender.')}</p>
+        <p className="text-xs text-warning-text">{t('settings.accounting.disclaimer', 'Rates and VAT/tax treatment are guidance only — verify with your Treuhänder.')}</p>
       </CardContent></Card>
 
       {/* VAT registration & reclaim — drives whether output/input VAT applies

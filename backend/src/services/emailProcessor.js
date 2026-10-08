@@ -425,7 +425,10 @@ async function resolveEmailAccent(configuredPrimary, configuredButtonText) {
     try {
       const brand = await loadBrandingTheme();
       primary = sanitizeCssColor((brand && (brand.accentDarkColor || brand.primaryColor)) || '') || null;
-    } catch (_) { /* fall through to the legacy green */ }
+    } catch (error) {
+      // The mail still goes out, in the legacy green.
+      logger.warn('Could not read the Branding accent for emails', { error: error.message });
+    }
   }
   primary = primary || LEGACY_EMAIL_GREEN;
   const buttonText = sanitizeCssColor(configuredButtonText || '') || readableTextOn(primary, '#ffffff');

@@ -265,7 +265,7 @@ export const ColorCustomizationCard: React.FC<ColorCustomizationCardProps> = ({
             t('branding.colorGroupSurfacesHelp', 'The neutral layers behind your content. Background sits furthest back; Surface and Elevated stack on top.'),
           )}
           {themePickers([
-            { key: 'backgroundColor', label: t('branding.backgroundColor', 'Background'), help: t('branding.backgroundColorHelp', 'The page itself — body background of every gallery, admin page and CMS page.'), fallback: '#fafafa' },
+            { key: 'backgroundColor', label: t('branding.backgroundColor', 'Background Color'), help: t('branding.backgroundColorHelp', 'The page itself — body background of every gallery, admin page and CMS page.'), fallback: '#fafafa' },
             { key: 'surfaceColor', label: t('branding.surfaceColor', 'Surface'), help: t('branding.surfaceColorHelp', 'Cards, sidebar, header bar and navigation. The first layer above Background.'), fallback: '#ffffff' },
             { key: 'elevatedColor', label: t('branding.elevatedColor', 'Elevated'), help: t('branding.elevatedColorHelp', 'Panels that float above cards: image placeholders, hover/active rows, modal headers, code blocks.'), fallback: '#f5f5f5' },
             { key: 'surfaceBorderColor', label: t('branding.borderColor', 'Border'), help: t('branding.borderColorHelp', 'Dividers, table grid lines, card outlines, input borders.'), fallback: '#e5e5e5' },
@@ -278,8 +278,8 @@ export const ColorCustomizationCard: React.FC<ColorCustomizationCardProps> = ({
             t('branding.colorGroupTextHelp', 'Foreground text colours. Primary is for everything readers focus on; Secondary is for supporting copy.'),
           )}
           {themePickers([
-            { key: 'textColor', label: t('branding.textColor', 'Primary text'), help: t('branding.textColorHelp', 'Headlines, body copy, table cells, form input values, navigation labels — the main text colour.'), fallback: '#171717' },
-            { key: 'mutedTextColor', label: t('branding.mutedTextColor', 'Secondary text'), help: t('branding.mutedTextColorHelp', 'Captions, helper text under inputs, table column headers, footer links, dates and metadata.'), fallback: '#737373' },
+            { key: 'textColor', label: t('branding.textColor', 'Text Color'), help: t('branding.textColorHelp', 'Headlines, body copy, table cells, form input values, navigation labels — the main text colour.'), fallback: '#171717' },
+            { key: 'mutedTextColor', label: t('branding.mutedTextColor', 'Muted text'), help: t('branding.mutedTextColorHelp', 'Captions, helper text under inputs, table column headers, footer links, dates and metadata.'), fallback: '#737373' },
           ])}
         </div>
 
@@ -289,7 +289,7 @@ export const ColorCustomizationCard: React.FC<ColorCustomizationCardProps> = ({
             t('branding.colorGroupAccentHelp', 'Brand colours that highlight interactive elements. Use a strong colour pair — Accent is for outlines/text, Accent Dark is for filled buttons.'),
           )}
           {themePickers([
-            { key: 'accentColor', label: t('branding.accentColor', 'Accent'), help: t('branding.accentColorHelp', 'Links, icons, focus rings, hover states on primary buttons, active sidebar item underline. Should read clearly on both Background and Surface.'), fallback: '#22c55e' },
+            { key: 'accentColor', label: t('branding.accentColor', 'Accent Color'), help: t('branding.accentColorHelp', 'Links, icons, focus rings, hover states on primary buttons, active sidebar item underline. Should read clearly on both Background and Surface.'), fallback: '#22c55e' },
             { key: 'accentDarkColor', label: t('branding.accentDarkColor', 'Accent (filled)'), help: t('branding.accentDarkColorHelp', 'Filled CTA buttons, active sidebar item background, badges and tags. Needs enough contrast for white text to be readable on top.'), fallback: '#5C8762' },
           ])}
           {/* primaryColor is kept in sync with accentDarkColor inside

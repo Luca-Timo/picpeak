@@ -898,7 +898,7 @@ export const EmailConfigPage: React.FC = () => {
                 endpoint, so reuse would be more friction than value). */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <ColorPickerRow
-                label={t('email.primaryColor', 'Primary')}
+                label={t('email.primaryColor', 'Primary Color')}
                 help={t('email.primaryColorHelp', 'Header bar, H2 headings, button background, link colour. Maps to Branding → Accent (filled).')}
                 value={emailPrimaryColor || brandAccent}
                 fallback={brandAccent}
