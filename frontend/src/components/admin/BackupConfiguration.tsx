@@ -14,7 +14,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Button, Card, Input } from '../common';
+import { Button, Card, Input, Notice, Switch } from '../common';
 import { SettingsSaveBar } from './SettingsSaveBar';
 import { api } from '../../config/api';
 import { backupErrorCode, backupErrorText } from '../../utils/backupErrors';
@@ -354,15 +354,11 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
               {t('backup.configuration.enableBackupHelp')}
             </p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={formData.backup_enabled}
-              onChange={(e) => handleChange('backup_enabled', e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-fill peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 dark:after:border-neutral-500 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-strong"></div>
-          </label>
+          <Switch
+            checked={!!formData.backup_enabled}
+            onChange={(next) => handleChange('backup_enabled', next)}
+            ariaLabel={t('backup.configuration.enableBackup')}
+          />
         </div>
       </Card>
 
@@ -394,7 +390,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
                 <Icon className={`h-8 w-8 mb-2 mx-auto ${
                   formData.backup_destination_type === type.id
                     ? 'text-accent'
-                    : 'text-neutral-400'
+                    : 'text-faint'
                 }`} />
                 <h4 className="font-medium text-heading">{type.name}</h4>
                 <p className="text-xs text-muted mt-1">{type.description}</p>
@@ -560,7 +556,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowSecrets(prev => ({ ...prev, s3_secret_key: !prev.s3_secret_key }))}
-                      className="absolute top-1/2 -translate-y-1/2 right-2 text-neutral-400 hover:text-body"
+                      className="absolute top-1/2 -translate-y-1/2 right-2 text-faint hover:text-body"
                     >
                       {showSecrets.s3_secret_key ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
@@ -568,36 +564,32 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
                 </div>
               </div>
               {pendingPrivateOrigin && canManageDestination && (
-                <div role="alert" className="rounded-lg border border-warning-line bg-warning-soft p-4">
-                  <div className="flex">
-                    <ShieldAlert className="h-5 w-5 flex-shrink-0 text-warning mt-0.5" />
-                    <div className="ml-3 space-y-2">
-                      <h4 className="text-sm font-medium text-warning-text">
-                        {t('backup.configuration.privateEndpoint.title')}
-                      </h4>
-                      <p className="text-sm text-warning-text">
-                        {t('backup.configuration.privateEndpoint.body')}
-                      </p>
-                      <p className="text-sm">
-                        <code className="rounded bg-warning-soft px-1.5 py-0.5 text-warning-text break-all">
-                          {pendingPrivateOrigin}
-                        </code>
-                      </p>
-                      <label className="flex items-start gap-2 text-sm text-warning-text cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={approvePrivate}
-                          onChange={(e) => setApprovePrivate(e.target.checked)}
-                          className="mt-0.5 rounded border-warning text-accent focus:ring-accent"
-                        />
-                        <span>{t('backup.configuration.privateEndpoint.approve')}</span>
-                      </label>
-                      <p className="text-xs text-warning-text">
-                        {t('backup.configuration.privateEndpoint.hint')}
-                      </p>
-                    </div>
+                <Notice
+                  tone="warning"
+                  icon={<ShieldAlert className="h-5 w-5" />}
+                  title={t('backup.configuration.privateEndpoint.title')}
+                >
+                  <div className="space-y-2">
+                    <p>{t('backup.configuration.privateEndpoint.body')}</p>
+                    <p>
+                      <code className="rounded bg-panel px-1.5 py-0.5 text-heading break-all">
+                        {pendingPrivateOrigin}
+                      </code>
+                    </p>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={approvePrivate}
+                        onChange={(e) => setApprovePrivate(e.target.checked)}
+                        className="mt-0.5 rounded border-line-strong text-accent focus:ring-accent"
+                      />
+                      <span>{t('backup.configuration.privateEndpoint.approve')}</span>
+                    </label>
+                    <p className="text-xs text-muted">
+                      {t('backup.configuration.privateEndpoint.hint')}
+                    </p>
                   </div>
-                </div>
+                </Notice>
               )}
               {!pendingPrivateOrigin && storedApproval && (
                 <p className="flex items-center gap-2 text-xs text-soft">
@@ -708,7 +700,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
             />
             <div className="ml-3">
               <div className="flex items-center space-x-2">
-                <Database className="h-4 w-4 text-neutral-400" />
+                <Database className="h-4 w-4 text-faint" />
                 <span className="text-sm font-medium text-body">{t('backup.configuration.whatToBackup.database')}</span>
               </div>
               <p className="text-xs text-muted">{t('backup.configuration.whatToBackup.databaseHelp')}</p>
@@ -724,7 +716,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
             />
             <div className="ml-3">
               <div className="flex items-center space-x-2">
-                <Image className="h-4 w-4 text-neutral-400" />
+                <Image className="h-4 w-4 text-faint" />
                 <span className="text-sm font-medium text-body">{t('backup.configuration.whatToBackup.photos')}</span>
               </div>
               <p className="text-xs text-muted">{t('backup.configuration.whatToBackup.photosHelp')}</p>
@@ -740,7 +732,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
             />
             <div className="ml-3">
               <div className="flex items-center space-x-2">
-                <FileArchive className="h-4 w-4 text-neutral-400" />
+                <FileArchive className="h-4 w-4 text-faint" />
                 <span className="text-sm font-medium text-body">{t('backup.configuration.whatToBackup.archives')}</span>
               </div>
               <p className="text-xs text-muted">{t('backup.configuration.whatToBackup.archivesHelp')}</p>
@@ -756,7 +748,7 @@ export const BackupConfiguration: React.FC<BackupConfigurationProps> = ({
             />
             <div className="ml-3">
               <div className="flex items-center space-x-2">
-                <Image className="h-4 w-4 text-neutral-400" />
+                <Image className="h-4 w-4 text-faint" />
                 <span className="text-sm font-medium text-body">{t('backup.configuration.whatToBackup.thumbnails')}</span>
               </div>
               <p className="text-xs text-muted">{t('backup.configuration.whatToBackup.thumbnailsHelp')}</p>

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Key, Copy, CheckCircle, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Key, Copy, CheckCircle, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Input, PasswordGenerator } from '../common';
+import { Button, Input, Modal, Notice, PasswordGenerator } from '../common';
 
 interface PasswordResetModalProps {
   eventName: string;
@@ -88,23 +88,43 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="max-w-md w-full">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-heading">
-            {resultPassword ? t('events.passwordReset.newTitle') : t('events.passwordReset.title')}
-          </h2>
-          <button
+    <Modal
+      open
+      onClose={onClose}
+      closeOnBackdrop={false}
+      size="sm"
+      title={resultPassword ? t('events.passwordReset.newTitle') : t('events.passwordReset.title')}
+      footer={!resultPassword ? (
+        <>
+          <Button
+            variant="outline"
             onClick={onClose}
-            className="text-neutral-400 hover:text-body"
+            disabled={isResetting}
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleReset}
+            disabled={isResetting}
+            isLoading={isResetting}
+            leftIcon={<Key className="w-4 h-4" />}
+          >
+            {t('events.passwordReset.submit')}
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant="primary"
+          onClick={onClose}
+        >
+          {t('events.passwordReset.done')}
+        </Button>
+      )}
+    >
         {!resultPassword ? (
           <>
-            <p className="text-neutral-600 mb-4">
+            <p className="text-soft mb-4">
               {t('events.passwordReset.description', { eventName })}
             </p>
 
@@ -171,68 +191,37 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-neutral-500" />
+                    <Mail className="w-4 h-4 text-muted" />
                     <span className="text-sm font-medium text-body">
                       {t('events.passwordReset.sendEmail')}
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-500 mt-1">
+                  <p className="text-xs text-muted mt-1">
                     {t('events.passwordReset.sendEmailHelp')}
                   </p>
                 </div>
               </label>
             </div>
 
-            <div className="bg-warning-soft border border-warning-line rounded-lg p-3 mb-6">
-              <p className="text-sm text-warning-text">
-                {t('events.passwordReset.warning')}
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={isResetting}
-                className="flex-1"
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleReset}
-                disabled={isResetting}
-                isLoading={isResetting}
-                leftIcon={<Key className="w-4 h-4" />}
-                className="flex-1"
-              >
-                {t('events.passwordReset.submit')}
-              </Button>
-            </div>
+            <Notice tone="warning" size="sm">
+              {t('events.passwordReset.warning')}
+            </Notice>
           </>
         ) : (
           <>
-            <div className="bg-success-soft border border-success-line rounded-lg p-4 mb-6">
-              <div className="flex items-center gap-3 mb-2">
-                <CheckCircle className="w-5 h-5 text-success-text" />
-                <p className="font-medium text-success-text">{t('events.passwordReset.successHeading')}</p>
-              </div>
-              {sendEmail && resultEmailSent && (
-                <p className="text-sm text-success-text">
-                  {t('events.passwordReset.emailSentNote')}
-                </p>
-              )}
-              {sendEmail && !resultEmailSent && (
-                <p className="text-sm text-warning-text" role="status">
-                  {t('events.passwordReset.emailNotSentNote')}
-                </p>
-              )}
-            </div>
+            <Notice tone="success" title={t('events.passwordReset.successHeading')} className="mb-4">
+              {sendEmail && resultEmailSent ? t('events.passwordReset.emailSentNote') : null}
+            </Notice>
+            {sendEmail && !resultEmailSent && (
+              <Notice tone="warning" size="sm" className="mb-4">
+                {t('events.passwordReset.emailNotSentNote')}
+              </Notice>
+            )}
 
             {resultWasGenerated && (
               <>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-sm font-medium text-body mb-2">
                     {t('events.passwordReset.generatedLabel')}
                   </label>
                   <div className="flex gap-2">
@@ -252,24 +241,13 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                   </div>
                 </div>
 
-                <div className="bg-info-soft border border-info-line rounded-lg p-3 mb-6">
-                  <p className="text-sm text-info-text">
-                    {t('events.passwordReset.saveSecurelyNote')}
-                  </p>
-                </div>
+                <Notice tone="info" size="sm">
+                  {t('events.passwordReset.saveSecurelyNote')}
+                </Notice>
               </>
             )}
-
-            <Button
-              variant="primary"
-              onClick={onClose}
-              className="w-full"
-            >
-              {t('events.passwordReset.done')}
-            </Button>
           </>
         )}
-      </Card>
-    </div>
+    </Modal>
   );
 };

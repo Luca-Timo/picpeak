@@ -1,6 +1,6 @@
 import React from 'react';
-import { Globe, Key, Activity, AlertCircle, Code, ShieldCheck } from 'lucide-react';
-import { Card, Input } from '../../../components/common';
+import { Globe, Key, Activity, Code, ShieldCheck } from 'lucide-react';
+import { Card, Input, Notice } from '../../../components/common';
 import { useTranslation } from 'react-i18next';
 import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import type { AnalyticsSettings, TrackerProvider } from '../hooks/useSettingsState';
@@ -28,22 +28,16 @@ const ProxiedNotice: React.FC = () => {
   const { t } = useTranslation();
 
   return (
-    <div className="p-4 bg-info-soft border border-info-line rounded-lg">
-      <div className="flex items-start gap-3">
-        <ShieldCheck className="w-5 h-5 text-info-text flex-shrink-0" />
-        <div className="text-sm text-info-text">
-          <p className="font-medium mb-1">
-            {t('settings.analytics.proxiedNotice', 'Served from your own domain')}
-          </p>
-          <p>
-            {t(
-              'settings.analytics.proxiedNoticeText',
-              'PicPeak loads the tracker script and forwards its events through its own domain, so no Content-Security-Policy or reverse-proxy change is needed — and ad blockers see first-party requests. Your tracker still gets each visitor\'s IP and user agent (forwarded as X-Forwarded-For), so device and location reporting keeps working. The URL must be reachable from the PicPeak server and resolve to a public address.',
-            )}
-          </p>
-        </div>
-      </div>
-    </div>
+    <Notice
+      tone="info"
+      icon={<ShieldCheck className="w-5 h-5" />}
+      title={t('settings.analytics.proxiedNotice', 'Served from your own domain')}
+    >
+      {t(
+        'settings.analytics.proxiedNoticeText',
+        'PicPeak loads the tracker script and forwards its events through its own domain, so no Content-Security-Policy or reverse-proxy change is needed — and ad blockers see first-party requests. Your tracker still gets each visitor\'s IP and user agent (forwarded as X-Forwarded-For), so device and location reporting keeps working. The URL must be reachable from the PicPeak server and resolve to a public address.',
+      )}
+    </Notice>
   );
 };
 
@@ -56,26 +50,19 @@ const CspWarning: React.FC = () => {
   const { t } = useTranslation();
 
   return (
-    <div className="p-4 bg-warning-soft border border-warning-line rounded-lg">
-      <div className="flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-warning-text flex-shrink-0" />
-        <div className="text-sm text-warning-text">
-          <p className="font-medium mb-1">
-            {t('settings.analytics.customCspWarning', 'Content-Security-Policy reminder')}
-          </p>
-          <p>
-            {t(
-              // Deliberately a NEW key: the old `customCspWarningText` value is
-              // still in en/de and describes the pre-proxy world ("your tracker
-              // loads from another domain", script-src only), which is now only
-              // true for Custom mode and is missing connect-src.
-              'settings.analytics.customOnlyCspWarningText',
-              'PicPeak ships with a strict CSP (`script-src \'self\'; connect-src \'self\'`). Unlike the Umami and Rybbit options above, a pasted snippet is not proxied — add your tracker\'s domain to BOTH `script-src` (to load the script) and `connect-src` (for the events it sends) in your reverse-proxy or nginx CSP config, otherwise the browser silently blocks it.',
-            )}
-          </p>
-        </div>
-      </div>
-    </div>
+    <Notice
+      tone="warning"
+      title={t('settings.analytics.customCspWarning', 'Content-Security-Policy reminder')}
+    >
+      {t(
+        // Deliberately a NEW key: the old `customCspWarningText` value is
+        // still in en/de and describes the pre-proxy world ("your tracker
+        // loads from another domain", script-src only), which is now only
+        // true for Custom mode and is missing connect-src.
+        'settings.analytics.customOnlyCspWarningText',
+        'PicPeak ships with a strict CSP (`script-src \'self\'; connect-src \'self\'`). Unlike the Umami and Rybbit options above, a pasted snippet is not proxied — add your tracker\'s domain to BOTH `script-src` (to load the script) and `connect-src` (for the events it sends) in your reverse-proxy or nginx CSP config, otherwise the browser silently blocks it.',
+      )}
+    </Notice>
   );
 };
 
@@ -136,7 +123,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 value={analyticsSettings.umami_url}
                 onChange={(e) => setAnalyticsSettings((prev) => ({ ...prev, umami_url: e.target.value }))}
                 placeholder="https://analytics.yourdomain.com"
-                leftIcon={<Globe className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Globe className="w-5 h-5 text-faint" />}
               />
               <p className="text-xs text-muted mt-1">
                 {t('settings.analytics.umamiUrlHelp')}
@@ -152,7 +139,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 value={analyticsSettings.umami_website_id}
                 onChange={(e) => setAnalyticsSettings((prev) => ({ ...prev, umami_website_id: e.target.value }))}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                leftIcon={<Key className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Key className="w-5 h-5 text-faint" />}
               />
               <p className="text-xs text-muted mt-1">
                 {t('settings.analytics.websiteIdHelp')}
@@ -168,7 +155,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 value={analyticsSettings.umami_share_url}
                 onChange={(e) => setAnalyticsSettings((prev) => ({ ...prev, umami_share_url: e.target.value }))}
                 placeholder="https://analytics.yourdomain.com/share/..."
-                leftIcon={<Activity className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Activity className="w-5 h-5 text-faint" />}
               />
               <p className="text-xs text-muted mt-1">
                 {t('settings.analytics.shareUrlHelp')}
@@ -184,7 +171,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 value={analyticsSettings.umami_api_key}
                 onChange={(e) => setAnalyticsSettings((prev) => ({ ...prev, umami_api_key: e.target.value }))}
                 placeholder="api_xxx…"
-                leftIcon={<Key className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Key className="w-5 h-5 text-faint" />}
                 autoComplete="off"
               />
               <p className="text-xs text-muted mt-1">
@@ -211,7 +198,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 value={analyticsSettings.rybbit_url}
                 onChange={(e) => setAnalyticsSettings((prev) => ({ ...prev, rybbit_url: e.target.value }))}
                 placeholder="https://app.rybbit.io"
-                leftIcon={<Globe className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Globe className="w-5 h-5 text-faint" />}
               />
               <p className="text-xs text-muted mt-1">
                 {t(
@@ -230,7 +217,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 value={analyticsSettings.rybbit_website_id}
                 onChange={(e) => setAnalyticsSettings((prev) => ({ ...prev, rybbit_website_id: e.target.value }))}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                leftIcon={<Key className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Key className="w-5 h-5 text-faint" />}
               />
               <p className="text-xs text-muted mt-1">
                 {t(
@@ -249,7 +236,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 value={analyticsSettings.rybbit_api_key}
                 onChange={(e) => setAnalyticsSettings((prev) => ({ ...prev, rybbit_api_key: e.target.value }))}
                 placeholder="rybbit_xxx…"
-                leftIcon={<Key className="w-5 h-5 text-neutral-400" />}
+                leftIcon={<Key className="w-5 h-5 text-faint" />}
                 autoComplete="off"
               />
               <p className="text-xs text-muted mt-1">
@@ -273,7 +260,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-3 pointer-events-none">
-                  <Code className="w-5 h-5 text-neutral-400" />
+                  <Code className="w-5 h-5 text-faint" />
                 </span>
                 <textarea
                   value={analyticsSettings.custom_head_html}
@@ -297,17 +284,12 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         )}
 
         {provider === 'none' && (
-          <div className="p-4 bg-info-soft border border-info-line rounded-lg">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0" />
-              <div className="text-sm text-info-text">
-                {t(
-                  'settings.analytics.providerNoneInfo',
-                  'No external tracker injected. The admin dashboard still shows summary cards + the daily chart from PicPeak\'s own access_logs; the device-breakdown chart uses a coarse user-agent heuristic.',
-                )}
-              </div>
-            </div>
-          </div>
+          <Notice tone="info">
+            {t(
+              'settings.analytics.providerNoneInfo',
+              'No external tracker injected. The admin dashboard still shows summary cards + the daily chart from PicPeak\'s own access_logs; the device-breakdown chart uses a coarse user-agent heuristic.',
+            )}
+          </Notice>
         )}
       </Card>
 

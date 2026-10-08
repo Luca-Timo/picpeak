@@ -22,7 +22,7 @@ import { toast } from 'react-toastify';
 import { Users, RefreshCw, Trash2, AlertTriangle, ShieldCheck, SlidersHorizontal, ExternalLink } from 'lucide-react';
 import { PeopleManagerModal } from './PeopleManagerModal';
 
-import { Button, Card, Loading } from '../common';
+import { Button, Card, Loading, Notice, useConfirm } from '../common';
 import { api } from '../../config/api';
 
 interface FacesPayload {
@@ -69,6 +69,7 @@ interface FaceRecognitionCardProps {
 
 export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventId, isArchived, bare = false }) => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [saving, setSaving] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [autoCategories, setAutoCategories] = useState(false);
@@ -230,9 +231,13 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
   const purge = async () => {
     // Irreversible and covers biometric data — a plain confirm is the least
     // this deserves.
-    const ok = window.confirm(t('admin.faces.confirmDelete', {
-      defaultValue: 'Delete all detected people and face data for this gallery? This cannot be undone. Photos are not affected.',
-    }));
+    const ok = await confirm({
+      message: t('admin.faces.confirmDelete', {
+        defaultValue: 'Delete all detected people and face data for this gallery? This cannot be undone. Photos are not affected.',
+      }),
+      variant: 'danger',
+      confirmLabel: t('admin.faces.delete', { defaultValue: 'Delete all face data' }),
+    });
     if (!ok) return;
 
     setSaving(true);
@@ -291,7 +296,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
   return (
     <Frame>
       <div className="flex items-start gap-3 mb-4">
-        <Users className="text-neutral-400 mt-0.5" size={20} />
+        <Users className="text-faint mt-0.5" size={20} />
         <div>
           <h3 className="text-lg font-medium text-heading">
             {t('admin.faces.title', { defaultValue: 'People in this gallery' })}
@@ -306,8 +311,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
 
       {/* Consent obligation. Stated plainly and up front, because by the time
           someone has switched this on they have already processed the data. */}
-      <div className="flex gap-2 p-3 mb-4 rounded-lg bg-warning-soft border border-warning-line text-sm text-warning-text">
-        <ShieldCheck size={16} className="flex-shrink-0 mt-0.5" />
+      <Notice tone="warning" className="mb-4" icon={<ShieldCheck size={16} />}>
         <p>
           {t('admin.faces.consentNotice', {
             defaultValue:
@@ -328,7 +332,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
             <ExternalLink size={12} className="inline-block ml-0.5 -mt-0.5" aria-hidden />
           </a>
         </p>
-      </div>
+      </Notice>
 
       <label className="flex items-start gap-3 py-2 cursor-pointer">
         <input
@@ -377,14 +381,11 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
           admin deserves to know that before starting a 2,000-photo backfill
           rather than discovering it in their storage graph. */}
       {data.enabled && (
-        <div className="flex gap-2 p-3 mt-3 rounded-lg bg-subtle text-xs text-soft">
-          <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-neutral-400" />
-          <p>
-            {t('admin.faces.previewNotice', {
-              defaultValue: 'Scanning works on the preview-sized copy of each photo. Galleries that have not generated previews yet will create them during the first scan, which uses additional CPU and disk space.',
-            })}
-          </p>
-        </div>
+        <Notice tone="neutral" size="sm" className="mt-3" icon={<AlertTriangle size={14} />}>
+          {t('admin.faces.previewNotice', {
+            defaultValue: 'Scanning works on the preview-sized copy of each photo. Galleries that have not generated previews yet will create them during the first scan, which uses additional CPU and disk space.',
+          })}
+        </Notice>
       )}
 
       {/* Auto-categories (#1074 phase 3). Global, not per-event, which is why
@@ -455,7 +456,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
                     page and their own gallery disagree, with no explanation. */}
                 {typeof status.people_visible_to_guests === 'number'
                   && status.people_visible_to_guests !== status.people && (
-                  <span className="text-neutral-400">
+                  <span className="text-faint">
                     {' '}
                     {t('admin.faces.visibleToGuests', {
                       count: status.people_visible_to_guests,
@@ -492,7 +493,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
                 not have: Split is how a wrong merge gets unpicked. */}
             {!status.in_progress && (data.consolidation?.merged ?? 0) > 0 && (
               <p className="mt-2 flex items-start gap-2 text-xs text-soft">
-                <Users size={14} className="mt-0.5 shrink-0 text-neutral-400" />
+                <Users size={14} className="mt-0.5 shrink-0 text-faint" />
                 <span>
                   {t('admin.faces.consolidated', {
                     count: data.consolidation!.merged,

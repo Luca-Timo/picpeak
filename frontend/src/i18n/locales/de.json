@@ -1567,7 +1567,8 @@
         "ARTIFACT_OUT_OF_SCOPE": "Die Dateien dieses Backups liegen außerhalb des konfigurierten Backup-Ziels, daher wurde nichts gelöscht",
         "ARTIFACT_DELETE_FAILED": "Das Backup-Manifest konnte nicht entfernt werden, der Eintrag wurde behalten",
         "FORBIDDEN": "Du hast keine Berechtigung, Backups zu löschen"
-      }
+      },
+      "deleteAction": "Backup löschen"
     },
     "restore": {
       "superAdminOnly": "Das Wiederherstellen eines Backups ersetzt alle Daten dieser Instanz, einschließlich Benutzerkonten und Rollen, und ist daher nur einem Super Admin möglich.",
@@ -2044,7 +2045,7 @@
     "addCategory": "Kategorie hinzufügen",
     "categoryName": "Kategoriename",
     "noCategoriesYet": "Noch keine Kategorien. Erstellen Sie Ihre erste Kategorie, um Fotos zu organisieren.",
-    "deleteConfirm": "Sind Sie sicher, dass Sie \"{{name}}\" löschen möchten?",
+    "deleteConfirm": "Kategorie „{{name}}“ löschen? Eine Kategorie, die noch Fotos enthält, kann nicht gelöscht werden; verschieben Sie die Fotos zuerst. Das kann nicht rückgängig gemacht werden.",
     "setCoverPhoto": "Titelbild festlegen",
     "removeCoverPhoto": "Titelbild entfernen",
     "coverPhotoSet": "Titelbild erfolgreich festgelegt",
@@ -2182,7 +2183,8 @@
         "invalidSlug": "Kurz-URLs müssen aus Kleinbuchstaben, Ziffern und Bindestrichen bestehen (1–64 Zeichen)."
       },
       "hits_one": "{{count}} Aufruf",
-      "hits_other": "{{count}} Aufrufe"
+      "hits_other": "{{count}} Aufrufe",
+      "deleteAction": "Kurz-URL löschen"
     },
     "resetGalleryPassword": "Galerie-Passwort zurücksetzen",
     "resendCreationEmail": "Erstellungs-E-Mail erneut senden",
@@ -3175,7 +3177,7 @@
       "filterDeleted": "Wortfilter erfolgreich gelöscht",
       "deleteError": "Wortfilter konnte nicht gelöscht werden",
       "wordRequired": "Bitte geben Sie ein Wort zum Filtern ein",
-      "confirmDelete": "Möchten Sie diesen Wortfilter wirklich löschen?",
+      "confirmDelete": "Diesen Wortfilter löschen? Kommentare werden nicht mehr damit geprüft. Das kann nicht rückgängig gemacht werden.",
       "loading": "Wortfilter werden geladen...",
       "noMatchingFilters": "Keine passenden Filter gefunden",
       "noFilters": "Noch keine Wortfilter konfiguriert",
@@ -3187,7 +3189,9 @@
       "lowDescription": "Wort wird zur Überprüfung markiert, aber nicht automatisch blockiert",
       "moderateDescription": "Kommentar erfordert manuelle Freigabe, bevor er sichtbar wird",
       "highDescription": "Kommentar wird automatisch ausgeblendet und erfordert Admin-Überprüfung",
-      "blockDescription": "Kommentar wird sofort abgelehnt und kann nicht eingereicht werden"
+      "blockDescription": "Kommentar wird sofort abgelehnt und kann nicht eingereicht werden",
+      "deleteAction": "Filter löschen",
+      "loadFailed": "Die Wortfilter konnten nicht geladen werden"
     },
     "styling": {
       "title": "Benutzerdefiniertes CSS"
@@ -3280,7 +3284,9 @@
       "confirmRevoke": "\"{{name}}\" widerrufen? Bestehende Integrationen, die dieses Token nutzen, erhalten ab sofort 401.",
       "revoke": "Widerrufen",
       "empty": "Noch keine Tokens. Generieren Sie oben einen, um zu beginnen.",
-      "preview": "Vorschau"
+      "preview": "Vorschau",
+      "revokeAction": "Token widerrufen",
+      "loadFailed": "Die API-Tokens konnten nicht geladen werden"
     },
     "webhooks": {
       "title": "Webhooks",
@@ -3359,7 +3365,9 @@
           "success": "erfolgreich",
           "failed": "fehlgeschlagen"
         }
-      }
+      },
+      "deleteAction": "Webhook löschen",
+      "loadFailed": "Die Webhooks konnten nicht geladen werden"
     },
     "sectionLabel": "Einstellungsbereich",
     "navAriaLabel": "Einstellungsnavigation",
@@ -4911,7 +4919,13 @@
         "filterNone": "Kein Name"
       },
       "approvedBy": "Freigegeben: {{value}}",
-      "rejectedBy": "Abgelehnt: {{value}}"
+      "rejectedBy": "Abgelehnt: {{value}}",
+      "deleteOneConfirm": "„{{name}}“ löschen? Das Foto wird endgültig aus der Galerie entfernt. Das kann nicht rückgängig gemacht werden.",
+      "deleteOneAction": "Foto löschen",
+      "deleteManyConfirm_one": "{{count}} Foto löschen? Es wird aus der Galerie entfernt. Das kann nicht rückgängig gemacht werden.",
+      "deleteManyConfirm_other": "{{count}} Fotos löschen? Sie werden aus der Galerie entfernt. Das kann nicht rückgängig gemacht werden.",
+      "deleteManyAction_one": "{{count}} Foto löschen",
+      "deleteManyAction_other": "{{count}} Fotos löschen"
     },
     "events": {
       "tabs": {
@@ -5519,7 +5533,8 @@
         "no_attachment": "Kein Anhang",
         "duplicate": "Duplikat",
         "error": "Fehler"
-      }
+      },
+      "loadFailed": "Empfangene E-Mails konnten nicht geladen werden"
     },
     "sentEmails": {
       "tab": "Gesendete E-Mails",
@@ -5547,7 +5562,8 @@
       "retries_one": "{{count}} Versuch",
       "retries_other": "{{count}} Versuche",
       "pagination_one": "Seite {{page}} von {{total}} · {{count}} E-Mail",
-      "pagination_other": "Seite {{page}} von {{total}} · {{count}} E-Mails"
+      "pagination_other": "Seite {{page}} von {{total}} · {{count}} E-Mails",
+      "loadFailed": "Gesendete E-Mails konnten nicht geladen werden"
     },
     "commonSmtpSettings": "Häufige SMTP-Einstellungen:",
     "editTemplate": "Vorlage bearbeiten",
@@ -5936,7 +5952,7 @@
     "approve": "Genehmigen",
     "hide": "Ausblenden",
     "unhide": "Einblenden",
-    "confirmDelete": "Dieses Feedback wirklich löschen?",
+    "confirmDelete": "Dieses Feedback löschen? Es wird endgültig entfernt. Das kann nicht rückgängig gemacht werden.",
     "avgRating": "Durchschnittsbewertung",
     "totalRatings_one": "{{count}} Bewertungen",
     "totalRatings_other": "{{count}} Bewertungen",
@@ -6020,7 +6036,8 @@
     "decisionError": "Deine Entscheidung konnte nicht gespeichert werden",
     "decisionType": "deine Entscheidung",
     "youApproved": "Du hast dieses Foto freigegeben",
-    "youRejected": "Du hast dieses Foto abgelehnt"
+    "youRejected": "Du hast dieses Foto abgelehnt",
+    "deleteAction": "Feedback löschen"
   },
   "filter": {
     "feedbackFilters": "Feedback-Filter",
@@ -6943,7 +6960,8 @@
         "createFailed": "Eintrag konnte nicht erfasst werden"
       },
       "unbilledCount_one": "{{count}} offener Eintrag, total {{total}}",
-      "unbilledCount_other": "{{count}} offene Einträge, total {{total}}"
+      "unbilledCount_other": "{{count}} offene Einträge, total {{total}}",
+      "deleteEntry": "Eintrag löschen"
     },
     "create": {
       "openButton": "Passiven Kunden erstellen",
@@ -7860,7 +7878,8 @@
       "number": "Kontonummer",
       "name": "Name",
       "type": "Art",
-      "confirmDelete": "Dieses Konto löschen?"
+      "confirmDelete": "Konto {{number}} „{{name}}“ löschen? Es kann danach nicht mehr für Buchungen oder den Export verwendet werden. Das kann nicht rückgängig gemacht werden.",
+      "deleteAction": "Konto löschen"
     },
     "vat": {
       "addTitle": "MWST-Code hinzufügen",
@@ -7871,8 +7890,9 @@
       "direction": "Richtung",
       "account": "MWST-Konto",
       "noAccount": "— keines —",
-      "confirmDelete": "Diesen MWST-Code löschen?",
-      "legacyRate": "{{rate}}% (nicht konfiguriert)"
+      "confirmDelete": "MWST-Code „{{code}}“ löschen? Er kann für neue Dokumente nicht mehr gewählt werden. Das kann nicht rückgängig gemacht werden.",
+      "legacyRate": "{{rate}}% (nicht konfiguriert)",
+      "deleteAction": "MWST-Code löschen"
     },
     "export": {
       "title": "Treuhänder-Export",

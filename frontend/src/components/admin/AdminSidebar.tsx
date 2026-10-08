@@ -470,7 +470,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
   const iconClass = (isActive: boolean) => `w-5 h-5 flex-shrink-0 ${
     collapsed ? 'mr-3 lg:mr-0' : 'mr-3'
   } ${
-    isActive ? 'text-white' : 'text-neutral-400'
+    isActive ? 'text-white' : 'text-faint'
   }`;
 
   return (
@@ -594,7 +594,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
             {searchable && (
               <div className="px-4 py-2">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faint pointer-events-none" />
                   <input
                     ref={searchRef}
                     type="search"
@@ -737,7 +737,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-md text-neutral-500 hover:text-heading hover:bg-hover-soft transition-colors"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md text-muted hover:text-heading hover:bg-hover-soft transition-colors"
               aria-label={collapsed ? t('admin.expandSidebar', 'Expand sidebar') : t('admin.collapseSidebar', 'Collapse sidebar')}
               title={collapsed ? t('admin.expandSidebar', 'Expand sidebar') : t('admin.collapseSidebar', 'Collapse sidebar')}
             >

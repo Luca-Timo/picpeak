@@ -82,7 +82,7 @@ export function ProductUsageConsentDialog({
     >
       <header className="flex items-start gap-3 px-6 pt-6 pb-4">
         <span className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full bg-accent-soft">
-          <Sparkles className="h-5 w-5 text-accent" />
+          <Sparkles className="h-5 w-5 text-on-accent-soft" />
         </span>
         <div className="min-w-0">
           <h2

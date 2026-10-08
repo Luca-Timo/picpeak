@@ -7,6 +7,8 @@ import { Modal } from '../Modal';
 import { Tabs } from '../Tabs';
 import { Switch } from '../Switch';
 import { ErrorState } from '../EmptyState';
+import { DecimalInput } from '../DecimalInput';
+import { Table, TableBody, TableRow, TableCell } from '../Table';
 import { applyStatusColors, normalizeStatusColors } from '../../../utils/statusColors';
 
 vi.mock('react-i18next', () => ({
@@ -107,5 +109,28 @@ describe('status colours', () => {
     expect(root.style.getPropertyValue('--status-danger')).toBe('#ff0000');
     applyStatusColors(normalizeStatusColors({ danger: 'not-a-colour' }));
     expect(root.style.getPropertyValue('--status-danger')).toBe('');
+  });
+});
+
+describe('DecimalInput', () => {
+  it('reformats on blur and still calls the caller\'s onBlur', () => {
+    const onBlur = vi.fn();
+    const onChange = vi.fn();
+    render(<DecimalInput aria-label="Rate" value={8} onChange={onChange} onBlur={onBlur} fractionDigits={2} />);
+    const input = screen.getByLabelText('Rate') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '8,1' } });
+    expect(onChange).toHaveBeenLastCalledWith(8.1);
+    fireEvent.blur(input);
+    expect(input.value).toBe('8.10');
+    expect(onBlur).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TableCell', () => {
+  it('lets a caller colour replace the default body colour', () => {
+    render(<Table><TableBody><TableRow><TableCell className="text-heading">Total</TableCell></TableRow></TableBody></Table>);
+    const cell = screen.getByText('Total');
+    expect(cell.className).toContain('text-heading');
+    expect(cell.className).not.toContain('text-body');
   });
 });

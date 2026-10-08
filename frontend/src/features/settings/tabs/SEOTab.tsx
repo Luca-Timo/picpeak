@@ -189,7 +189,7 @@ export const SEOTab: React.FC<SEOTabProps> = ({
                     {agent}
                     <button
                       onClick={() => handleRemoveAgent(agent)}
-                      className="text-neutral-400 hover:text-danger transition-colors"
+                      className="text-faint hover:text-danger transition-colors"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -288,7 +288,7 @@ export const SEOTab: React.FC<SEOTabProps> = ({
                     </code>
                     <button
                       onClick={() => handleRemoveCustomRule(index)}
-                      className="text-neutral-400 hover:text-danger transition-colors"
+                      className="text-faint hover:text-danger transition-colors"
                     >
                       <X className="w-4 h-4" />
                     </button>

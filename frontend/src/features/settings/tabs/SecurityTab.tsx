@@ -1,6 +1,6 @@
 import React from 'react';
-import { Key, AlertCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
-import { Card, Input } from '../../../components/common';
+import { Key, ShieldCheck } from 'lucide-react';
+import { Card, Input, Notice } from '../../../components/common';
 import { useTranslation } from 'react-i18next';
 import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import type { SecuritySettings, RateLimitSettings } from '../hooks/useSettingsState';
@@ -212,10 +212,7 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
             </span>
           </label>
 
-          <div className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-soft p-3 text-sm text-warning-text">
-            <AlertCircle className="w-5 h-5 flex-none mt-0.5" />
-            <p>{t('settings.security.rateLimitNatNote')}</p>
-          </div>
+          <Notice tone="warning">{t('settings.security.rateLimitNatNote')}</Notice>
         </div>
       </Card>
 
@@ -238,16 +235,12 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
 
           {/* #1271 — reversible storage is a deliberate trade of security for
               convenience; the warning stays visible whether or not it is on. */}
-          <div className="p-4 bg-warning-soft border border-warning-line rounded-lg">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-warning-text flex-shrink-0" />
-              <div className="text-sm text-warning-text space-y-1">
-                <p className="font-medium">{t('settings.security.galleryPasswordRecoverableWarningTitle')}</p>
-                <p>{t('settings.security.galleryPasswordRecoverableWarning')}</p>
-                <p>{t('settings.security.galleryPasswordRecoverableOffNote')}</p>
-              </div>
+          <Notice tone="warning" title={t('settings.security.galleryPasswordRecoverableWarningTitle')}>
+            <div className="space-y-1">
+              <p>{t('settings.security.galleryPasswordRecoverableWarning')}</p>
+              <p>{t('settings.security.galleryPasswordRecoverableOffNote')}</p>
             </div>
-          </div>
+          </Notice>
         </div>
       </Card>
 
@@ -276,7 +269,7 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
                   value={securitySettings.recaptcha_site_key}
                   onChange={(e) => setSecuritySettings(prev => ({ ...prev, recaptcha_site_key: e.target.value }))}
                   placeholder={t('settings.security.siteKey')}
-                  leftIcon={<Key className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Key className="w-5 h-5 text-faint" />}
                 />
               </div>
               <div>
@@ -288,20 +281,15 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
                   value={securitySettings.recaptcha_secret_key}
                   onChange={(e) => setSecuritySettings(prev => ({ ...prev, recaptcha_secret_key: e.target.value }))}
                   placeholder={t('settings.security.secretKey')}
-                  leftIcon={<Key className="w-5 h-5 text-neutral-400" />}
+                  leftIcon={<Key className="w-5 h-5 text-faint" />}
                 />
               </div>
             </>
           )}
 
-          <div className="p-4 bg-info-soft border border-info-line rounded-lg">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0" />
-              <div className="text-sm text-info-text">
-                <p>{t('settings.security.recaptchaHelp')} <a href="https://www.google.com/recaptcha/admin" target="_blank" rel="noopener noreferrer" className="underline">Google reCAPTCHA Admin</a></p>
-              </div>
-            </div>
-          </div>
+          <Notice tone="info">
+            {t('settings.security.recaptchaHelp')} <a href="https://www.google.com/recaptcha/admin" target="_blank" rel="noopener noreferrer" className="underline text-accent">Google reCAPTCHA Admin</a>
+          </Notice>
         </div>
       </Card>
 

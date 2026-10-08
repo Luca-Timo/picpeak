@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { RotateCcw, AlertTriangle, Check } from 'lucide-react';
-import { Button, Card, Loading } from '../common';
+import { RotateCcw, Check } from 'lucide-react';
+import { Button, Card, Loading, Notice } from '../common';
 import { useConfirm } from '../common/ConfirmDialog';
 import { SettingsSaveBar } from './SettingsSaveBar';
 import { cssTemplatesService, CssTemplate } from '../../services/cssTemplates.service';
@@ -103,8 +103,12 @@ export const CssTemplateEditor: React.FC = () => {
     setActiveSlot(slot);
   };
 
-  const handleReset = () => {
-    if (!confirm(t('cssTemplates.resetConfirm', 'Reset this template to the default? Your changes will be lost.'))) {
+  const handleReset = async () => {
+    if (!(await confirmDialog({
+      message: t('cssTemplates.resetConfirm', 'Reset this template to the default? Your changes will be lost.'),
+      variant: 'danger',
+      confirmLabel: t('cssTemplates.resetToDefault', 'Reset to Default'),
+    }))) {
       return;
     }
     resetMutation.mutate();
@@ -138,7 +142,7 @@ export const CssTemplateEditor: React.FC = () => {
               >
                 {t('cssTemplates.template', 'Template')} {slot}
                 {template && (
-                  <span className="ml-2 text-neutral-400">
+                  <span className="ml-2 text-faint">
                     ({template.name})
                   </span>
                 )}
@@ -154,7 +158,7 @@ export const CssTemplateEditor: React.FC = () => {
           <div className="space-y-6">
             {/* Template Name */}
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 dark:text-neutral-300 mb-2">
+              <label className="block text-sm font-medium text-body mb-2">
                 {t('cssTemplates.templateName', 'Template Name')}
               </label>
               <input
@@ -173,7 +177,7 @@ export const CssTemplateEditor: React.FC = () => {
                   type="checkbox"
                   checked={activeTemplate.is_enabled}
                   onChange={(e) => updateLocalTemplate({ is_enabled: e.target.checked })}
-                  className="rounded border-neutral-300 text-accent focus:ring-accent"
+                  className="rounded border-line-strong text-accent focus:ring-accent"
                 />
                 <span className="text-sm font-medium text-body">
                   {t('cssTemplates.enableTemplate', 'Enable this template')}
@@ -186,18 +190,18 @@ export const CssTemplateEditor: React.FC = () => {
 
             {/* CSS Editor */}
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 dark:text-neutral-300 mb-2">
+              <label className="block text-sm font-medium text-body mb-2">
                 {t('cssTemplates.cssContent', 'CSS Content')}
               </label>
               <div className="relative">
                 <textarea
                   value={activeTemplate.css_content}
                   onChange={(e) => updateLocalTemplate({ css_content: e.target.value })}
-                  className="w-full h-96 px-4 py-3 font-mono text-sm border border-neutral-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark bg-neutral-900 text-success"
+                  className="w-full h-96 px-4 py-3 font-mono text-sm border border-line-strong rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark bg-neutral-900 text-success"
                   spellCheck={false}
                   placeholder="/* Enter your custom CSS here */"
                 />
-                <div className="absolute bottom-3 right-3 text-xs text-neutral-400">
+                <div className="absolute bottom-3 right-3 text-xs text-faint">
                   {(activeTemplate.css_content?.length || 0).toLocaleString()} / 102,400 {t('common.characters', 'characters')}
                 </div>
               </div>
@@ -207,13 +211,10 @@ export const CssTemplateEditor: React.FC = () => {
             </div>
 
             {/* Security Notice */}
-            <div className="flex items-start gap-2 p-3 bg-warning-soft border border-warning-line rounded-lg">
-              <AlertTriangle className="w-4 h-4 text-warning-text mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-warning-text">
-                <strong>{t('cssTemplates.securityNotice', 'Security Notice')}:</strong>{' '}
-                {t('cssTemplates.securityText', 'CSS is sanitized to prevent malicious code. External URLs, @import, and JavaScript expressions are blocked.')}
-              </div>
-            </div>
+            <Notice tone="warning" size="sm">
+              <strong>{t('cssTemplates.securityNotice', 'Security Notice')}:</strong>{' '}
+              {t('cssTemplates.securityText', 'CSS is sanitized to prevent malicious code. External URLs, @import, and JavaScript expressions are blocked.')}
+            </Notice>
 
             {/* Reset to default — Save lives in the bar below */}
             {activeSlot === 1 && activeTemplate.is_default && (

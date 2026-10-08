@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Image, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
-import { Button, Card, Loading } from '../../../components/common';
+import { Image, RefreshCw, Loader2 } from 'lucide-react';
+import { Button, Card, ErrorState, Loading, Notice } from '../../../components/common';
 import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -60,7 +60,7 @@ export const ThumbnailsTab: React.FC = () => {
       : fallback
   );
 
-  const { data: fetchedData, isLoading, error } = useQuery<FetchedSettings>({
+  const { data: fetchedData, isLoading, error, refetch, isFetching } = useQuery<FetchedSettings>({
     queryKey: ['thumbnail-settings'],
     queryFn: async () => {
       const response = await api.get('/admin/thumbnails/settings');
@@ -152,13 +152,15 @@ export const ThumbnailsTab: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !fetchedData) {
     return (
       <Card padding="md">
-        <div className="flex items-center gap-3 text-danger-text">
-          <AlertCircle className="w-5 h-5" />
-          <p>{t('settings.thumbnails.loadError', 'Failed to load thumbnail settings')}</p>
-        </div>
+        <ErrorState
+          size="inline"
+          title={t('settings.thumbnails.loadError', 'Failed to load thumbnail settings')}
+          onRetry={() => refetch()}
+          retrying={isFetching}
+        />
       </Card>
     );
   }
@@ -169,12 +171,9 @@ export const ThumbnailsTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {!canEdit && (
-        <Card padding="md" className="bg-warning-soft border-warning-line">
-          <div className="flex items-start gap-3 text-sm text-warning-text">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <p>{t('settings.thumbnails.readOnly', 'Only admins who can edit settings can change these values or regenerate the whole library.')}</p>
-          </div>
-        </Card>
+        <Notice tone="warning">
+          {t('settings.thumbnails.readOnly', 'Only admins who can edit settings can change these values or regenerate the whole library.')}
+        </Notice>
       )}
       <fieldset disabled={!canEdit} className="space-y-6 min-w-0">
       {/* Dimensions & Quality */}
@@ -346,17 +345,9 @@ export const ThumbnailsTab: React.FC = () => {
       </Card>
 
       {/* Info Box */}
-      <Card padding="md" className="bg-info-soft border-info-line">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-info-text">
-            <p className="font-medium mb-1">{t('settings.thumbnails.infoTitle', 'About Thumbnails')}</p>
-            <p>
-              {t('settings.thumbnails.infoText', 'Thumbnails are smaller preview images generated from your originals. Increasing the size or quality improves how photos look in the gallery grid but uses more storage and bandwidth. After changing settings, use "Regenerate All Thumbnails" to update existing photos.')}
-            </p>
-          </div>
-        </div>
-      </Card>
+      <Notice tone="info" title={t('settings.thumbnails.infoTitle', 'About Thumbnails')}>
+        {t('settings.thumbnails.infoText', 'Thumbnails are smaller preview images generated from your originals. Increasing the size or quality improves how photos look in the gallery grid but uses more storage and bandwidth. After changing settings, use "Regenerate All Thumbnails" to update existing photos.')}
+      </Notice>
 
       </fieldset>
       <SettingsSaveBar

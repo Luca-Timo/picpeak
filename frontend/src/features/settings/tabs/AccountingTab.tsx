@@ -194,13 +194,13 @@ export const AccountingTab: React.FC = () => {
           <p className="mt-1 text-xs text-muted">{t('settings.accounting.profileFields.dayRateHint', 'Used by per-day quote lines when a customer has no own day rate. In {{currency}}, major units.', { currency })}</p>
         </div>
         <label className="flex items-center gap-2 text-sm text-body">
-          <input type="checkbox" checked={requireProof} onChange={(e) => setRequireProof(e.target.checked)} className="rounded border-neutral-300" />
+          <input type="checkbox" checked={requireProof} onChange={(e) => setRequireProof(e.target.checked)} className="rounded border-line-strong" />
           {t('settings.accounting.requireProof', 'Require a proof file on every expense')}
         </label>
         {flags.incomingInvoices && (
           <div>
             <label className="flex items-start gap-2 text-sm text-body">
-              <input type="checkbox" checked={rebillAttachProof} onChange={(e) => setRebillAttachProof(e.target.checked)} className="mt-0.5 rounded border-neutral-300" />
+              <input type="checkbox" checked={rebillAttachProof} onChange={(e) => setRebillAttachProof(e.target.checked)} className="mt-0.5 rounded border-line-strong" />
               <span>{t('settings.accounting.rebillAttachProof', 'Attach the supplier proof to re-billed invoices by default')}</span>
             </label>
             <p className="mt-1 ml-6 text-xs text-muted">{t('settings.accounting.rebillAttachProofHint', 'When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time.')}</p>
@@ -222,7 +222,7 @@ export const AccountingTab: React.FC = () => {
           {t('settings.accounting.vat.title', 'VAT')}
         </h3>
         <label className="flex items-start gap-2 text-sm text-body">
-          <input type="checkbox" checked={vatRegistered} onChange={(e) => setVatRegistered(e.target.checked)} className="mt-0.5 rounded border-neutral-300" />
+          <input type="checkbox" checked={vatRegistered} onChange={(e) => setVatRegistered(e.target.checked)} className="mt-0.5 rounded border-line-strong" />
           <span>
             {t('settings.accounting.vat.registered', 'VAT-registered (charge output VAT + reclaim input VAT)')}
             <span className="block text-xs text-muted">

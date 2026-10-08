@@ -12,7 +12,8 @@ import {
   RotateCw,
   AlertTriangle,
 } from 'lucide-react';
-import { Button, Card, Input } from '../../../components/common';
+import { Button, Card, Notice } from '../../../components/common';
+import { DecimalInput } from '../../../components/common/DecimalInput';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../config/api';
@@ -24,6 +25,36 @@ import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { usePermission } from '../../../hooks/usePermission';
 
 const BYTES_PER_GB = 1024 * 1024 * 1024;
+
+/** A size in GB: accepts 1,5 and 1.5 (DecimalInput); empty is ''. */
+const GbField: React.FC<{
+  label: string;
+  helperText: string;
+  value: number | '';
+  onChange: (value: number | '') => void;
+  disabled?: boolean;
+}> = ({ label, helperText, value, onChange, disabled }) => {
+  const id = React.useId();
+  return (
+    <div className="w-full">
+      <label htmlFor={id} className="block text-sm font-medium mb-1.5 text-body">{label}</label>
+      <div className="relative">
+        <DecimalInput
+          id={id}
+          className="input pr-10"
+          value={value === '' ? NaN : value}
+          onChange={(n) => onChange(Number.isFinite(n) ? n : '')}
+          disabled={disabled}
+          aria-describedby={`${id}-helper`}
+        />
+        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+          <span className="text-xs font-semibold text-muted uppercase">GB</span>
+        </div>
+      </div>
+      <p id={`${id}-helper`} className="mt-1.5 text-sm text-muted">{helperText}</p>
+    </div>
+  );
+};
 
 interface StatusTabProps {
   isActive: boolean;
@@ -361,28 +392,14 @@ export const StatusTab: React.FC<StatusTabProps> = ({
               )}
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)]">
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.1"
-                  value={softLimitGb === '' ? '' : softLimitGb}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setSoftLimitDirty(true);
-                    if (value === '') {
-                      setSoftLimitGb('');
-                      return;
-                    }
-                    const numeric = Number(value);
-                    if (Number.isNaN(numeric)) {
-                      return;
-                    }
-                    setSoftLimitGb(numeric);
-                  }}
+                <GbField
                   label={t('settings.storage.softLimitInputLabel')}
                   helperText={t('settings.storage.softLimitHelper')}
-                  rightIcon={<span className="text-xs font-semibold text-neutral-500 uppercase">GB</span>}
+                  value={softLimitGb}
+                  onChange={(value) => {
+                    setSoftLimitDirty(true);
+                    setSoftLimitGb(value);
+                  }}
                 />
                 <p className="text-xs text-muted">
                   {t('settings.storage.limitNotEnforced')}
@@ -433,52 +450,24 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.1"
-                    value={capacityOverrideGb === '' ? '' : capacityOverrideGb}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setOverrideDirty(true);
-                      if (value === '') {
-                        setCapacityOverrideGb('');
-                        return;
-                      }
-                      const numeric = Number(value);
-                      if (Number.isNaN(numeric)) {
-                        return;
-                      }
-                      setCapacityOverrideGb(numeric);
-                    }}
+                  <GbField
                     label={t('settings.storage.overrideCapacityLabel')}
                     helperText={t('settings.storage.overrideCapacityHelper')}
-                    rightIcon={<span className="text-xs font-semibold text-neutral-500 uppercase">GB</span>}
+                    value={capacityOverrideGb}
+                    onChange={(value) => {
+                      setOverrideDirty(true);
+                      setCapacityOverrideGb(value);
+                    }}
                     disabled={overrideControlled}
                   />
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.1"
-                    value={availableOverrideGb === '' ? '' : availableOverrideGb}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setOverrideDirty(true);
-                      if (value === '') {
-                        setAvailableOverrideGb('');
-                        return;
-                      }
-                      const numeric = Number(value);
-                      if (Number.isNaN(numeric)) {
-                        return;
-                      }
-                      setAvailableOverrideGb(numeric);
-                    }}
+                  <GbField
                     label={t('settings.storage.overrideAvailableLabel')}
                     helperText={t('settings.storage.overrideAvailableHelper')}
-                    rightIcon={<span className="text-xs font-semibold text-neutral-500 uppercase">GB</span>}
+                    value={availableOverrideGb}
+                    onChange={(value) => {
+                      setOverrideDirty(true);
+                      setAvailableOverrideGb(value);
+                    }}
                     disabled={overrideControlled}
                   />
                 </div>
@@ -640,12 +629,10 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 </div>
               </div>
               {systemStatus.emailQueue.stuck > 0 && (
-                <div className="mt-3 p-3 bg-warning-soft rounded-md">
-                  <p className="text-xs text-warning-text">
-                    <span className="font-semibold">Warning: {systemStatus.emailQueue.stuck} email(s) stuck:</span> These emails have exceeded retry limits and won&apos;t be processed automatically.
-                    Only {systemStatus.emailQueue.processable} of {systemStatus.emailQueue.pending} pending emails will be processed.
-                  </p>
-                </div>
+                <Notice tone="warning" size="sm" className="mt-3">
+                  <span className="font-semibold">Warning: {systemStatus.emailQueue.stuck} email(s) stuck:</span> These emails have exceeded retry limits and won&apos;t be processed automatically.
+                  Only {systemStatus.emailQueue.processable} of {systemStatus.emailQueue.pending} pending emails will be processed.
+                </Notice>
               )}
             </div>
           </Card>

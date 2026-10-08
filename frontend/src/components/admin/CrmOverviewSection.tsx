@@ -21,7 +21,7 @@ import {
   FileText, Send, CheckCircle2, XCircle, Clock,
   Receipt, AlertTriangle, TrendingUp, Wallet,
 } from 'lucide-react';
-import { Card } from '../common';
+import { Card, ErrorState } from '../common';
 import { fetchCrmOverview, type CrmOverviewStats } from '../../services/bills.service';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
@@ -62,7 +62,7 @@ export const CrmOverviewSection: React.FC = () => {
   const quotesBlock     = quotesOn && showQuotes;
   const invoicesBlock   = billsOn && showInvoices;
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['crm-overview'],
     queryFn: () => fetchCrmOverview(),
     enabled: anyCrm,
@@ -88,10 +88,15 @@ export const CrmOverviewSection: React.FC = () => {
         <h2 className="text-xl font-bold text-heading mb-2">
           {t('crmOverview.title', 'CRM overview')}
         </h2>
-        <p className="text-sm text-danger-text">
-          {t('crmOverview.loadError',
-            'Could not load CRM stats. Check that you have bills.view or quotes.view permission and that the backend is on the latest build.')}
-        </p>
+        <Card>
+          <ErrorState
+            size="inline"
+            message={t('crmOverview.loadError',
+              'Could not load CRM stats. Check that you have bills.view or quotes.view permission and that the backend is on the latest build.')}
+            onRetry={() => refetch()}
+            retrying={isFetching}
+          />
+        </Card>
       </section>
     );
   }
@@ -189,7 +194,7 @@ export const CrmOverviewSection: React.FC = () => {
               to="/admin/clients/quotes?status=declined"
             />
             <StatCard
-              icon={<Clock className="w-5 h-5 text-neutral-500" />}
+              icon={<Clock className="w-5 h-5 text-muted" />}
               label={t('quotes.status.expired', 'Expired')}
               value={d.quotes.expired}
               to="/admin/clients/quotes?status=expired"
@@ -242,7 +247,7 @@ export const CrmOverviewSection: React.FC = () => {
               to="/admin/clients/bills?status=overdue"
             />
             <StatCard
-              icon={<XCircle className="w-5 h-5 text-neutral-500" />}
+              icon={<XCircle className="w-5 h-5 text-muted" />}
               label={t('bills.status.cancelled', 'Cancelled')}
               value={d.invoices.cancelled}
               to="/admin/clients/bills?status=cancelled"

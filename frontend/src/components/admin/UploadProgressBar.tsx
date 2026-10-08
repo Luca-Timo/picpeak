@@ -100,7 +100,7 @@ export const UploadProgressBar: React.FC = () => {
                   type="button"
                   onClick={dismiss}
                   aria-label={t('common.dismiss', 'Dismiss')}
-                  className="p-1 -m-1 rounded text-neutral-500 hover:text-body hover:bg-hover-soft"
+                  className="p-1 -m-1 rounded text-muted hover:text-body hover:bg-hover-soft"
                 >
                   <X className="w-4 h-4" />
                 </button>

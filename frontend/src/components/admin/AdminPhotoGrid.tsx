@@ -11,7 +11,7 @@ import { uploadsService } from '../../services/uploads.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { getPhotoViewMode, setPhotoViewMode, type PhotoViewMode } from '../../utils/photoViewPrefs';
 import { defaultCategoryLabel, isVideoItem, mediaSplitLabel, selectLabel, splitMediaCount } from '../../utils/mediaCounts';
-import { Button, ColumnMenuHeader } from '../common';
+import { Badge, Button, ColumnMenuHeader, useConfirm } from '../common';
 import type { ColumnMenuOption } from '../common';
 import { PermissionGate } from './PermissionGate';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
@@ -65,6 +65,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
   canModerate = false
 }) => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { format: formatDate } = useLocalizedDate();
   const queryClient = useQueryClient();
   // The same test the tiles below use to tell a video from a photo.
@@ -232,7 +233,11 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
   const handleDeleteSingle = async (photo: AdminPhoto, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!confirm(`Are you sure you want to delete "${photo.filename}"?`)) {
+    if (!(await confirm({
+      message: t('admin.photos.deleteOneConfirm', 'Delete "{{name}}"? The photo is removed from the gallery for good. This cannot be undone.', { name: photo.filename }),
+      variant: 'danger',
+      confirmLabel: t('admin.photos.deleteOneAction', 'Delete photo'),
+    }))) {
       return;
     }
 
@@ -255,7 +260,11 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
     if (selectedPhotos.size === 0) return;
 
     const count = selectedPhotos.size;
-    if (!confirm(`Are you sure you want to delete ${count} photo${count > 1 ? 's' : ''}?`)) {
+    if (!(await confirm({
+      message: t('admin.photos.deleteManyConfirm', 'Delete {{count}} photos? They are removed from the gallery. This cannot be undone.', { count }),
+      variant: 'danger',
+      confirmLabel: t('admin.photos.deleteManyAction', 'Delete {{count}} photos', { count }),
+    }))) {
       return;
     }
 
@@ -716,13 +725,13 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                   className="w-full h-full object-cover"
                   loading="lazy"
                   fallback={
-                    <div className="w-full h-full flex items-center justify-center text-neutral-400">
+                    <div className="w-full h-full flex items-center justify-center text-faint">
                       <Eye className="w-8 h-8" />
                     </div>
                   }
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-neutral-400">
+                <div className="w-full h-full flex items-center justify-center text-faint">
                   <Eye className="w-8 h-8" />
                 </div>
               )}
@@ -776,7 +785,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
             {/* Category Badge - move to top-left and prevent overlap with select checkbox */}
             {defaultCategoryLabel(t, photo) && (
               <div className={`absolute left-2 ${isHidden ? 'top-9' : 'top-2'} pointer-events-none`}>
-                <span className="px-2 py-1 text-xs font-medium bg-white/90 text-neutral-700 rounded max-w-[70%] whitespace-nowrap overflow-hidden text-ellipsis">
+                <span className="px-2 py-1 text-xs font-medium bg-white/90 text-body rounded max-w-[70%] whitespace-nowrap overflow-hidden text-ellipsis">
                   {defaultCategoryLabel(t, photo)}
                 </span>
               </div>
@@ -802,7 +811,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); void retryPosterFrame(photo.id); }}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/90 text-neutral-700 text-[10px] font-medium"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/90 text-body text-[10px] font-medium"
                   title={t('admin.photos.noPosterFrameRetry', 'Take the poster frame again') as string}
                 >
                   <RefreshCw className="w-2.5 h-2.5" />
@@ -874,7 +883,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                 )}
                 {!!photo.my_rating && (
                   <span
-                    className="bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 text-xs font-medium text-neutral-700 flex items-center gap-0.5"
+                    className="bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 text-xs font-medium text-body flex items-center gap-0.5"
                     title={t('admin.photos.yourMarkRating', 'Your rating: {{count}}', { count: photo.my_rating })}
                   >
                     <Star className="w-3 h-3 text-rating" fill="currentColor" />
@@ -893,7 +902,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     title={t('admin.photos.approvedBy', 'Approved: {{value}}', { value: approvedCount })}
                   >
                     <ThumbsUp className="w-3.5 h-3.5 text-success-text" aria-hidden="true" />
-                    <span className="text-xs font-medium text-neutral-700">{approvedCount}</span>
+                    <span className="text-xs font-medium text-body">{approvedCount}</span>
                   </div>
                 )}
                 {rejectedCount > 0 && (
@@ -902,19 +911,19 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     title={t('admin.photos.rejectedBy', 'Rejected: {{value}}', { value: rejectedCount })}
                   >
                     <ThumbsDown className="w-3.5 h-3.5 text-danger-text" aria-hidden="true" />
-                    <span className="text-xs font-medium text-neutral-700">{rejectedCount}</span>
+                    <span className="text-xs font-medium text-body">{rejectedCount}</span>
                   </div>
                 )}
                 {averageRating > 0 && (
                   <div className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1" title={`Rating: ${Number(averageRating).toFixed(1)}`}>
                     <Star className="w-3.5 h-3.5 text-rating" fill="currentColor" />
-                    <span className="text-xs font-medium text-neutral-700">{Number(averageRating).toFixed(1)}</span>
+                    <span className="text-xs font-medium text-body">{Number(averageRating).toFixed(1)}</span>
                   </div>
                 )}
                 {commentCount > 0 && (
                   <div className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1" title={`${commentCount} comments`}>
                     <MessageSquare className="w-3.5 h-3.5 text-accent" fill="currentColor" />
-                    <span className="text-xs font-medium text-neutral-700">{commentCount}</span>
+                    <span className="text-xs font-medium text-body">{commentCount}</span>
                   </div>
                 )}
               </div>
@@ -961,7 +970,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                   key={photo.id}
                   data-testid={`admin-photo-row-${photo.id}`}
                   className={`group cursor-pointer transition-colors ${
-                    isSelected ? 'bg-accent-soft' : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/50'
+                    isSelected ? 'bg-accent-soft' : 'hover:bg-hover-soft'
                   } ${isRowDeleting ? 'opacity-50' : ''}`}
                   onClick={() => !isRowDeleting && onPhotoClick(photo, index)}
                 >
@@ -978,7 +987,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                         isSelected
                           ? 'bg-accent-dark border-accent-dark'
-                          : 'border-line-strong group-hover:border-neutral-400'
+                          : 'border-line-strong group-hover:border-faint'
                       }`}>
                         {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
                       </div>
@@ -1004,13 +1013,13 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                             className="w-full h-full object-cover"
                             loading="lazy"
                             fallback={
-                              <div className="w-full h-full flex items-center justify-center text-neutral-400">
+                              <div className="w-full h-full flex items-center justify-center text-faint">
                                 <Eye className="w-4 h-4" />
                               </div>
                             }
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-neutral-400">
+                          <div className="w-full h-full flex items-center justify-center text-faint">
                             <Eye className="w-4 h-4" />
                           </div>
                         )}
@@ -1055,13 +1064,14 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                             <span className="flex-shrink-0">{reviewBadge(photo, 'soft')}</span>
                           )}
                           {isHidden && !photo.moderation_status && (
-                            <span
-                              className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-danger-soft text-danger-text text-[10px] font-medium"
+                            <Badge
+                              tone="danger"
+                              className="flex-shrink-0"
+                              icon={<EyeOff />}
                               title={t('admin.photos.hiddenTooltip', 'Hidden from guests — this photo is not shown in the client gallery.') as string}
                             >
-                              <EyeOff className="w-3 h-3" />
                               {t('admin.photos.hidden', 'Hidden')}
-                            </span>
+                            </Badge>
                           )}
                         </div>
                         {photo.original_filename && photo.original_filename !== photo.filename && (
@@ -1083,7 +1093,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     {photo.credit_name ? (
                       <span className="block truncate" title={photo.credit_name}>{photo.credit_name}</span>
                     ) : photo.uploaded_by === 'guest' ? (
-                      <span className="text-neutral-400">{t('admin.photos.credit.unnamedGuest')}</span>
+                      <span className="text-faint">{t('admin.photos.credit.unnamedGuest')}</span>
                     ) : '—'}
                   </td>
 
