@@ -172,11 +172,13 @@
 
 
 /*
- * Dark mode. AdminDarkModeContext (admin) and usePublicDarkMode (public
- * quote/contract pages, customer portal) toggle `.dark` on <html>. The UI
- * tokens flip here, so a component written with bg-panel / text-body needs
- * no dark: variants. The theme tokens flip too; gallery applyTheme() still
- * wins because it writes inline --color-* styles on <html>.
+ * Dark mode. AdminDarkModeContext (admin) and usePublicDarkMode (customer
+ * portal and public pages, when the operator's palette is a dark one) toggle
+ * `.dark` on <html>. The UI tokens flip here, so a component written with
+ * bg-panel / text-body needs no dark: variants. The theme-token defaults flip
+ * too; applyTheme() still wins because it writes inline --color-* styles on
+ * <html>. Never put `.dark` on an element below <html>: there these defaults
+ * would replace the operator's palette for everything inside it.
  */
 .dark {
   --color-background: #0a0a0a;
@@ -244,6 +246,39 @@
   --ui-accent-soft: color-mix(in srgb, var(--color-accent-dark) 55%, transparent);
   --ui-accent-line: color-mix(in srgb, var(--color-accent-dark) 70%, transparent);
   --ui-accent-on-soft: #ffffff;
+}
+
+/*
+ * Customer portal and public pages (usePublicDarkMode puts .public-ui on
+ * <html> while one is mounted): the UI tokens take the operator's palette, so
+ * the shared primitives (Notice, EmptyState, ErrorState, Modal, ConfirmDialog,
+ * Card, Input) and the status tints sit on the studio's own surface in light
+ * and dark. The status shades above are derived from --ui-panel, so they
+ * follow too. Declared after .dark so it wins on <html>, where both sit.
+ */
+.public-ui {
+  --ui-canvas: var(--color-background);
+  --ui-shell: var(--color-surface);
+  --ui-panel: var(--color-surface);
+  --ui-subtle: var(--color-elevated);
+  --ui-inset: var(--color-elevated);
+  --ui-fill: var(--color-surface-border);
+  --ui-fill-strong: color-mix(in srgb, var(--color-muted-text) 45%, var(--color-surface));
+  --ui-hover: var(--color-elevated);
+  --ui-hover-soft: var(--color-elevated);
+
+  --ui-text-heading: var(--color-text);
+  --ui-text-body: var(--color-text);
+  --ui-text-soft: var(--color-muted-text);
+  --ui-text-muted: var(--color-muted-text);
+  --ui-text-faint: color-mix(in srgb, var(--color-muted-text) 70%, var(--color-surface));
+
+  --ui-line: var(--color-surface-border);
+  --ui-line-strong: color-mix(in srgb, var(--color-muted-text) 35%, var(--color-surface-border));
+  --ui-line-faint: var(--color-surface-border);
+
+  --shared-fill: var(--color-surface-border);
+  --shared-surface: var(--color-surface);
 }
 
 /* Inside the admin (AdminDarkModeProvider puts .admin-ui on <html>), shared

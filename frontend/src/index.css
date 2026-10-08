@@ -155,11 +155,11 @@
   }
 
   /*
-   * Input styles - Admin inputs keep explicit Tailwind colors so the visual
-   * contract is byte-for-byte identical to pre-migration (border-neutral-300
-   * vs the lighter neutral-200/surface-border). Dark mode is handled by the
-   * .dark .input override below. Gallery inputs use .input-themed which
-   * binds to the 8-token palette via CSS variables.
+   * Input styles. `.input` reads the UI tokens: the admin's greys, and the
+   * operator's palette on the portal and public pages (.public-ui in
+   * tokens.css). `.input-themed` reads the theme tokens directly, wherever it
+   * sits: the gallery, and the raw <input>/<select>/<textarea> of the portal
+   * and public pages (`<Input themed>` uses it too).
    */
   .input {
     @apply flex h-10 w-full rounded-lg border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
@@ -170,7 +170,6 @@
     @apply text-muted;
   }
 
-  /* Gallery-specific input that uses theme variables */
   .input-themed {
     @apply flex h-10 w-full rounded-lg border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
     background-color: var(--color-surface);
@@ -432,55 +431,14 @@
     @apply bg-red-100 text-red-800;
   }
 
-    /* Admin dark mode: .card and .input flip through the --ui-* tokens
-     (src/styles/tokens.css); only the themed card keeps an override. */
-  .dark .card-themed {
-    @apply bg-neutral-800 border-neutral-700;
-  }
-
   /*
-   * Customer-surface scope (#354): the default .input and .card classes
-   * hard-code bg-white, and the customer surface uses theme variables
-   * rather than the admin's `.dark` class trigger. Overriding here so
-   * every <Input> and <Card> rendered inside the customer surface picks
-   * up var(--color-surface) / var(--color-text) automatically — no
-   * per-page wrapper needed. Same treatment for native <select>
-   * elements which share the .input mental model on the profile and
-   * accept-invite forms.
+   * Status colours for the customer portal and the public pages.
    *
-   * The .customer-surface marker is set on the root <div> of every
-   * customer page (CustomerLayout, CustomerLoginPage, CustomerAcceptInvitePage,
-   * CustomerResetPasswordPage). Pages outside this scope (admin, public
-   * gallery) keep their original styling.
-   */
-  .customer-surface .card,
-  .customer-surface .card-hover {
-    background-color: var(--color-surface);
-    border-color: var(--color-surface-border);
-  }
-
-  .customer-surface .input,
-  .customer-surface select.input,
-  .customer-surface input.input {
-    background-color: var(--color-surface);
-    border-color: var(--color-surface-border);
-    color: var(--color-text);
-  }
-
-  /*
-   * Status colours for the customer surface.
-   *
-   * Tailwind's `dark:` modifier is INERT here: the portal themes through
-   * CSS tokens (see CustomerLayout), while `dark:` needs the class the
-   * admin shell toggles on <html>. A chip written as `bg-green-100
-   * text-green-800 dark:…` therefore rendered its LIGHT values on a dark
-   * portal — and the chip is usually the one thing the page exists to
-   * communicate.
-   *
-   * Putting `dark` on the portal's own root would make the variants fire but
-   * break what they sit inside: `.dark` re-declares `--color-surface` and the
-   * rest with PicPeak's generic palette, so any operator running custom
-   * branding would lose their colours below that element.
+   * Never a `dark:` variant there: `.dark` follows the operator's palette
+   * (usePublicDarkMode), but the variants carry PicPeak's neutral greys, not
+   * the studio's colours. And never `.dark` on an element below <html>:
+   * `.dark` re-declares `--color-surface` and the rest with PicPeak's generic
+   * palette, so a studio's own colours would be lost below that element.
    *
    * So these derive from the surface instead. A `hue-*` class names the
    * meaning; `.status-chip` washes that hue over whatever surface it lands
@@ -516,23 +474,10 @@
     background-color: color-mix(in srgb, var(--color-text, #171717) 6%, transparent);
   }
 
-  .customer-surface .input::placeholder {
-    color: var(--color-muted-text);
-    opacity: 0.7;
-  }
-
-  .customer-surface .input:disabled {
-    background-color: var(--color-elevated, var(--color-surface));
-    color: var(--color-muted-text);
-    opacity: 0.7;
-  }
-
-  .dark .input-themed {
-    @apply bg-neutral-800 border-neutral-700 text-neutral-100;
-  }
-
-  .dark .input-themed::placeholder {
-    @apply text-neutral-500;
+  /* A box that explains a state on a themed page: `.status-chip .hue-*` for
+     the tint and text, this for the border (the portal's Notice). */
+  .status-line {
+    border-color: color-mix(in srgb, var(--chip-hue) 35%, var(--color-surface, #ffffff));
   }
 
   .dark .skeleton {
@@ -575,37 +520,43 @@
     background-color: var(--ui-hover-soft);
   }
 
-  /* Table and select defaults for admin dark mode. `:where()` keeps them at
+  /* Table and select defaults in dark mode. `:where()` keeps them at
      single-class specificity so a token utility on the element (bg-subtle,
      text-muted, ...) wins, as the old dark: variants did; a bare element with
-     no colour class still gets these. */
+     no colour class still gets these. They read the UI tokens (the admin's
+     dark greys, exactly as before), so on the portal and public pages, where
+     .public-ui maps those tokens onto the operator's palette, a bare select
+     or table follows the studio's colours instead of PicPeak's greys. */
   .dark :where(table) {
-    @apply bg-neutral-800;
+    background-color: var(--ui-panel);
   }
 
   .dark :where(thead) {
-    @apply bg-neutral-900/50;
+    background-color: color-mix(in srgb, var(--ui-shell) 50%, transparent);
   }
 
   .dark :where(th) {
-    @apply text-neutral-300 border-neutral-700;
+    color: var(--ui-text-body);
+    border-color: var(--ui-line);
   }
 
   .dark :where(td) {
-    @apply text-neutral-200 border-neutral-700;
+    color: color-mix(in srgb, var(--ui-text-heading) 50%, var(--ui-text-body));
+    border-color: var(--ui-line);
   }
 
   .dark :where(tbody tr) {
-    @apply border-neutral-700;
+    border-color: var(--ui-line);
   }
 
   .dark :where(tbody tr):hover {
-    @apply bg-neutral-700/50;
+    background-color: color-mix(in srgb, var(--ui-hover) 50%, transparent);
   }
 
-  /* Select/dropdown for admin dark mode */
   .dark :where(select) {
-    @apply bg-neutral-800 border-neutral-700 text-neutral-100;
+    background-color: var(--ui-panel);
+    border-color: var(--ui-line);
+    color: var(--ui-text-heading);
   }
 
   /* Tag/chip styles for admin dark mode */
