@@ -6,11 +6,11 @@
  */
 import React, { useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import { Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Input, Card, ReCaptcha, PoweredBy } from '../../components/common';
+import { Button, Input, Card, Notice, ReCaptcha, PoweredBy } from '../../components/common';
 import { useCustomerAuth } from '../../contexts/CustomerAuthContext';
 import { customerService } from '../../services/customer.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
@@ -174,13 +174,7 @@ export const CustomerLoginPage: React.FC = () => {
         <Card padding="lg">
           <form onSubmit={handleSubmit} className="space-y-6">
             {errors.form && (
-              <div
-                role="alert"
-                className="flex items-start gap-2 p-3 rounded-lg border status-chip status-line hue-danger"
-              >
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <span className="text-sm">{errors.form}</span>
-              </div>
+              <Notice tone="danger">{errors.form}</Notice>
             )}
 
             <div>

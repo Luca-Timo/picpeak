@@ -17,11 +17,11 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Lock, MapPin, Phone, User as UserIcon, AlertCircle, CheckCircle } from 'lucide-react';
+import { Lock, MapPin, Phone, User as UserIcon, CheckCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Input, Card, Loading, CountrySelect } from '../../components/common';
+import { Button, Input, Card, Loading, CountrySelect, Notice } from '../../components/common';
 import {
   customerService,
   type CustomerInvitationInfo,
@@ -204,10 +204,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
           {isLookingUp ? (
             <div className="flex justify-center py-8"><Loading size="lg" /></div>
           ) : lookupError || !invitation ? (
-            <div className="flex items-start gap-2 text-sm">
-              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-status hue-danger" />
-              <p className="text-theme">{lookupError}</p>
-            </div>
+            <Notice tone="danger">{lookupError}</Notice>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="flex items-start gap-2 p-3 rounded-lg bg-elevated">
@@ -226,10 +223,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
               </div>
 
               {errors.form && (
-                <div role="alert" className="flex items-start gap-2 p-3 rounded-lg border status-chip status-line hue-danger">
-                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span className="text-sm">{errors.form}</span>
-                </div>
+                <Notice tone="danger">{errors.form}</Notice>
               )}
 
               {/* Personal — required: display name + password */}

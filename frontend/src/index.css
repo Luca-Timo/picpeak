@@ -474,12 +474,6 @@
     background-color: color-mix(in srgb, var(--color-text, #171717) 6%, transparent);
   }
 
-  /* A box that explains a state on a themed page: `.status-chip .hue-*` for
-     the tint and text, this for the border (the portal's Notice). */
-  .status-line {
-    border-color: color-mix(in srgb, var(--chip-hue) 35%, var(--color-surface, #ffffff));
-  }
-
   .dark .skeleton {
     @apply bg-neutral-700;
   }

@@ -25,7 +25,7 @@ import {
   type PaymentCheckIssuer,
 } from '../../services/paymentCheck.service';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
-import { Loading } from '../../components/common';
+import { Loading, Notice } from '../../components/common';
 import { DecimalInput } from '../../components/common/DecimalInput';
 import { formatMoneyMinor } from '../../utils/money';
 // All call-sites in this file pass minor units — alias to the
@@ -312,9 +312,9 @@ const ActionCard: React.FC<ActionCardProps> = ({ label, description, icon, selec
 
 const ErrorBox: React.FC<{ message: string }> = ({ message }) => (
   <div className="min-h-screen flex items-center justify-center p-6 bg-background text-theme">
-    <div role="alert" className="max-w-md w-full rounded-lg border p-6 status-chip status-line hue-danger">
-      <h1 className="text-lg font-bold mb-2">{message}</h1>
-    </div>
+    <Notice tone="danger" className="max-w-md w-full">
+      <h1 className="text-base font-semibold">{message}</h1>
+    </Notice>
   </div>
 );
 
