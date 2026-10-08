@@ -821,7 +821,8 @@
     "language": "Language",
     "hidePassword": "Hide password",
     "showPassword": "Show password",
-    "loadFailed": "Could not load this"
+    "loadFailed": "Could not load this",
+    "moreActions": "More actions"
   },
   "upload": {
     "photoCategory": "Photo Category",
@@ -971,7 +972,7 @@
     "filesAdded": "Files added",
     "deleted": "Transfer deleted",
     "deleteConfirmTitle": "Delete transfer?",
-    "deleteConfirmBody": "This removes the link. Source event photos are not affected.",
+    "deleteConfirmBody": "This removes the link. The photos in their galleries are not affected.",
     "addImages": "Add images",
     "noUploads": "No files uploaded by the client yet.",
     "createAndSend": "Create & send",
@@ -1101,20 +1102,25 @@
       "request": "Request"
     },
     "emptyReadOnly": "Nothing here yet.",
-    "someDropped": "{{count}} attached file(s) were not kept — a file request only collects files: {{names}}"
+    "someDropped": "{{count}} attached file(s) were not kept — a file request only collects files: {{names}}",
+    "deleteRequestAction": "Delete request",
+    "deleteAction": "Delete transfer",
+    "loadFailed": "Could not load the transfers"
   },
   "workflows": {
     "title": "Workflows",
     "subtitle": "Visual automations — triggers, conditions, gates and actions.",
     "new": "New workflow",
-    "empty": "No workflows yet. Create one to automate your invoicing and booking steps.",
+    "empty": "Create one to automate your invoicing and booking steps.",
     "builtin": "built-in",
     "triggerLabel": "Trigger",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "confirmDelete": "Delete this workflow?",
     "toggle": {
-      "confirmDisableBuiltin": "Disabling this built-in reverts to the previous built-in behaviour — it does not turn the automation off. Continue?"
+      "confirmDisableBuiltin": "Disabling this built-in reverts to the previous built-in behaviour — it does not turn the automation off. Continue?",
+      "disableBuiltinTitle": "Disable this built-in workflow?",
+      "disableBuiltin": "Disable workflow"
     },
     "test": {
       "title": "Test run",
@@ -1140,7 +1146,9 @@
       "pendingTitle": "Pending approvals",
       "viewAll": "View all approvals",
       "openEntity": "Open {{type}} #{{id}}",
-      "acted": "Done"
+      "acted": "Done",
+      "loadFailed": "Could not load the approvals",
+      "emptyHint": "A workflow with a confirmation gate lists its paused runs here."
     },
     "editor": {
       "namePlaceholder": "Workflow name",
@@ -1192,7 +1200,11 @@
       "groups": "Customer groups",
       "groupsNoPermission": "Listing customer groups needs the customers.view permission.",
       "groupsHint": "Checked when this step runs. Needs a customer on the run: customer, quote, contract and invoice triggers have one; on gallery and event triggers this is always “no”."
-    }
+    },
+    "confirmDeleteNamed": "Delete \"{{name}}\"? Runs in progress stop and the flow cannot be restored.",
+    "deleteAction": "Delete workflow",
+    "loadFailed": "Could not load the workflows",
+    "emptyTitle": "No workflows yet"
   },
   "archives": {
     "title": "Archives",
@@ -1212,7 +1224,7 @@
     "sortByName": "Sort by Name",
     "sortBySize": "Sort by Size",
     "tableHeaders": {
-      "event": "Event",
+      "event": "Gallery",
       "type": "Type",
       "archivedDate": "Archived Date",
       "size": "Size",
@@ -1232,7 +1244,16 @@
     "confirmRestore": "Are you sure you want to restore this archive? The event will become active again.",
     "confirmDelete": "Are you sure you want to permanently delete this archive? This action cannot be undone.",
     "restoreSuccess": "Archive restored successfully",
-    "deleteSuccess": "Archive deleted permanently"
+    "deleteSuccess": "Archive deleted permanently",
+    "restoreTitle": "Restore archive?",
+    "confirmRestoreNamed": "Restore \"{{name}}\"? The gallery becomes active again.",
+    "restoreAction": "Restore gallery",
+    "deleteTitle": "Delete archive?",
+    "confirmDeleteNamed": "Permanently delete the archive of \"{{name}}\" with all its photos? This cannot be undone.",
+    "deleteAction": "Delete archive",
+    "loadFailed": "Could not load the archives",
+    "noArchivesMatchHint": "Nothing matches this search or filter.",
+    "noArchivesHint": "Archive a gallery from its menu in the gallery list; it shows up here."
   },
   "auth": {
     "password": "Password",
@@ -2242,7 +2263,11 @@
       "reviewUploadsHelp": "Holds uploads from team members whose role lacks the “Review Team Uploads” permission: they stay hidden from guests and clients until you or a reviewer approve them on the Photos tab. The Admin, Editor and Solo Photographer roles hold that permission by default, so their uploads are never held.",
       "reviewUploadsHelpMember": "Your uploads to this gallery stay hidden from guests and clients until the owner or a reviewer approves them.",
       "reviewUploadsHelpReviewer": "Uploads from team members without the “Review Team Uploads” permission wait for approval on the Photos tab. Yours are published right away."
-    }
+    },
+    "deleteEventConfirmLoss": "Delete \"{{name}}\" with all its photos? This cannot be undone.",
+    "noEventsMatchHint": "Nothing matches this search or filter. Clear it to see every gallery.",
+    "noEventsYet": "No galleries yet",
+    "noEventsYetHint": "Create a gallery to share photos with a client."
   },
   "settings": {
     "title": "System Settings",
@@ -2797,7 +2822,7 @@
         "eventType": "Event type",
         "total_one": "{{count}} total",
         "total_other": "{{count}} total",
-        "empty": "No deliveries yet. Create an event or send a test event to see something here.",
+        "empty": "Create a gallery or send a test event to see deliveries here.",
         "colTime": "Time",
         "colEvent": "Event",
         "colStatus": "Status",
@@ -2819,7 +2844,11 @@
           "pending": "pending",
           "success": "success",
           "failed": "failed"
-        }
+        },
+        "emptyTitle": "No deliveries yet",
+        "loadFailed": "Could not load this webhook",
+        "listLoadFailed": "Could not load the deliveries",
+        "notFoundHint": "It may have been deleted. Settings › Webhooks lists the ones that exist."
       }
     },
     "sectionLabel": "Settings section",
@@ -3542,7 +3571,8 @@
     "configureInstructions": "To see real analytics data, configure Umami in your environment variables and admin panel settings.",
     "catalogedMedia": "Catalogued media",
     "storageUnavailable": "unavailable",
-    "storageNoMeasurement": "no measurement available"
+    "storageNoMeasurement": "no measurement available",
+    "loadFailed": "Could not load the analytics"
   },
   "branding": {
     "title": "Branding & Themes",
@@ -9790,7 +9820,7 @@
     "createNewDoc": "Create new {{label}}",
     "existingDocs": "Or reference an existing one",
     "noExistingDocs": "No existing documents for this customer yet.",
-    "galleryCreateOnly": "Galleries are event-based — this opens the event editor, where you can assign the customer.",
+    "galleryCreateOnly": "This opens the gallery editor, where you can assign the customer.",
     "syncOk": "Checked mailboxes — {{count}} new.",
     "syncDisabled": "Incoming mail is off — enable it under Settings → Features.",
     "syncUnconfigured": "Configure a mailbox under Settings → Email first.",
@@ -9798,7 +9828,10 @@
     "syncFailed": "Sync failed.",
     "actionFailed": "Action failed.",
     "syncOk_one": "Checked mailboxes — {{count}} new.",
-    "syncOk_other": "Checked mailboxes — {{count}} new."
+    "syncOk_other": "Checked mailboxes — {{count}} new.",
+    "body": "Message",
+    "deleteForeverTitle": "Delete this message permanently?",
+    "deleteForeverConfirm": "The message and its attachments are removed for good. This cannot be undone."
   },
   "rebills": {
     "createInvoice": "Create invoice from re-bills",

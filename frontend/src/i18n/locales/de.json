@@ -821,7 +821,8 @@
     "language": "Sprache",
     "hidePassword": "Passwort verbergen",
     "showPassword": "Passwort anzeigen",
-    "loadFailed": "Konnte nicht geladen werden"
+    "loadFailed": "Konnte nicht geladen werden",
+    "moreActions": "Weitere Aktionen"
   },
   "upload": {
     "photoCategory": "Fotokategorie",
@@ -971,7 +972,7 @@
     "filesAdded": "Dateien hinzugefügt",
     "deleted": "Transfer gelöscht",
     "deleteConfirmTitle": "Transfer löschen?",
-    "deleteConfirmBody": "Damit wird der Link entfernt. Die Fotos im Event bleiben unberührt.",
+    "deleteConfirmBody": "Damit wird der Link entfernt. Die Fotos in ihren Galerien bleiben unberührt.",
     "addImages": "Bilder hinzufügen",
     "noUploads": "Der Kunde hat noch keine Dateien hochgeladen.",
     "createAndSend": "Erstellen & senden",
@@ -1101,20 +1102,25 @@
       "request": "Anfrage"
     },
     "emptyReadOnly": "Noch nichts vorhanden.",
-    "someDropped": "{{count}} angehängte Datei(en) wurden nicht übernommen – eine Dateianfrage sammelt nur Dateien: {{names}}"
+    "someDropped": "{{count}} angehängte Datei(en) wurden nicht übernommen – eine Dateianfrage sammelt nur Dateien: {{names}}",
+    "deleteRequestAction": "Anfrage löschen",
+    "deleteAction": "Transfer löschen",
+    "loadFailed": "Die Transfers konnten nicht geladen werden"
   },
   "workflows": {
     "title": "Workflows",
     "subtitle": "Visuelle Automatisierungen – Auslöser, Bedingungen, Freigaben und Aktionen.",
     "new": "Neuer Workflow",
-    "empty": "Noch keine Workflows. Erstellen Sie einen, um Rechnungsstellung und Buchungsschritte zu automatisieren.",
+    "empty": "Erstellen Sie einen, um Rechnungsstellung und Buchungsschritte zu automatisieren.",
     "builtin": "integriert",
     "triggerLabel": "Auslöser",
     "enabled": "Aktiv",
     "disabled": "Inaktiv",
     "confirmDelete": "Diesen Workflow löschen?",
     "toggle": {
-      "confirmDisableBuiltin": "Das Deaktivieren dieses eingebauten Ablaufs stellt das vorherige Standardverhalten wieder her – die Automatisierung wird dadurch nicht abgeschaltet. Fortfahren?"
+      "confirmDisableBuiltin": "Das Deaktivieren dieses eingebauten Ablaufs stellt das vorherige Standardverhalten wieder her – die Automatisierung wird dadurch nicht abgeschaltet. Fortfahren?",
+      "disableBuiltinTitle": "Diesen eingebauten Workflow deaktivieren?",
+      "disableBuiltin": "Workflow deaktivieren"
     },
     "test": {
       "title": "Testlauf",
@@ -1140,7 +1146,9 @@
       "pendingTitle": "Offene Freigaben",
       "viewAll": "Alle Freigaben ansehen",
       "openEntity": "{{type}} #{{id}} öffnen",
-      "acted": "Erledigt"
+      "acted": "Erledigt",
+      "loadFailed": "Die Freigaben konnten nicht geladen werden",
+      "emptyHint": "Ein Workflow mit einer Bestätigungsstufe listet seine angehaltenen Durchläufe hier auf."
     },
     "editor": {
       "namePlaceholder": "Workflow-Name",
@@ -1192,7 +1200,11 @@
       "groups": "Kundengruppen",
       "groupsNoPermission": "Zum Auflisten der Kundengruppen ist die Berechtigung customers.view nötig.",
       "groupsHint": "Wird geprüft, wenn dieser Schritt läuft. Braucht einen Kunden im Ablauf: Kunden-, Angebots-, Vertrags- und Rechnungs-Auslöser haben einen; bei Galerie- und Event-Auslösern ist das Ergebnis immer „nein“."
-    }
+    },
+    "confirmDeleteNamed": "„{{name}}“ löschen? Laufende Durchläufe werden beendet und der Ablauf kann nicht wiederhergestellt werden.",
+    "deleteAction": "Workflow löschen",
+    "loadFailed": "Die Workflows konnten nicht geladen werden",
+    "emptyTitle": "Noch keine Workflows"
   },
   "eventTypes": {
     "title": "Veranstaltungsarten",
@@ -1750,7 +1762,7 @@
     "sortByName": "Nach Name sortieren",
     "sortBySize": "Nach Größe sortieren",
     "tableHeaders": {
-      "event": "Veranstaltung",
+      "event": "Galerie",
       "type": "Typ",
       "archivedDate": "Archivierungsdatum",
       "size": "Größe",
@@ -1770,7 +1782,16 @@
     "confirmRestore": "Sind Sie sicher, dass Sie dieses Archiv wiederherstellen möchten? Die Veranstaltung wird wieder aktiv.",
     "confirmDelete": "Sind Sie sicher, dass Sie dieses Archiv dauerhaft löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "restoreSuccess": "Archiv erfolgreich wiederhergestellt",
-    "deleteSuccess": "Archiv dauerhaft gelöscht"
+    "deleteSuccess": "Archiv dauerhaft gelöscht",
+    "restoreTitle": "Archiv wiederherstellen?",
+    "confirmRestoreNamed": "„{{name}}“ wiederherstellen? Die Galerie wird wieder aktiv.",
+    "restoreAction": "Galerie wiederherstellen",
+    "deleteTitle": "Archiv löschen?",
+    "confirmDeleteNamed": "Das Archiv von „{{name}}“ mit allen Fotos endgültig löschen? Das kann nicht rückgängig gemacht werden.",
+    "deleteAction": "Archiv löschen",
+    "loadFailed": "Die Archive konnten nicht geladen werden",
+    "noArchivesMatchHint": "Nichts passt zu dieser Suche oder diesem Filter.",
+    "noArchivesHint": "Archivieren Sie eine Galerie über ihr Menü in der Galerieliste; sie erscheint dann hier."
   },
   "auth": {
     "password": "Passwort",
@@ -2780,7 +2801,11 @@
       "reviewUploadsHelp": "Betrifft Uploads von Teammitgliedern, deren Rolle die Berechtigung „Review Team Uploads“ nicht hat: Sie bleiben für Gäste und Kunden verborgen, bis Sie oder eine prüfende Person sie im Tab Fotos freigeben. Die Rollen Admin, Editor und Solo Photographer haben diese Berechtigung standardmäßig, ihre Uploads werden nie zurückgehalten.",
       "reviewUploadsHelpMember": "Ihre Uploads in diese Galerie bleiben für Gäste und Kunden verborgen, bis der Galerie-Inhaber oder eine prüfende Person sie freigibt.",
       "reviewUploadsHelpReviewer": "Uploads von Teammitgliedern ohne die Berechtigung „Review Team Uploads“ warten im Tab Fotos auf Freigabe. Ihre eigenen werden sofort veröffentlicht."
-    }
+    },
+    "deleteEventConfirmLoss": "„{{name}}“ mit allen Fotos löschen? Das kann nicht rückgängig gemacht werden.",
+    "noEventsMatchHint": "Nichts passt zu dieser Suche oder diesem Filter. Setzen Sie ihn zurück, um alle Galerien zu sehen.",
+    "noEventsYet": "Noch keine Galerien",
+    "noEventsYetHint": "Erstellen Sie eine Galerie, um Fotos mit einem Kunden zu teilen."
   },
   "settings": {
     "title": "Systemeinstellungen",
@@ -3335,7 +3360,7 @@
         "eventType": "Ereignistyp",
         "total_one": "{{count}} gesamt",
         "total_other": "{{count}} gesamt",
-        "empty": "Noch keine Zustellungen. Erstellen Sie eine Veranstaltung oder senden Sie ein Testereignis, um hier etwas zu sehen.",
+        "empty": "Erstellen Sie eine Galerie oder senden Sie ein Testereignis, um hier Zustellungen zu sehen.",
         "colTime": "Zeit",
         "colEvent": "Ereignis",
         "colStatus": "Status",
@@ -3357,7 +3382,11 @@
           "pending": "ausstehend",
           "success": "erfolgreich",
           "failed": "fehlgeschlagen"
-        }
+        },
+        "emptyTitle": "Noch keine Zustellungen",
+        "loadFailed": "Dieser Webhook konnte nicht geladen werden",
+        "listLoadFailed": "Die Zustellungen konnten nicht geladen werden",
+        "notFoundHint": "Er wurde vielleicht gelöscht. Einstellungen › Webhooks listet die vorhandenen auf."
       }
     },
     "sectionLabel": "Einstellungsbereich",
@@ -5439,7 +5468,8 @@
     "configureInstructions": "Um echte Analysedaten zu sehen, konfigurieren Sie Umami in Ihren Umgebungsvariablen und Admin-Panel-Einstellungen.",
     "catalogedMedia": "Katalogisierte Medien",
     "storageUnavailable": "nicht verfügbar",
-    "storageNoMeasurement": "keine Messung verfügbar"
+    "storageNoMeasurement": "keine Messung verfügbar",
+    "loadFailed": "Die Analysedaten konnten nicht geladen werden"
   },
   "email": {
     "title": "E-Mail-Konfiguration",
@@ -9756,7 +9786,7 @@
     "createNewDoc": "Neues {{label}} erstellen",
     "existingDocs": "Oder ein bestehendes referenzieren",
     "noExistingDocs": "Für diesen Kunden gibt es noch keine Dokumente.",
-    "galleryCreateOnly": "Galerien sind event-basiert — dies öffnet den Event-Editor, wo Sie den Kunden zuweisen können.",
+    "galleryCreateOnly": "Damit öffnet sich der Galerie-Editor, in dem Sie den Kunden zuordnen können.",
     "syncOk": "Postfächer geprüft — {{count}} neu.",
     "syncDisabled": "Eingehende E-Mails sind deaktiviert — unter Einstellungen → Funktionen aktivieren.",
     "syncUnconfigured": "Zuerst ein Postfach unter Einstellungen → E-Mail konfigurieren.",
@@ -9764,7 +9794,10 @@
     "syncFailed": "Synchronisierung fehlgeschlagen.",
     "actionFailed": "Aktion fehlgeschlagen.",
     "syncOk_one": "Postfächer geprüft — {{count}} neu.",
-    "syncOk_other": "Postfächer geprüft — {{count}} neu."
+    "syncOk_other": "Postfächer geprüft — {{count}} neu.",
+    "body": "Nachricht",
+    "deleteForeverTitle": "Diese Nachricht endgültig löschen?",
+    "deleteForeverConfirm": "Die Nachricht und ihre Anhänge werden endgültig entfernt. Das kann nicht rückgängig gemacht werden."
   },
   "rebills": {
     "createInvoice": "Rechnung aus Weiterverrechnungen erstellen",
