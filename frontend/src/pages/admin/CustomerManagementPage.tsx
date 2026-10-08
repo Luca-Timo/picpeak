@@ -369,7 +369,6 @@ export const CustomerManagementPage: React.FC = () => {
       <SectionPageHeader
         icon={UserCog}
         title={t('customers.pageTitle', 'Customers')}
-        feature="customerPortal"
         description={t('customers.pageSubtitle', 'Recurring customer accounts that can log in at /customer/login.')}
         actions={(
           <>

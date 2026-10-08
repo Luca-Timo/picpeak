@@ -27,41 +27,37 @@ export type PortalFeatureKey = 'portalCalendar';
 
 export const NEW_FOR_DAYS = 30;
 
-// Every feature that carried a "new" label before the labels were unified
-// counts as new from the day that change was merged.
-const UNIFIED_LABELS_MERGED = '2026-10-08';
-
 export const FEATURE_STATUS: Record<FeatureKey | PortalFeatureKey, FeatureStatusEntry> = {
   // Core
   galleries: { maturity: 'stable' },
-  slideshow: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  transfers: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  faces: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
+  slideshow: { maturity: 'beta' },
+  transfers: { maturity: 'beta' },
+  faces: { maturity: 'beta' },
   // Automation
-  workflows: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
+  workflows: { maturity: 'beta' },
   // CRM
   clients: { maturity: 'stable' },
   customerPortal: { maturity: 'beta' },
-  documents: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  calendar: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
+  documents: { maturity: 'beta' },
+  calendar: { maturity: 'beta' },
   calendarBooking: { maturity: 'roadmap' },
-  quotes: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  contracts: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  bills: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  newsletters: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  hoursLogging: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  projects: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
+  quotes: { maturity: 'beta' },
+  contracts: { maturity: 'beta' },
+  bills: { maturity: 'beta' },
+  newsletters: { maturity: 'beta' },
+  hoursLogging: { maturity: 'beta' },
+  projects: { maturity: 'beta' },
   crmDevelopment: { maturity: 'experimental' },
   // Communication
   reminderEmails: { maturity: 'beta' },
-  incomingMail: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  whatsapp: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  messaging: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
+  incomingMail: { maturity: 'beta' },
+  whatsapp: { maturity: 'beta' },
+  messaging: { maturity: 'beta' },
   // Accounting
-  accounting: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  taxReport: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  incomingInvoices: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
-  expenses: { maturity: 'stable', newSince: UNIFIED_LABELS_MERGED },
+  accounting: { maturity: 'beta' },
+  taxReport: { maturity: 'beta' },
+  incomingInvoices: { maturity: 'beta' },
+  expenses: { maturity: 'beta' },
   // Insights & access
   analytics: { maturity: 'stable' },
   userManagement: { maturity: 'stable' },
