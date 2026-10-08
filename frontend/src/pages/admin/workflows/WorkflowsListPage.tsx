@@ -13,6 +13,7 @@ import { Plus, Workflow as WorkflowIcon, Inbox, Trash2, Pencil, FlaskConical } f
 import { Button, Card, Loading } from '../../../components/common';
 import { useMutationWithToast } from '../../../hooks';
 import { workflowsService, type WorkflowSummary, type WorkflowSavePayload, type WorkflowTestResult } from '../../../services/workflows.service';
+import { FeatureStatusBadge } from '../../../features/featureStatus';
 
 const NEW_WORKFLOW: WorkflowSavePayload = {
   name: 'New workflow',
@@ -93,7 +94,7 @@ export const WorkflowsListPage: React.FC = () => {
             <WorkflowIcon className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-heading">{t('workflows.title', 'Workflows')}</h1>
+            <h1 className="text-xl font-semibold text-heading flex items-center gap-2">{t('workflows.title', 'Workflows')}<FeatureStatusBadge feature="workflows" /></h1>
             <p className="text-sm text-soft">{t('workflows.subtitle', 'Visual automations — triggers, conditions, gates and actions.')}</p>
           </div>
         </div>

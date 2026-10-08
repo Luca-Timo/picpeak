@@ -4,14 +4,15 @@ import { Link } from 'react-router-dom';
 import { CornerDownRight, Lock, AlertTriangle, ArrowRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Switch } from './Switch';
-import { StatusBadge, type FeatureStatus } from './StatusBadge';
+import { FeatureStatusBadge } from '../../featureStatus';
+import type { FeatureKey } from '../../../services/featureFlags.service';
 
 interface FeatureCardProps {
   icon: LucideIcon;
   title: string;
   description: string;
-  status: FeatureStatus;
-  statusLabel: string;
+  /** Its state label comes from features/featureStatus/registry.ts. */
+  feature: FeatureKey;
   sidebarLabel?: string;
   sidebarHidden?: boolean;
   sidebarHiddenLabel?: string;
@@ -37,8 +38,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
   icon: Icon,
   title,
   description,
-  status,
-  statusLabel,
+  feature,
   sidebarLabel,
   sidebarHidden,
   sidebarHiddenLabel,
@@ -78,7 +78,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <h4 className="text-sm font-semibold text-heading">{title}</h4>
-          <StatusBadge status={status} label={statusLabel} />
+          <FeatureStatusBadge feature={feature} />
         </div>
         <p className="mt-1 text-sm text-soft">{description}</p>
 

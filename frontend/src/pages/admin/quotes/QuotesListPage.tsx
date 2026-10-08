@@ -57,7 +57,7 @@ export const QuotesListPage: React.FC = () => {
       <SectionPageHeader
         icon={FileText}
         title={t('quotes.title', 'Quotes')}
-        beta
+        feature="quotes"
         description={t('quotes.subtitle', 'Send, track and convert quotes into events.')}
         actions={(
           <>

@@ -949,7 +949,6 @@
     "clients": "Stranke",
     "accounting": "Računovodstvo",
     "workflows": "Delovni tokovi",
-    "betaTag": "Beta",
     "automation": "Avtomatizacija",
     "sharing": "Deljenje"
   },
@@ -2691,7 +2690,6 @@
         "automation": "Avtomatizacija"
       },
       "status": {
-        "stable": "stabilno",
         "beta": "beta",
         "new": "novo",
         "experimental": "eksperimentalno",
@@ -6078,8 +6076,6 @@
       "quotes": "Ponudbe",
       "bills": "Računi",
       "profile": "Profil",
-      "soon": "Kmalu",
-      "new": "Novo",
       "contracts": "Pogodbe",
       "documents": "Dokumenti"
     },

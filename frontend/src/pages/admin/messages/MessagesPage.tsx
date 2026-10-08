@@ -17,6 +17,7 @@ import { DocumentActionModal, type DocType } from './DocumentActionModal';
 import { EmailBodyFrame } from './EmailBodyFrame';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { usePermission } from '../../../hooks/usePermission';
+import { FeatureStatusBadge } from '../../../features/featureStatus';
 
 /**
  * Admin "Messages" — read-only viewer over the mail picpeak already
@@ -261,6 +262,7 @@ export const MessagesPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-heading flex items-center gap-2">
             <Mail className="w-6 h-6 text-muted" />
             {t('messages.title', 'Messages')}
+            <FeatureStatusBadge feature="messaging" />
           </h1>
           <p className="text-sm text-soft mt-0.5">
             {t('messages.subtitle', 'Sent, automated and incoming mail — one place.')}

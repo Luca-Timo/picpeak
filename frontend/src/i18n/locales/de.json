@@ -948,7 +948,6 @@
     "clients": "CRM",
     "accounting": "Buchhaltung",
     "workflows": "Workflows",
-    "betaTag": "Beta",
     "automation": "Automatisierung",
     "sharing": "Teilen"
   },
@@ -3401,7 +3400,6 @@
         "automation": "Automatisierung"
       },
       "status": {
-        "stable": "stabil",
         "beta": "beta",
         "new": "neu",
         "experimental": "experimentell",
@@ -3535,7 +3533,13 @@
         "description": "Teilen Sie Dokumente im Portal mit einem Kunden und erhalten Sie Dokumente von ihm. Kunden-Uploads bleiben gesperrt, bis Sie sie im Kundendatensatz als sauber markieren. Standardmäßig PDF; weitere Dateitypen, Größen- und Speichergrenzen unter Einstellungen → CRM."
       },
       "configure": "Konfigurieren",
-      "sidebarInSettings": "Kein Eintrag in der Seitenleiste — liegt in den Einstellungen"
+      "sidebarInSettings": "Kein Eintrag in der Seitenleiste — liegt in den Einstellungen",
+      "statusHelp": {
+        "new": "Neu veröffentlicht und einsatzbereit.",
+        "beta": "In Entwicklung: für echte Arbeit nutzbar, Details können sich noch ändern.",
+        "experimental": "Kann ausfallen oder wieder entfernt werden. Nicht für den produktiven Studiobetrieb.",
+        "roadmap": "Noch nicht gebaut."
+      }
     },
     "customerSurface": {
       "brandingTitle": "Kundendashboard-Kopfzeile",
@@ -6551,8 +6555,6 @@
       "quotes": "Angebote",
       "bills": "Rechnungen",
       "profile": "Profil",
-      "soon": "Bald",
-      "new": "Neu",
       "contracts": "Verträge",
       "documents": "Dokumente"
     },

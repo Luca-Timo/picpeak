@@ -65,7 +65,7 @@ export const BillsListPage: React.FC = () => {
       <SectionPageHeader
         icon={Receipt}
         title={t('bills.title', 'Invoices')}
-        beta
+        feature="bills"
         description={t('bills.subtitle', 'Schedule, send, track payments and chase late invoices.')}
         actions={(
           <>

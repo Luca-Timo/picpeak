@@ -389,6 +389,7 @@ export const AccountingInboxPage: React.FC = () => {
   return (
     <div>
       <SectionPageHeader
+        feature="incomingInvoices"
         icon={Inbox}
         title={t('accounting.subnav.incomingInvoices', 'Incoming invoices')}
         description={t('accounting.inbox.subtitle', 'Supplier invoices captured by camera, upload or the incoming mailbox, ready to categorise and re-bill.')}

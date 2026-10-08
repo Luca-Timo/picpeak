@@ -196,6 +196,7 @@ export const CrmDevelopmentPage: React.FC = () => {
   return (
     <div>
       <SectionPageHeader
+        feature="crmDevelopment"
         icon={Wrench}
         title={t('crmDev.title', 'CRM Development')}
         description={t('crmDev.subtitle', 'Internal tools for verifying CRM flows. Hidden by default — enabled via Settings → Features → Development.')}

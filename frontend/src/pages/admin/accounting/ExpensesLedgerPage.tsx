@@ -267,6 +267,7 @@ export const ExpensesLedgerPage: React.FC = () => {
   return (
     <div>
       <SectionPageHeader
+        feature="expenses"
         icon={Wallet}
         title={t('accounting.subnav.expenses', 'Expenses')}
         description={t('accounting.ledger.subtitle', 'Internal expenses such as mileage, per diems and cash receipts, booked to an event or the company.')}

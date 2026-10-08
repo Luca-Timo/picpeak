@@ -92,7 +92,7 @@ export const HoursLoggingPage: React.FC = () => {
       <SectionPageHeader
         icon={Clock}
         title={t('hoursLogging.title', 'Hours logging')}
-        beta
+        feature="hoursLogging"
         description={t('hoursLogging.subtitle', 'Pick a customer and log billable time blocks. Entries flow into the next monthly bill or are billed on demand for per-event customers.')}
         className=""
       />

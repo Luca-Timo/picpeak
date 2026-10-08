@@ -18,7 +18,8 @@ import {
   CheckCircle2, X, FileText, Calendar, KeyRound, ToggleLeft, Settings as SettingsIcon, Megaphone,
 } from 'lucide-react';
 
-import { Button, Card, CountrySelect, Input, Loading } from '../../components/common';
+import { Button, Card, CountrySelect, Input, Loading, Switch } from '../../components/common';
+import { FeatureStatusBadge } from '../../features/featureStatus';
 import { SUPPORTED_LANGUAGES } from '../../components/common/LanguageSelector';
 import { DecimalInput } from '../../components/common/DecimalInput';
 import { AssignedEventsDialog } from '../../components/admin/AssignedEventsDialog';
@@ -656,63 +657,42 @@ export const CustomerDetailPage: React.FC = () => {
             // globally" signal is conveyed by the row simply not
             // appearing, mirroring the hoursLogging pattern below.
             //
-            // `badge` controls which status pill is shown:
-            //   - 'soon' (amber) for tabs that still don't have a
-            //     customer-facing surface (Calendar booking)
-            //   - 'new' (green) for shipped customer-facing tabs that
-            //     are recent additions to the admin's vocabulary so
-            //     they catch the eye when reviewing per-customer
-            //     overrides. Matches Settings → Features StatusBadge.
+            // `feature` picks the state label from the feature-status
+            // registry, the same one Settings → Features shows. The
+            // portal calendar tab is its own entry: the admin calendar
+            // is built, the customer-facing one is not yet.
             ...(flags.calendar
-              ? [{ key: 'featureCalendar' as const, labelKey: 'customer.nav.calendar', fallback: 'Calendar', badge: 'soon' as const }]
+              ? [{ key: 'featureCalendar' as const, labelKey: 'customer.nav.calendar', fallback: 'Calendar', feature: 'portalCalendar' as const }]
               : []),
             ...(flags.quotes
-              ? [{ key: 'featureQuotes' as const,   labelKey: 'customer.nav.quotes',   fallback: 'Quotes',   badge: 'new'  as const }]
+              ? [{ key: 'featureQuotes' as const,   labelKey: 'customer.nav.quotes',   fallback: 'Quotes',   feature: 'quotes' as const }]
               : []),
             ...(flags.bills
-              ? [{ key: 'featureBills' as const,    labelKey: 'customer.nav.bills',    fallback: 'Bills',    badge: 'new'  as const }]
+              ? [{ key: 'featureBills' as const,    labelKey: 'customer.nav.bills',    fallback: 'Bills',    feature: 'bills' as const }]
               : []),
             ...(flags.hoursLogging
-              ? [{ key: 'featureHoursLogging' as const, labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging', badge: 'new' as const }]
+              ? [{ key: 'featureHoursLogging' as const, labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging', feature: 'hoursLogging' as const }]
               : []),
             ...(flags.contracts
-              ? [{ key: 'featureContracts' as const, labelKey: 'customer.nav.contracts', fallback: 'Contracts', badge: 'new' as const }]
+              ? [{ key: 'featureContracts' as const, labelKey: 'customer.nav.contracts', fallback: 'Contracts', feature: 'contracts' as const }]
               : []),
             ...(flags.documents
-              ? [{ key: 'featureDocuments' as const, labelKey: 'customer.nav.documents', fallback: 'Documents', badge: 'new' as const }]
+              ? [{ key: 'featureDocuments' as const, labelKey: 'customer.nav.documents', fallback: 'Documents', feature: 'documents' as const }]
               : []),
-          ] as const).map(({ key, labelKey, fallback, badge }) => {
+          ] as const).map(({ key, labelKey, fallback, feature }) => {
             const enabled = !!form[key];
             return (
-              <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
-                <span className="text-sm font-medium text-heading flex items-center gap-2">
-                  {t(labelKey, fallback)}
-                  {/* Status pill — 'soon' = amber, 'new' = green.
-                      Colors match Settings → Features StatusBadge so
-                      the two surfaces feel consistent. */}
-                  {badge === 'soon' ? (
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                      {t('customer.nav.soon', 'Soon')}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                      {t('customer.nav.new', 'New')}
-                    </span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={enabled}
-                  onClick={() => toggleFeature(key)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${enabled ? '' : 'bg-fill-strong'}`}
-                  style={enabled ? { backgroundColor: 'var(--color-accent)' } : undefined}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}
-                  />
-                </button>
-              </label>
+              <Switch
+                key={key}
+                checked={enabled}
+                onChange={() => toggleFeature(key)}
+                label={(
+                  <span className="flex items-center gap-2 text-heading">
+                    {t(labelKey, fallback)}
+                    <FeatureStatusBadge feature={feature} />
+                  </span>
+                )}
+              />
             );
           })}
         </div>

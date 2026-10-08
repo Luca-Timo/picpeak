@@ -58,6 +58,7 @@ export const ProjectsListPage: React.FC = () => {
   return (
     <div>
       <SectionPageHeader
+        feature="projects"
         icon={FolderKanban}
         title={t('projects.title', 'Project Overview')}
         description={t('projects.subtitle', 'Group events into projects and see every email, document, gallery and hour in one cockpit.')}

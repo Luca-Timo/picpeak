@@ -69,7 +69,7 @@ export const ContractsListPage: React.FC = () => {
       <SectionPageHeader
         icon={ScrollText}
         title={t('contracts.title', 'Contracts')}
-        beta
+        feature="contracts"
         description={t('contracts.subtitle', 'Compose contracts from reusable blocks and have customers sign in-browser or upload a wet-signed PDF.')}
         actions={(
           <>

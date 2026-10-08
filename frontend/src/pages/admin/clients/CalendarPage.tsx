@@ -469,6 +469,7 @@ export const CalendarPage: React.FC = () => {
   return (
     <div className="space-y-4">
       <SectionPageHeader
+        feature="calendar"
         icon={CalendarIcon}
         title={t('calendar.pageTitle', 'Calendar')}
         description={t('calendar.subtitle', 'Events, logged hours, and pending quotes/contracts in one view.')}

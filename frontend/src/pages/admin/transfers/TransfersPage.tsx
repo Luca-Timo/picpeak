@@ -34,6 +34,7 @@ import {
   type TransferKind,
   type TransferWriteResult,
 } from '../../../services/transfers.service';
+import { FeatureStatusBadge } from '../../../features/featureStatus';
 
 function formatBytes(bytes: number | null | undefined): string {
   if (!bytes) return '0 B';
@@ -142,6 +143,7 @@ export const TransfersPage: React.FC = () => {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-heading">
             <Send className="h-6 w-6" /> {t('transfers.title', 'PicTransfer')}
+            <FeatureStatusBadge feature="transfers" />
           </h1>
           <p className="mt-1 text-sm text-muted">
             {t('transfers.subtitle', 'Send files to a client, or ask a client to send files to you.')}

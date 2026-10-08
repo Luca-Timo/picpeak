@@ -948,7 +948,6 @@
     "clients": "CRM",
     "accounting": "Accounting",
     "workflows": "Workflows",
-    "betaTag": "Beta",
     "automation": "Automation",
     "sharing": "Sharing"
   },
@@ -2863,7 +2862,6 @@
         "automation": "Automation"
       },
       "status": {
-        "stable": "stable",
         "beta": "beta",
         "new": "new",
         "experimental": "experimental",
@@ -2997,7 +2995,13 @@
         "description": "Share documents with a customer in their portal and receive documents from them. Customer uploads stay unavailable until you mark them clean on the customer record. PDF by default; more file types, size and storage limits under Settings → CRM."
       },
       "configure": "Configure",
-      "sidebarInSettings": "No sidebar item — lives in Settings"
+      "sidebarInSettings": "No sidebar item — lives in Settings",
+      "statusHelp": {
+        "new": "Recently released and ready to use.",
+        "beta": "In development: ready for real work, but details may still change.",
+        "experimental": "May break or be removed. Not for a production studio.",
+        "roadmap": "Not built yet."
+      }
     },
     "customerSurface": {
       "brandingTitle": "Customer dashboard header",
@@ -6586,8 +6590,6 @@
       "quotes": "Quotes",
       "bills": "Invoices",
       "profile": "Profile",
-      "soon": "Soon",
-      "new": "New",
       "contracts": "Contracts",
       "documents": "Documents"
     },

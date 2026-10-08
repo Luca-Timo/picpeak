@@ -207,6 +207,7 @@ export const TaxReportPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <SectionPageHeader
+        feature="taxReport"
         icon={Calculator}
         title={t('taxReport.title', 'Tax report')}
         description={t('taxReport.intro', 'Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Cancelled invoices stay visible for audit-trail continuity but are excluded from totals.')}

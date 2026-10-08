@@ -282,6 +282,7 @@ export const ReminderTemplatesPage: React.FC = () => {
   return (
     <div>
       <SectionPageHeader
+        feature="reminderEmails"
         icon={Mail}
         title={t('reminderTemplates.title', 'Pre-event reminder emails')}
       />

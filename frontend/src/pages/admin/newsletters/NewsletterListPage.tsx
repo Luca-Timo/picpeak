@@ -91,6 +91,7 @@ export const NewsletterListPage: React.FC = () => {
   return (
     <div>
       <SectionPageHeader
+        feature="newsletters"
         icon={Megaphone}
         title={t('newsletters.title', 'Newsletters')}
         description={t('newsletters.subtitle', 'Send a campaign to your customer accounts. Everyone who has opted out is skipped automatically, and every send carries an unsubscribe link.')}
