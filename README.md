@@ -58,11 +58,13 @@ cd picpeak
 # (domain, SMTP, storage paths, …) — nothing is required.
 cp .env.example .env
 
-# Start with Docker Compose
-docker compose up -d
+# Start with Docker Compose, using the prebuilt images
+docker compose -f docker-compose.production.yml up -d
 
 # Access at http://localhost:3000
 ```
+
+`docker-compose.production.yml` pulls the prebuilt images from GHCR, so nothing is compiled on your machine. The plain `docker-compose.yml` builds from source and is meant for development — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 On first start, open **http://localhost:3000/admin** and follow the in-browser setup to create your admin account. Full details — the one-time setup token, Docker file permissions, and ARM64 notes — are in **[First-run setup](https://docs.picpeak.app/getting-started/first-login)**.
 
@@ -78,7 +80,7 @@ proxy in front of the frontend, set `TRUST_PROXY=2`, `COOKIE_SECURE=true` and
 and configure the outer proxy to append or overwrite forwarding headers using
 the real client address. The installer selects these settings in proxy mode.
 
-> **Updating / release channels:** set `PICPEAK_CHANNEL` (`stable` default, or `beta`) in `.env`, then `docker compose pull && docker compose up -d`. To update from the admin UI instead, enable [in-app updates](docs/self-update.md). See [RELEASING.md](RELEASING.md) for the promotion cadence.
+> **Updating / release channels:** set `PICPEAK_CHANNEL` (`stable` default, or `beta`) in `.env`, then `docker compose -f docker-compose.production.yml pull && docker compose -f docker-compose.production.yml up -d`. To update from the admin UI instead, enable [in-app updates](docs/self-update.md). See [RELEASING.md](RELEASING.md) for the promotion cadence.
 
 > [!NOTE]
 > **Recommended hardening:** an existing install keeps working without
@@ -99,7 +101,7 @@ For a home server, a NAS, or a single small studio, the all-in-one image runs th
 docker run -d --name picpeak -p 127.0.0.1:3000:3000 \
   -e COOKIE_SECURE=auto \
   -v picpeak:/data \
-  ghcr.io/picpeak/picpeak/aio:main
+  ghcr.io/picpeak/picpeak/aio:stable
 ```
 
 The cookie mode above (also the default) suits this loopback-only HTTP quick
@@ -108,7 +110,7 @@ JWT secret is generated on first start and kept on the volume.
 
 Then open **http://localhost:3000/admin** and read the setup token with `docker exec picpeak cat /data/db/SETUP_TOKEN`, or open `db/SETUP_TOKEN` on the volume with any file manager if the host has no shell.
 
-`:main` is the active-development tag, and today it is the only one the all-in-one image has — `Dockerfile.aio` landed after the current stable release, so `:stable` and `:latest` first appear for this image once the aio build reaches the `stable` branch. Switch to `:stable` then, or pin a published version tag if you would rather not track `main`.
+The same image is on Docker Hub as `picpeak/aio:stable`. NAS container apps (Synology Container Manager, QNAP Container Station, UGREEN Docker) search Docker Hub by default, so search for `picpeak/aio`, pick the `stable` tag, map port `3000` and mount one volume at `/data`. Use `:beta` to follow the beta channel, or pin a published version tag.
 
 The compose stack above is still the right choice for anything busier — SQLite takes one writer at a time, and Postgres is what scales. You can move to it later without reinstalling: take a `.picpeak` backup and restore it into the full stack. See **[Single-container install](https://docs.picpeak.app/deployment/single-container)** for the volume layout, the external-Postgres variant, TLS, and the limits.
 
