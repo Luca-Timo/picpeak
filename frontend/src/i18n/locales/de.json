@@ -1065,7 +1065,8 @@
       "someRejected": "Diese Dateien wurden nicht akzeptiert: {{names}}",
       "anyType": "Jeder Dateityp wird akzeptiert.",
       "acceptedTypes": "Akzeptiert: {{types}}",
-      "someFailed": "Diese Dateien konnten nicht gespeichert werden. Bitte erneut versuchen: {{names}}"
+      "someFailed": "Diese Dateien konnten nicht gespeichert werden. Bitte erneut versuchen: {{names}}",
+      "removeFile": "{{name}} entfernen"
     },
     "newSend": "Dateien senden",
     "newRequest": "Dateien anfordern",
@@ -5432,7 +5433,11 @@
   },
   "legal": {
     "impressum": "Impressum",
-    "datenschutz": "Datenschutzerklärung"
+    "datenschutz": "Datenschutzerklärung",
+    "notFoundTitle": "Seite nicht gefunden",
+    "notFoundBody": "Die gesuchte Seite gibt es nicht.",
+    "goHome": "Zur Startseite",
+    "copyright": "© {{year}} PicPeak. Alle Rechte vorbehalten."
   },
   "toast": {
     "saveSuccess": "Änderungen erfolgreich gespeichert",

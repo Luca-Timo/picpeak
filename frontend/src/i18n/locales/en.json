@@ -1065,7 +1065,8 @@
       "someRejected": "These files were not accepted: {{names}}",
       "anyType": "Any file type is accepted.",
       "acceptedTypes": "Accepted: {{types}}",
-      "someFailed": "These files could not be stored. Please try them again: {{names}}"
+      "someFailed": "These files could not be stored. Please try them again: {{names}}",
+      "removeFile": "Remove {{name}}"
     },
     "newSend": "Send files",
     "newRequest": "Request files",
@@ -4977,7 +4978,11 @@
   },
   "legal": {
     "impressum": "Legal Notice",
-    "datenschutz": "Privacy Policy"
+    "datenschutz": "Privacy Policy",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "The page you are looking for does not exist.",
+    "goHome": "Go to the homepage",
+    "copyright": "© {{year}} PicPeak. All rights reserved."
   },
   "toast": {
     "saveSuccess": "Changes saved successfully",
