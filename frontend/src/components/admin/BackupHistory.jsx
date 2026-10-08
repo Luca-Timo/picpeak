@@ -34,10 +34,10 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { backupErrorCode, backupErrorText } from '../../utils/backupErrors';
 
 const statusIcons = {
-  completed: { icon: CheckCircle, color: 'text-green-500' },
-  failed: { icon: XCircle, color: 'text-red-500' },
-  running: { icon: Loader2, color: 'text-blue-500 animate-spin' },
-  partial: { icon: AlertCircle, color: 'text-amber-500' }
+  completed: { icon: CheckCircle, color: 'text-success' },
+  failed: { icon: XCircle, color: 'text-danger' },
+  running: { icon: Loader2, color: 'text-info animate-spin' },
+  partial: { icon: AlertCircle, color: 'text-warning' }
 };
 
 // Codes DELETE /admin/backup/runs/:id answers with (issue 1711); each has a
@@ -233,7 +233,7 @@ export const BackupHistory = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 capitalize">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-info-soft text-info-text capitalize">
                             {backup.backup_type || 'Manual'}
                           </span>
                         </td>
@@ -270,7 +270,7 @@ export const BackupHistory = () => {
                             )}
                             <button
                               onClick={() => handleDelete(backup)}
-                              className="text-neutral-400 hover:text-red-600"
+                              className="text-neutral-400 hover:text-danger-text"
                               title={t('backup.actions.delete')}
                               disabled={deleteMutation.isPending}
                               aria-label={t('backup.actions.delete')}
@@ -321,7 +321,7 @@ export const BackupHistory = () => {
                                 <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.history.details.contentBackedUp')}</h4>
                                 <div className="space-y-2">
                                   <div className="flex items-center space-x-2">
-                                    <Database className={`h-4 w-4 ${stats.database_backed_up ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                    <Database className={`h-4 w-4 ${stats.database_backed_up ? 'text-success' : 'text-neutral-300 dark:text-neutral-600'}`} />
                                     <span className="text-sm text-neutral-700 dark:text-neutral-300">{t('backup.configuration.whatToBackup.database')}</span>
                                   </div>
                                   {(() => {
@@ -343,7 +343,7 @@ export const BackupHistory = () => {
                                         <>
                                           {entries.map(([pathKey, info]) => (
                                             <div key={pathKey} className="flex items-center space-x-2">
-                                              <FileArchive className={`h-4 w-4 ${info.count > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                              <FileArchive className={`h-4 w-4 ${info.count > 0 ? 'text-success' : 'text-neutral-300 dark:text-neutral-600'}`} />
                                               <span className="text-sm text-neutral-700 dark:text-neutral-300 font-mono">
                                                 {pathKey}
                                               </span>
@@ -371,19 +371,19 @@ export const BackupHistory = () => {
                                     return (
                                       <>
                                         <div className="flex items-center space-x-2">
-                                          <Image className={`h-4 w-4 ${stats.photos_backed_up > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <Image className={`h-4 w-4 ${stats.photos_backed_up > 0 ? 'text-success' : 'text-neutral-300 dark:text-neutral-600'}`} />
                                           <span className="text-sm text-neutral-700 dark:text-neutral-300">
                                             Photos ({stats.photos_backed_up || 0} of {stats.total_photos || 0})
                                           </span>
                                         </div>
                                         <div className="flex items-center space-x-2">
-                                          <FileArchive className={`h-4 w-4 ${stats.archives_backed_up > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <FileArchive className={`h-4 w-4 ${stats.archives_backed_up > 0 ? 'text-success' : 'text-neutral-300 dark:text-neutral-600'}`} />
                                           <span className="text-sm text-neutral-700 dark:text-neutral-300">
                                             Archives ({stats.archives_backed_up || 0})
                                           </span>
                                         </div>
                                         <div className="flex items-center space-x-2">
-                                          <FileArchive className={`h-4 w-4 ${other > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <FileArchive className={`h-4 w-4 ${other > 0 ? 'text-success' : 'text-neutral-300 dark:text-neutral-600'}`} />
                                           <span className="text-sm text-neutral-700 dark:text-neutral-300">
                                             {t('backup.history.details.otherFiles', 'Business documents & other')} ({other})
                                           </span>
@@ -402,8 +402,8 @@ export const BackupHistory = () => {
                               {/* Error Information */}
                               {backup.error_message && (
                                 <div className="space-y-2">
-                                  <h4 className="font-medium text-red-900 dark:text-red-200">{t('backup.history.details.errorDetails')}</h4>
-                                  <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 p-2 rounded">
+                                  <h4 className="font-medium text-danger-text">{t('backup.history.details.errorDetails')}</h4>
+                                  <p className="text-sm text-danger-text bg-danger-soft p-2 rounded">
                                     {backupErrorText(backupErrorCode(backup.error_message), t) ?? backup.error_message}
                                   </p>
                                 </div>

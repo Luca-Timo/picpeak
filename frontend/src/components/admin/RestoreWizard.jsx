@@ -358,12 +358,12 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <div className={`p-2 rounded-lg ${
-                    backup.status === 'completed' ? 'bg-green-100 dark:bg-green-900/40' : 'bg-amber-100 dark:bg-amber-900/40'
+                    backup.status === 'completed' ? 'bg-success-soft' : 'bg-warning-soft'
                   }`}>
                     {backup.status === 'completed' ? (
-                      <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                      <CheckCircle className="h-6 w-6 text-success-text" />
                     ) : (
-                      <AlertCircle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                      <AlertCircle className="h-6 w-6 text-warning-text" />
                     )}
                   </div>
                   <div>
@@ -385,7 +385,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                       Restoring it would NOT bring CRM data back. */}
                   {backup.database_included === false && (
                     <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-danger-soft text-danger-text border border-danger-line"
                       title={t('backup.restore.backup.filesOnlyHint',
                         'This backup has no database dump — restoring it will NOT recover the database (CRM data, customers, quotes, invoices, contracts will be empty after restore).')}
                     >
@@ -395,7 +395,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                   )}
                   {backup.corrupt && (
                     <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-warning-soft text-warning-text border border-warning-line"
                       title={t('backup.restore.backup.corruptHint',
                         'The manifest file is unreadable — the backup may be incomplete or damaged.')}
                     >
@@ -420,15 +420,15 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           caused Ralf's 2026-05-29 data loss (four files-only manifests
           mistaken for full backups). */}
       {restoreData.selectedBackup && restoreData.selectedBackup.database_included === false && (
-        <Card className="p-4 bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700">
+        <Card className="p-4 bg-danger-soft border-danger-line">
           <div className="flex items-start space-x-3">
-            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+            <AlertCircle className="h-5 w-5 text-danger-text mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+              <p className="text-sm font-semibold text-danger-text">
                 {t('backup.restore.backup.filesOnlyWarning.title',
                   'Selected backup has no database dump')}
               </p>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+              <p className="mt-1 text-sm text-danger-text">
                 {t('backup.restore.backup.filesOnlyWarning.message',
                   'Restoring this backup will recover files (photos, PDFs) but the database — including admin users, customers, quotes, invoices, contracts, and settings — will NOT come back. Pick a different backup if you have one with a database dump, or proceed only if files-only is what you want.')}
               </p>
@@ -438,12 +438,12 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
       )}
 
       {restoreData.selectedBackup?.encrypted && (
-        <Card className="p-4 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
+        <Card className="p-4 bg-warning-soft border-warning-line">
           <div className="flex items-start space-x-3">
-            <Shield className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <Shield className="h-5 w-5 text-warning-text mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t('backup.restore.backup.encrypted')}</p>
-              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+              <p className="text-sm font-medium text-warning-text">{t('backup.restore.backup.encrypted')}</p>
+              <p className="text-sm text-warning-text mt-1">
                 {t('backup.restore.backup.encryptedMessage')}
               </p>
               <Input
@@ -490,7 +490,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                 <div className="flex-1">
                   <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{type.name}</h4>
                   <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">{type.description}</p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                  <p className="text-xs text-warning-text mt-2">
                     <AlertTriangle className="inline h-3 w-3 mr-1" />
                     {type.warning}
                   </p>
@@ -556,25 +556,25 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           {/* Validation Results */}
           <Card className={`p-4 ${
             validationResult.validation?.isValid
-              ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800'
-              : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+              ? 'bg-success-soft border-success-line'
+              : 'bg-danger-soft border-danger-line'
           }`}>
             <div className="flex items-start space-x-3">
               {validationResult.validation?.isValid ? (
-                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                <CheckCircle className="h-5 w-5 text-success-text mt-0.5" />
               ) : (
-                <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                <XCircle className="h-5 w-5 text-danger-text mt-0.5" />
               )}
               <div className="flex-1">
                 <p className={`text-sm font-medium ${
-                  validationResult.validation?.isValid ? 'text-green-900 dark:text-green-200' : 'text-red-900 dark:text-red-200'
+                  validationResult.validation?.isValid ? 'text-success-text' : 'text-danger-text'
                 }`}>
                   {validationResult.validation?.isValid 
                     ? t('backup.restore.confirmation.validation.passed') 
                     : t('backup.restore.confirmation.validation.failed')}
                 </p>
                 {validationResult.validation?.errors?.length > 0 && (
-                  <ul className="mt-2 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                  <ul className="mt-2 text-sm text-danger-text list-disc list-inside">
                     {validationResult.validation.errors.map((error, idx) => (
                       <li key={idx}>{error}</li>
                     ))}
@@ -603,7 +603,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                   </span>
                 </div>
                 {validationResult.spaceCheck.sufficient === false && (
-                  <p className="text-red-600 text-xs mt-2">
+                  <p className="text-danger-text text-xs mt-2">
                     <AlertCircle className="inline h-3 w-3 mr-1" />
                     {t('backup.restore.confirmation.spaceCheck.insufficient')}
                   </p>
@@ -638,14 +638,14 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           </Card>
 
           {/* Warning */}
-          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+          <div className="bg-warning-soft border border-warning-line rounded-lg p-4">
             <div className="flex">
-              <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5" />
+              <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                <h3 className="text-sm font-medium text-warning-text">
                   {t('backup.restore.confirmation.warning.title')}
                 </h3>
-                <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                <p className="mt-1 text-sm text-warning-text">
                   {t('backup.restore.confirmation.warning.message')}
                 </p>
               </div>
@@ -692,7 +692,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('backup.restore.progress.title')}</h3>
           <p className={`text-sm ${
             lastRunFailed
-              ? 'text-red-700 dark:text-red-300 font-medium'
+              ? 'text-danger-text font-medium'
               : 'text-neutral-600 dark:text-neutral-400'
           }`}>
             {subtitle}
@@ -700,18 +700,18 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
         </div>
 
         {lastRunFailed && (
-          <div className="bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg p-4">
+          <div className="bg-danger-soft border border-danger-line rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <XCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <XCircle className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-red-800 dark:text-red-200 mb-1">
+                <h4 className="text-sm font-semibold text-danger-text mb-1">
                   {t('backup.restore.progress.errorTitle', 'Restore did not complete')}
                 </h4>
-                <p className="text-sm text-red-700 dark:text-red-300 font-mono break-all">
+                <p className="text-sm text-danger-text font-mono break-all">
                   {lastRunError || t('backup.restore.progress.errorUnknown', 'No error message recorded.')}
                 </p>
                 {lastRun.was_rollback_attempted && (
-                  <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                  <p className="mt-2 text-xs text-danger-text">
                     {t('backup.restore.progress.rolledBack',
                       'Pre-restore safety backup was used to roll back. Destination is in its pre-restore state — safe to retry once the issue above is resolved.')}
                   </p>
@@ -749,11 +749,11 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
             {progress.steps?.map((step, idx) => (
               <div key={idx} className="flex items-center space-x-3">
                 {step.status === 'completed' ? (
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <CheckCircle className="h-5 w-5 text-success" />
                 ) : step.status === 'running' ? (
-                  <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                  <Loader2 className="h-5 w-5 text-info animate-spin" />
                 ) : step.status === 'failed' ? (
-                  <XCircle className="h-5 w-5 text-red-500" />
+                  <XCircle className="h-5 w-5 text-danger" />
                 ) : (
                   <Clock className="h-5 w-5 text-neutral-300 dark:text-neutral-600" />
                 )}
@@ -788,14 +788,14 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
             could be null between runs, so the green "Restore completed
             successfully" banner could render alongside a silent failure. */}
         {lastRunSucceeded && (
-          <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+          <div className="bg-success-soft border border-success-line rounded-lg p-4">
             <div className="flex">
-              <CheckCircle className="h-5 w-5 text-green-400 mt-0.5" />
+              <CheckCircle className="h-5 w-5 text-success mt-0.5" />
               <div className="ml-3 flex-1">
-                <h3 className="text-sm font-medium text-green-800 dark:text-green-200">
+                <h3 className="text-sm font-medium text-success-text">
                   {t('backup.restore.progress.success.title')}
                 </h3>
-                <p className="mt-1 text-sm text-green-700 dark:text-green-300">
+                <p className="mt-1 text-sm text-success-text">
                   {t('backup.restore.progress.success.message')}
                 </p>
                 {/* Post-restore CTA: jump to the integrity check (D2). The
