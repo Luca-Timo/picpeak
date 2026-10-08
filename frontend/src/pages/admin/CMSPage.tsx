@@ -1,18 +1,16 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { FileText, Globe, Clock, Sparkles, ShieldCheck, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { FileText, Globe, Sparkles, ShieldCheck, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { debounce } from 'lodash';
 import DOMPurify from 'dompurify';
 
-import { Button, Card, Input, Loading } from '../../components/common';
+import { Button, Card, Input, Loading, useConfirm } from '../../components/common';
 import { CMSEditor } from '../../components/admin/CMSEditor';
 import { cmsService } from '../../services/cms.service';
 import type { CMSPage as CMSPageType } from '../../services/cms.service';
 import { settingsService, PublicSiteBranding } from '../../services/settings.service';
 import { SettingsSaveBar } from '../../components/admin/SettingsSaveBar';
-import { useUnsavedChanges } from '../../contexts/UnsavedChangesContext';
 import { buildResourceUrl } from '../../utils/url';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../hooks';
@@ -20,14 +18,12 @@ import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
 
 export const CMSPage: React.FC = () => {
   const { t } = useTranslation();
-  const { formatDateTime: fmtDateTime, formatTime: fmtTime } = useLocalizedDate();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [selectedPage, setSelectedPage] = useState<string>('impressum');
   const [editingLang, setEditingLang] = useState<'en' | 'de'>('en');
   const [editForm, setEditForm] = useState<Partial<CMSPageType>>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [publicSiteEnabled, setPublicSiteEnabled] = useState(false);
   const [publicSiteHtml, setPublicSiteHtml] = useState('');
   const [publicSiteCss, setPublicSiteCss] = useState('');
@@ -58,14 +54,9 @@ export const CMSPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cms-pages'] });
       setHasUnsavedChanges(false);
-      setLastSaved(new Date());
-      setIsAutoSaving(false);
-      if (!isAutoSaving) {
-        toast.success(t('cms.pageUpdated'));
-      }
+      toast.success(t('cms.pageUpdated'));
     },
     onError: () => {
-      setIsAutoSaving(false);
       toast.error(t('toast.saveError'));
     },
   });
@@ -117,20 +108,6 @@ export const CMSPage: React.FC = () => {
     },
   });
 
-  // Auto-save functionality
-  const autoSave = useCallback(
-    debounce(() => {
-      if (hasUnsavedChanges && !updateMutation.isPending) {
-        setIsAutoSaving(true);
-        updateMutation.mutate({
-          slug: selectedPage,
-          data: editForm,
-        });
-      }
-    }, 3000),
-    [hasUnsavedChanges, editForm, selectedPage]
-  );
-
   useEffect(() => {
     if (publicSiteDefaults) {
       setPublicSiteBaseCss(publicSiteDefaults.baseCss || '');
@@ -154,8 +131,9 @@ export const CMSPage: React.FC = () => {
     setLoadedPublicSite(next);
   }, [adminSettings]);
 
-  // Public-site form for the shared save bar. The page editor below keeps
-  // its autosave; it only registers its unsaved state with the leave guard.
+  // One save bar for the whole page (UX.md § 2): the public-site settings and
+  // the CMS page being edited. No autosave — every edit is saved or discarded
+  // on purpose.
   const publicSiteDirty = !!loadedPublicSite && (
     publicSiteEnabled !== loadedPublicSite.enabled
     || publicSiteHtml !== loadedPublicSite.html
@@ -167,17 +145,7 @@ export const CMSPage: React.FC = () => {
     setPublicSiteHtml(loadedPublicSite.html);
     setPublicSiteCss(loadedPublicSite.css);
   };
-  useUnsavedChanges(hasUnsavedChanges);
-
-  // Trigger auto-save when content changes
-  useEffect(() => {
-    if (hasUnsavedChanges) {
-      autoSave();
-    }
-    return () => {
-      autoSave.cancel();
-    };
-  }, [hasUnsavedChanges, autoSave]);
+  const confirm = useConfirm();
 
   // Load page data when selection changes
   React.useEffect(() => {
@@ -191,7 +159,6 @@ export const CMSPage: React.FC = () => {
   }, [pages, selectedPage]);
 
   const handleSave = () => {
-    autoSave.cancel(); // Cancel any pending auto-save
     updateMutation.mutate({
       slug: selectedPage,
       data: editForm,
@@ -524,12 +491,14 @@ export const CMSPage: React.FC = () => {
               {pages?.map((page) => (
                 <button
                   key={page.slug}
-                  onClick={() => {
-                    if (hasUnsavedChanges) {
-                      if (confirm('You have unsaved changes. Do you want to save them?')) {
-                        handleSave();
-                      }
-                    }
+                  onClick={async () => {
+                    if (page.slug === selectedPage) return;
+                    // Switching pages drops the edits to this one: ask first.
+                    if (hasUnsavedChanges && !(await confirm({
+                      message: t('cms.discardOnSwitch', 'Discard your unsaved changes to this page?'),
+                      variant: 'danger',
+                      confirmLabel: t('cms.discardAndSwitch', 'Discard and switch'),
+                    }))) return;
                     setSelectedPage(page.slug);
                   }}
                   className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 border ${
@@ -580,31 +549,6 @@ export const CMSPage: React.FC = () => {
             </div>
           </Card>
 
-          {/* Auto-save status */}
-          {(hasUnsavedChanges || lastSaved) && (
-            <Card padding="md" className="mt-4">
-              <div className="text-sm">
-                {isAutoSaving && (
-                  <div className="flex items-center gap-2 text-body">
-                    <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
-                    Auto-saving...
-                  </div>
-                )}
-                {!isAutoSaving && hasUnsavedChanges && (
-                  <div className="flex items-center gap-2 text-warning-text">
-                    <div className="w-2 h-2 bg-warning rounded-full" />
-                    Unsaved changes
-                  </div>
-                )}
-                {!hasUnsavedChanges && lastSaved && (
-                  <div className="flex items-center gap-2 text-success-text">
-                    <Clock className="w-4 h-4" />
-                    Saved {fmtTime(new Date(lastSaved))}
-                  </div>
-                )}
-              </div>
-            </Card>
-          )}
         </div>
 
         {/* Editor */}
@@ -788,10 +732,18 @@ export const CMSPage: React.FC = () => {
       </div>
 
       <SettingsSaveBar
-        isDirty={publicSiteDirty}
-        isSaving={publicSiteSaveMutation.isPending}
-        onSave={() => publicSiteSaveMutation.mutate()}
-        onDiscard={discardPublicSite}
+        isDirty={publicSiteDirty || hasUnsavedChanges}
+        isSaving={publicSiteSaveMutation.isPending || updateMutation.isPending}
+        onSave={() => {
+          if (publicSiteDirty) publicSiteSaveMutation.mutate();
+          if (hasUnsavedChanges) handleSave();
+        }}
+        onDiscard={() => {
+          discardPublicSite();
+          const page = pages?.find((p) => p.slug === selectedPage);
+          if (page) setEditForm(page);
+          setHasUnsavedChanges(false);
+        }}
       />
     </div>
   );

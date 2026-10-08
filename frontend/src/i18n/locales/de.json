@@ -5749,7 +5749,9 @@
       }
     },
     "showInFooter": "In der Galerie-Fußzeile anzeigen",
-    "showInFooterHelp": "Wenn deaktiviert, wird diese Seite in der öffentlichen Galerie-Fußzeile ausgeblendet. Die Seite selbst bleibt über ihre direkte URL erreichbar."
+    "showInFooterHelp": "Wenn deaktiviert, wird diese Seite in der öffentlichen Galerie-Fußzeile ausgeblendet. Die Seite selbst bleibt über ihre direkte URL erreichbar.",
+    "discardOnSwitch": "Ungespeicherte Änderungen an dieser Seite verwerfen?",
+    "discardAndSwitch": "Verwerfen und wechseln"
   },
   "validation": {
     "eventNameRequired": "Veranstaltungsname ist erforderlich",

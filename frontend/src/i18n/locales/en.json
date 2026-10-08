@@ -5261,7 +5261,9 @@
       }
     },
     "showInFooter": "Show in gallery footer",
-    "showInFooterHelp": "When off, this page is hidden from the public gallery footer. The page itself remains accessible at its direct URL."
+    "showInFooterHelp": "When off, this page is hidden from the public gallery footer. The page itself remains accessible at its direct URL.",
+    "discardOnSwitch": "Discard your unsaved changes to this page?",
+    "discardAndSwitch": "Discard and switch"
   },
   "eventTypes": {
     "title": "Event Types",
