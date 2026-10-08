@@ -4,6 +4,7 @@ import { ThemeConfig, EventTheme, GALLERY_THEME_PRESETS } from '../types/theme.t
 import { fontsService, extractFamilyName, type FontDefinition } from '../services/fonts.service';
 import { applyForceColorMode } from '../utils/themeMigration';
 import { getReadableForeground } from '../utils/contrast';
+import { applyStatusColors, normalizeStatusColors } from '../utils/statusColors';
 import { usePublicSettings } from '../hooks/usePublicSettings';
 
 // Self-hosted font loader. Resolves the available-fonts list once (cached for
@@ -114,6 +115,13 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     : publicSettings?.branding_force_color_mode === 'light'
       ? 'light'
       : null;
+
+  // Status colours are site-wide (Branding › Colours), not part of a theme:
+  // a gallery theme never changes what "overdue" looks like.
+  const statusColors = publicSettings?.branding_status_colors;
+  useEffect(() => {
+    applyStatusColors(normalizeStatusColors(statusColors));
+  }, [statusColors]);
 
   const applyTheme = useCallback((rawThemeConfig: ThemeConfig) => {
     const root = document.documentElement;

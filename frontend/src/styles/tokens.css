@@ -19,7 +19,9 @@
  *                              the admin — that is how cards once got their
  *                              themed shadow).
  *
- * Scale tokens (radius, shadow, fonts) are shared by both families.
+ * Status (--status-*, --ui-<status>-*), accent (--ui-accent*) and data
+ * colours (--chart-*) are shared by both families: one success green, one
+ * danger red, everywhere. Scale tokens (radius, shadow, fonts) too.
  */
 
 :root {
@@ -71,6 +73,63 @@
   /* Tailwind RGB values for primary color (legacy, used by primary-* utilities) */
   --tw-color-primary: 92 135 98;
   --radius: 0.5rem;
+
+  /* ---- 4. Status: one hue per meaning ------------------------------- */
+  /* Branding › Colours writes --status-* inline on <html>; these are the
+   * defaults. Everything else (text, tint, border, dark mode) is derived
+   * below, so a studio picks five colours, never twenty. */
+  --status-success: #16a34a;      /* paid, signed, published, done */
+  --status-warning: #d97706;      /* due soon, draft needs attention, unsaved */
+  --status-danger: #dc2626;       /* overdue, failed, destructive */
+  --status-info: #2563eb;         /* neutral notices, in progress */
+  --status-storno: #9333ea;       /* cancelled / credited documents */
+
+  /* Derived per status: solid (dots, fills), -text (readable on a panel),
+   * -soft (badge / notice background), -line (notice border). */
+  --ui-success: var(--status-success);
+  --ui-success-text: color-mix(in srgb, var(--status-success) 78%, #000);
+  --ui-success-soft: color-mix(in srgb, var(--status-success) 10%, var(--ui-panel));
+  --ui-success-line: color-mix(in srgb, var(--status-success) 30%, var(--ui-panel));
+  --ui-warning: var(--status-warning);
+  --ui-warning-text: color-mix(in srgb, var(--status-warning) 78%, #000);
+  --ui-warning-soft: color-mix(in srgb, var(--status-warning) 10%, var(--ui-panel));
+  --ui-warning-line: color-mix(in srgb, var(--status-warning) 30%, var(--ui-panel));
+  --ui-danger: var(--status-danger);
+  --ui-danger-text: color-mix(in srgb, var(--status-danger) 78%, #000);
+  --ui-danger-soft: color-mix(in srgb, var(--status-danger) 10%, var(--ui-panel));
+  --ui-danger-line: color-mix(in srgb, var(--status-danger) 30%, var(--ui-panel));
+  --ui-info: var(--status-info);
+  --ui-info-text: color-mix(in srgb, var(--status-info) 78%, #000);
+  --ui-info-soft: color-mix(in srgb, var(--status-info) 10%, var(--ui-panel));
+  --ui-info-line: color-mix(in srgb, var(--status-info) 30%, var(--ui-panel));
+  --ui-storno: var(--status-storno);
+  --ui-storno-text: color-mix(in srgb, var(--status-storno) 78%, #000);
+  --ui-storno-soft: color-mix(in srgb, var(--status-storno) 10%, var(--ui-panel));
+  --ui-storno-line: color-mix(in srgb, var(--status-storno) 30%, var(--ui-panel));
+
+  /* ---- 5. Accent (admin) ------------------------------------------- */
+  /* The studio's brand colour, from Branding. applyTheme() also writes
+   * --color-accent-dark-fg: white or near-black, whichever reads on the
+   * filled accent, so a pastel brand colour keeps a readable button. */
+  --ui-accent: var(--color-accent);
+  --ui-accent-strong: var(--color-accent-dark);
+  --ui-accent-fg: var(--color-accent-dark-fg, #ffffff);
+  --ui-accent-soft: color-mix(in srgb, var(--color-accent-dark) 18%, transparent);  /* .bg-accent-soft */
+  --ui-accent-line: color-mix(in srgb, var(--color-accent-dark) 45%, transparent);  /* .border-accent-soft */
+  --ui-accent-on-soft: var(--color-accent-dark);                                     /* .text-on-accent-soft */
+
+  /* ---- 6. Data colours ---------------------------------------------- */
+  /* Charts, calendar entries, categories, colour labels: things that need
+   * to look different from each other without meaning good or bad. Use in
+   * order; never use a status colour for a series. */
+  --chart-1: #2563eb;  /* blue   */
+  --chart-2: #0d9488;  /* teal   */
+  --chart-3: #d97706;  /* amber  */
+  --chart-4: #9333ea;  /* purple */
+  --chart-5: #db2777;  /* pink   */
+  --chart-6: #65a30d;  /* lime   */
+  --chart-7: #0891b2;  /* cyan   */
+  --chart-8: #ea580c;  /* orange */
 
   /* ---- 3. Scale tokens ------------------------------------------------ */
   /* Tailwind's rounded-*, shadow-* and font-sans read these. */
@@ -127,4 +186,34 @@
   --color-muted-text: #a3a3a3;
   --color-accent: #22c55e;
   --color-accent-dark: #5C8762;
+
+  /* Status, derived for dark panels */
+  --ui-success-text: color-mix(in srgb, var(--status-success) 55%, #fff);
+  --ui-success-soft: color-mix(in srgb, var(--status-success) 18%, var(--ui-panel));
+  --ui-success-line: color-mix(in srgb, var(--status-success) 40%, var(--ui-panel));
+  --ui-warning-text: color-mix(in srgb, var(--status-warning) 55%, #fff);
+  --ui-warning-soft: color-mix(in srgb, var(--status-warning) 18%, var(--ui-panel));
+  --ui-warning-line: color-mix(in srgb, var(--status-warning) 40%, var(--ui-panel));
+  --ui-danger-text: color-mix(in srgb, var(--status-danger) 55%, #fff);
+  --ui-danger-soft: color-mix(in srgb, var(--status-danger) 18%, var(--ui-panel));
+  --ui-danger-line: color-mix(in srgb, var(--status-danger) 40%, var(--ui-panel));
+  --ui-info-text: color-mix(in srgb, var(--status-info) 55%, #fff);
+  --ui-info-soft: color-mix(in srgb, var(--status-info) 18%, var(--ui-panel));
+  --ui-info-line: color-mix(in srgb, var(--status-info) 40%, var(--ui-panel));
+  --ui-storno-text: color-mix(in srgb, var(--status-storno) 55%, #fff);
+  --ui-storno-soft: color-mix(in srgb, var(--status-storno) 18%, var(--ui-panel));
+  --ui-storno-line: color-mix(in srgb, var(--status-storno) 40%, var(--ui-panel));
+
+  --ui-accent-soft: color-mix(in srgb, var(--color-accent-dark) 55%, transparent);
+  --ui-accent-line: color-mix(in srgb, var(--color-accent-dark) 70%, transparent);
+  --ui-accent-on-soft: #ffffff;
+
+  --chart-1: #60a5fa;
+  --chart-2: #2dd4bf;
+  --chart-3: #fbbf24;
+  --chart-4: #c084fc;
+  --chart-5: #f472b6;
+  --chart-6: #a3e635;
+  --chart-7: #22d3ee;
+  --chart-8: #fb923c;
 }

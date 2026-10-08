@@ -270,33 +270,19 @@
    * back to the var(--color-accent-dark) below.
    */
   .bg-accent-soft {
-    background-color: var(--color-accent-dark);
-    background-color: color-mix(in srgb, var(--color-accent-dark) 18%, transparent);
-  }
-  .dark .bg-accent-soft {
-    background-color: var(--color-accent-dark);
-    background-color: color-mix(in srgb, var(--color-accent-dark) 55%, transparent);
+    background-color: var(--ui-accent-soft);
   }
   .border-accent-soft {
-    border-color: var(--color-accent-dark);
-    border-color: color-mix(in srgb, var(--color-accent-dark) 45%, transparent);
-  }
-  .dark .border-accent-soft {
-    border-color: color-mix(in srgb, var(--color-accent-dark) 70%, transparent);
+    border-color: var(--ui-accent-line);
   }
 
   /*
-   * Foreground for content sitting on .bg-accent-soft. Uses the
-   * theme's text token (already high-contrast against both light
-   * backgrounds and dark surfaces) instead of the accent itself —
-   * accent-on-accent-soft was the reason the Sidebar Preview pills
-   * read as "barely visible".
+   * Foreground for content sitting on .bg-accent-soft. Not the accent
+   * itself: accent on accent-soft is what made the Sidebar Preview pills
+   * read as "barely visible". Values in tokens.css § 5.
    */
   .text-on-accent-soft {
-    color: var(--color-accent-dark);
-  }
-  .dark .text-on-accent-soft {
-    color: #ffffff;
+    color: var(--ui-accent-on-soft);
   }
 
   /*
@@ -308,14 +294,14 @@
    * follows the user's CI palette.
    */
   .tile-selected {
-    background-color: var(--color-accent-dark) !important;
-    border-color: var(--color-accent-dark) !important;
-    color: #ffffff !important;
+    background-color: var(--ui-accent-strong) !important;
+    border-color: var(--ui-accent-strong) !important;
+    color: var(--ui-accent-fg) !important;
   }
 
   .tile-selected *,
   .tile-selected svg {
-    color: #ffffff !important;
+    color: var(--ui-accent-fg) !important;
   }
 
   /*
@@ -500,11 +486,12 @@
     color: color-mix(in srgb, var(--chip-hue) 72%, var(--color-text, #171717));
   }
 
-  .hue-success { --chip-hue: #16a34a; }
-  .hue-warning { --chip-hue: #d97706; }
-  .hue-danger { --chip-hue: #dc2626; }
-  .hue-info { --chip-hue: #2563eb; }
-  .hue-storno { --chip-hue: #9333ea; }
+  /* Same hues as the admin (tokens.css § 4, Branding › Colours). */
+  .hue-success { --chip-hue: var(--status-success); }
+  .hue-warning { --chip-hue: var(--status-warning); }
+  .hue-danger { --chip-hue: var(--status-danger); }
+  .hue-info { --chip-hue: var(--status-info); }
+  .hue-storno { --chip-hue: var(--status-storno); }
   .hue-neutral { --chip-hue: var(--color-muted-text, #737373); }
 
   /* A row that is cancelled or reversed: dimmed against its own surface. */
