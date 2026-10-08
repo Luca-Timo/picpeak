@@ -70,7 +70,7 @@ import { DownloadQuotaNotice } from './DownloadQuotaNotice';
 import type { FilterType, FeedbackFilterType } from './GalleryFilter';
 import { analyticsService } from '../../services/analytics.service';
 import { useDevToolsProtection } from '../../hooks/useDevToolsProtection';
-import { Upload, Menu, Eye, EyeOff, Shield, X, Download, ClipboardList } from 'lucide-react';
+import { Upload, Menu, Eye, EyeOff, Shield, X, Download, ClipboardList, AlertCircle } from 'lucide-react';
 import { galleryService } from '../../services/gallery.service';
 import { feedbackService, type ColorLabel } from '../../services/feedback.service';
 import { useWatermarkSettings } from '../../hooks/useWatermarkSettings';
@@ -1203,7 +1203,11 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
     return <GallerySkeleton />;
   }
 
-  if (error || !data) {
+  // Auth failures end the session whenever they happen, background refetch
+  // included. Any other failure replaces the gallery only when nothing has
+  // loaded yet: a failed background refetch keeps the photos on screen
+  // (TanStack keeps `data` and sets `error`), as UX.md › States asks.
+  if (error) {
     // Check if it's an authentication error (401)
     const is401Error = (error as any)?.response?.status === 401;
 
@@ -1222,10 +1226,13 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
     if (isPasswordChangeRequired(error)) {
       return <PasswordChangeRequiredNotice />;
     }
+  }
 
+  if (!data) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+        <div className="text-center" role="alert">
+          <AlertCircle className="w-10 h-10 mx-auto mb-3 text-muted-theme" aria-hidden="true" />
           <p className="text-lg text-muted-theme">{t('gallery.failedToLoad')}</p>
           <Button onClick={() => refetch()} className="mt-4">
             {t('gallery.tryAgain')}
