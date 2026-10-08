@@ -6244,7 +6244,9 @@
     "setPin": "PIN festlegen",
     "linkLabel": "Kundenzugangs-Link",
     "regenerateToken": "Link neu generieren",
-    "tokenRegenerated": "Kundenzugangs-Link neu generiert"
+    "tokenRegenerated": "Kundenzugangs-Link neu generiert",
+    "hiddenFromGuests": "Für Gäste ausgeblendet",
+    "visibleToGuests": "Für Gäste sichtbar"
   },
   "setup": {
     "title": "Willkommen bei PicPeak",

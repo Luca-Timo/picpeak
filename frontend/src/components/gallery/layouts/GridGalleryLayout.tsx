@@ -249,6 +249,7 @@ export const GridGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   isClient = false,
   onToggleVisibility
 }) => {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const gallerySettings = theme.gallerySettings || {};
   const animation = gallerySettings.photoAnimation || 'fade';
@@ -310,6 +311,7 @@ export const GridGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
             {/* Client visibility toggle overlay (#172) */}
             {isClient && onToggleVisibility && (
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleVisibility(photo.id, photo.visibility || 'visible');
@@ -317,9 +319,16 @@ export const GridGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
                 className={`absolute top-2 left-2 z-10 p-1.5 rounded-full shadow-md transition-colors ${
                   isHidden
                     ? 'bg-danger text-white hover:opacity-90'
-                    : 'bg-white/90 text-neutral-700 hover:bg-white dark:bg-neutral-800/90 dark:text-neutral-200 dark:hover:bg-neutral-700'
+                    // On the photo: a fixed white chip, whatever the theme.
+                    : 'bg-white/90 text-neutral-700 hover:bg-white'
                 }`}
-                title={isHidden ? 'Hidden from guests' : 'Visible to guests'}
+                title={isHidden
+                  ? t('clientAccess.hiddenFromGuests', 'Hidden from guests')
+                  : t('clientAccess.visibleToGuests', 'Visible to guests')}
+                aria-label={isHidden
+                  ? t('clientAccess.hiddenFromGuests', 'Hidden from guests')
+                  : t('clientAccess.visibleToGuests', 'Visible to guests')}
+                aria-pressed={isHidden}
               >
                 {isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
