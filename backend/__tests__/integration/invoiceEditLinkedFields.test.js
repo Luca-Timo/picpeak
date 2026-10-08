@@ -1,11 +1,12 @@
 /**
- * A scheduled invoice is edited on its own page, and the form offers its
- * customer, VAT code and linked event. PUT used to drop all three while the
- * editor said "saved"; they now save, with the checks createInvoice makes:
- * the customer must be billable, the event must be one the admin owns (the
- * rule CRM code uses for events, filterOwnedEventIds), and an event with
- * customer assignments must belong to the invoice's customer. Creating an
- * invoice applies the same event rule.
+ * A scheduled invoice is edited on its own page. PUT used to drop its VAT
+ * code and linked event while the editor said "saved"; they now save, with
+ * the checks createInvoice makes: the event must be one the admin owns (the
+ * rule CRM code uses for events, filterOwnedEventIds with manage-all), and an
+ * event with customer assignments must belong to the invoice's customer.
+ * Creating an invoice applies the same event rule. The customer is fixed once
+ * the invoice exists (409), because drafts, lineage, installments and
+ * re-billed proofs hang off it.
  */
 
 const request = require('supertest');
@@ -87,16 +88,23 @@ async function scheduledInvoice() {
   return created.body.invoice.id;
 }
 
-test('customer, VAT code and an owned event save on a scheduled invoice', async () => {
+test('VAT code and an owned event save on a scheduled invoice', async () => {
   const invoiceId = await scheduledInvoice();
   const saved = await as(request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`)).send({
-    customerAccountId: otherCustomerId, vatCode: 'UN81', vatRate: 8.1, eventId: ownEventId,
+    customerAccountId: customerId, vatCode: 'UN81', vatRate: 8.1, eventId: ownEventId,
   });
   expect(saved.status).toBe(200);
   const row = await db('invoices').where({ id: invoiceId }).first();
-  expect(Number(row.customer_account_id)).toBe(otherCustomerId);
   expect(Number(row.event_id)).toBe(ownEventId);
   expect(row.vat_code).toBe('UN81');
+});
+
+test('the customer of an existing invoice is not changed', async () => {
+  const invoiceId = await scheduledInvoice();
+  const moved = await as(request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`)).send({ customerAccountId: otherCustomerId });
+  expect(moved.status).toBe(409);
+  expect(moved.body.code).toBe('INVOICE_CUSTOMER_LOCKED');
+  expect(Number((await db('invoices').where({ id: invoiceId }).first()).customer_account_id)).toBe(customerId);
 });
 
 test('an event the admin does not own is refused, on update and on create', async () => {
@@ -115,6 +123,7 @@ test('an event the admin does not own is refused, on update and on create', asyn
 test('an event assigned to another customer is refused', async () => {
   const invoiceId = await scheduledInvoice();
   await db('event_customer_assignments').insert({ event_id: ownEventId, customer_account_id: otherCustomerId });
+  // The invoice is for `customerId`; the event belongs to the other customer.
   const put = await as(request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`)).send({ eventId: ownEventId });
   expect(put.status).toBe(422);
   await db('event_customer_assignments').where({ event_id: ownEventId }).del();

@@ -39,7 +39,7 @@ const expenseService = require('../services/expenseService');
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const { db } = require('../database/db');
 const { filterOwnedEventIds } = require('../middleware/ownership');
-const { ensureCustomerCanBill, ensureEventMatchesCustomer } = require('../services/invoice/helpers');
+const { ensureEventMatchesCustomer } = require('../services/invoice/helpers');
 const { hasColumnCached } = require('../utils/schemaCache');
 
 const router = express.Router();
@@ -454,7 +454,9 @@ router.post(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const linkedEvent = parseInt(req.body.eventId, 10);
-    if (linkedEvent && (await filterOwnedEventIds(req.admin, [linkedEvent])).denied.length) {
+    // Owner rule for CRM data (the gallery's ⋯ menu offers "Create invoice"
+    // on the same condition, can_manage_assignments / ownsEvent).
+    if (linkedEvent && (await filterOwnedEventIds(req.admin, [linkedEvent], { honourManageAll: true })).denied.length) {
       return res.status(403).json({ error: 'That event is not yours to link' });
     }
     // createInvoice always returns `{ invoiceIds: number[] }` —
@@ -649,25 +651,25 @@ router.put(
     // Recompute totals if line items are present.
     let updates = { updated_at: new Date() };
 
-    // Customer, linked event and VAT code: the editor offers them on a
-    // scheduled invoice, so they save here with the checks createInvoice
-    // makes. Each is only re-checked when it changes.
-    const nextCustomerId = payload.customerAccountId
-      ? parseInt(payload.customerAccountId, 10) : existing.customer_account_id;
+    // Linked event and VAT code save with the checks createInvoice makes. The
+    // customer is fixed once the invoice exists: monthly drafts, quote
+    // lineage, installment siblings and re-billed proofs all hang off it, so
+    // moving one invoice to another customer would split them.
+    if (payload.customerAccountId
+        && parseInt(payload.customerAccountId, 10) !== Number(existing.customer_account_id)) {
+      return res.status(409).json({
+        error: 'The customer of an existing invoice cannot be changed. Cancel this invoice and create a new one for the other customer.',
+        code: 'INVOICE_CUSTOMER_LOCKED',
+      });
+    }
     const nextEventId = Object.prototype.hasOwnProperty.call(payload, 'eventId')
       ? (parseInt(payload.eventId, 10) || null) : existing.event_id;
-    if (nextCustomerId !== existing.customer_account_id) {
-      ensureCustomerCanBill(await db('customer_accounts').where({ id: nextCustomerId }).first());
-      updates.customer_account_id = nextCustomerId;
-    }
     if (nextEventId !== (existing.event_id ?? null)) {
-      if (nextEventId && (await filterOwnedEventIds(req.admin, [nextEventId])).denied.length) {
+      if (nextEventId && (await filterOwnedEventIds(req.admin, [nextEventId], { honourManageAll: true })).denied.length) {
         return res.status(403).json({ error: 'That event is not yours to link' });
       }
+      if (nextEventId) await ensureEventMatchesCustomer(nextEventId, existing.customer_account_id);
       updates.event_id = nextEventId;
-    }
-    if (nextEventId && (updates.customer_account_id || updates.event_id)) {
-      await ensureEventMatchesCustomer(nextEventId, nextCustomerId);
     }
     if (Object.prototype.hasOwnProperty.call(payload, 'vatCode') && await hasColumnCached('invoices', 'vat_code')) {
       updates.vat_code = payload.vatCode ? String(payload.vatCode).slice(0, 16) : null;
