@@ -821,7 +821,8 @@
     "language": "Language",
     "hidePassword": "Hide password",
     "showPassword": "Show password",
-    "loadFailed": "Could not load this"
+    "loadFailed": "Could not load this",
+    "moreActions": "More actions"
   },
   "upload": {
     "photoCategory": "Photo Category",
@@ -8131,7 +8132,10 @@
       "accepted": "This quote was already accepted and can't be edited. To change it, reissue it: the quote is declined and copied as a new draft. If it no longer applies, decline it.",
       "acceptedConverted": "This quote was already accepted, and a contract, event or invoice exists for it. It can't be changed any more.",
       "declined": "This quote was declined and can't be edited. Duplicate it to start a new quote.",
-      "converted": "This quote was already converted into an event or invoice and can't be changed any more."
+      "converted": "This quote was already converted into an event or invoice and can't be changed any more.",
+      "replacedTitle": "Replaced by {{number}}",
+      "replaced": "This quote was reissued; the customer works with the new one.",
+      "acceptedTitle": "Accepted{{at}}"
     },
     "catalog": {
       "addItem": "Add item",
@@ -8300,7 +8304,16 @@
     "contractTemplate": "Contract template",
     "convertToContractConfirm": "Draft the contract",
     "contractTemplateFromQuote": "Preselected by the quote's template: {{name}}",
-    "contractTemplateAuto": "As the quote's template says (else the default)"
+    "contractTemplateAuto": "As the quote's template says (else the default)",
+    "saveAndSendTitle": "Send with your unsaved changes?",
+    "saveAndSendMessage": "Your changes are saved first, then the quote goes to {{to}}.",
+    "reissueReason": "Reason",
+    "openReplacement": "Open {{number}}",
+    "sentNoticeTitle": "Sent {{at}}",
+    "sentNotice": "You can still change it. The customer sees changes after you send it again.",
+    "forCustomer": "for {{name}}",
+    "createdToast": "Draft created.",
+    "createDraft": "Create draft"
   },
   "crm": {
     "lineItems": {
@@ -8538,7 +8551,16 @@
       "sendWithCount": "Send with {{count}} proof(s)",
       "sendWithCount_one": "Send with {{count}} proof(s)",
       "sendWithCount_other": "Send with {{count}} proof(s)"
-    }
+    },
+    "saveAndSendTitle": "Send with your unsaved changes?",
+    "saveAndSendMessage": "Your changes are saved first, then the invoice goes to the customer.",
+    "saveAndSend": "Save & send",
+    "cancelDraft": "Cancel draft",
+    "cancelWithStorno": "Cancel with Storno",
+    "forCustomer": "for {{name}}",
+    "issuedLockedTitle": "Issued invoices can't be changed.",
+    "issuedLocked": "To correct it, cancel it with a Storno invoice and issue a new one.",
+    "createDraft": "Create invoice"
   },
   "businessProfile": {
     "savedToast": "Business profile saved.",
@@ -9203,7 +9225,11 @@
         "collectHint": "Only the first signer gets a link now, to complete their details. The contract, its PDF and the price are prepared once they have, and then go to the other signers.",
         "requestDetails": "Ask for the details",
         "afterDetails": "Set once the customer has completed their details."
-      }
+      },
+      "saveAndSendTitle": "Send with your unsaved changes?",
+      "saveAndSendMessage": "Your changes are saved first, then you review the contract before it goes out.",
+      "saveAndReview": "Save & review",
+      "cancelContract": "Cancel contract"
     },
     "editor": {
       "backToDetail": "Back to contract",
@@ -9518,7 +9544,8 @@
         "compareTitle": "What changed in “{{name}}”",
         "adopted_one": "{{count}} new clause added at the end",
         "adopted_other": "{{count}} new clauses added at the end",
-        "nothingNew": "Nothing new to add — marked as reviewed"
+        "nothingNew": "Nothing new to add — marked as reviewed",
+        "adopted": "{{count}} new clauses added at the end"
       }
     },
     "attachments": {
@@ -9710,7 +9737,8 @@
       "desktop": "Desktop",
       "phone": "Phone",
       "note": "Layout preview of the signing page. The PDF is the document that is signed."
-    }
+    },
+    "forCustomer": "for {{name}}"
   },
   "messages": {
     "remoteContentBlocked": "External images are blocked to protect your privacy.",
@@ -10101,7 +10129,8 @@
       "advice": "Confirm SPF, DKIM and DMARC are set up for your sending domain, send yourself a test first, and consider splitting a first campaign across several smaller sends.",
       "duration": "At {{rate}}/minute this takes about {{minutes}} minutes. The send queue is shared, so while it runs other email — gallery invitations, password resets — can be delayed behind it."
     },
-    "groupsHint": "Who is in the groups is read when the campaign is sent, not now. Deactivated and unsubscribed customers are left out."
+    "groupsHint": "Who is in the groups is read when the campaign is sent, not now. Deactivated and unsubscribed customers are left out.",
+    "queueShort": "Send campaign"
   },
   "documentVerification": {
     "title": "Confirm it's you",

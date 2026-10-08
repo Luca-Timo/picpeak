@@ -821,7 +821,8 @@
     "language": "Sprache",
     "hidePassword": "Passwort verbergen",
     "showPassword": "Passwort anzeigen",
-    "loadFailed": "Konnte nicht geladen werden"
+    "loadFailed": "Konnte nicht geladen werden",
+    "moreActions": "Weitere Aktionen"
   },
   "upload": {
     "photoCategory": "Fotokategorie",
@@ -8096,7 +8097,10 @@
       "accepted": "Dieses Angebot wurde bereits angenommen und kann nicht mehr bearbeitet werden. Um es zu ändern, stellen Sie es neu aus: Das Angebot wird abgelehnt und als neuer Entwurf kopiert. Gilt es nicht mehr, lehnen Sie es im Namen des Kunden ab.",
       "acceptedConverted": "Dieses Angebot wurde bereits angenommen, und es gibt dazu schon einen Vertrag, einen Anlass oder eine Rechnung. Es kann nicht mehr geändert werden.",
       "declined": "Dieses Angebot wurde abgelehnt und kann nicht mehr bearbeitet werden. Duplizieren Sie es, um ein neues Angebot zu erstellen.",
-      "converted": "Dieses Angebot wurde bereits in einen Anlass oder eine Rechnung umgewandelt und kann nicht mehr geändert werden."
+      "converted": "Dieses Angebot wurde bereits in einen Anlass oder eine Rechnung umgewandelt und kann nicht mehr geändert werden.",
+      "replacedTitle": "Ersetzt durch {{number}}",
+      "replaced": "Dieses Angebot wurde neu ausgestellt; der Kunde arbeitet mit dem neuen.",
+      "acceptedTitle": "Angenommen{{at}}"
     },
     "catalog": {
       "addItem": "Leistung hinzufügen",
@@ -8265,7 +8269,16 @@
     "contractTemplate": "Vertragsvorlage",
     "convertToContractConfirm": "Vertrag entwerfen",
     "contractTemplateFromQuote": "Vorausgewählt durch die Offertvorlage: {{name}}",
-    "contractTemplateAuto": "Wie in der Offertvorlage festgelegt (sonst die Standardvorlage)"
+    "contractTemplateAuto": "Wie in der Offertvorlage festgelegt (sonst die Standardvorlage)",
+    "saveAndSendTitle": "Mit ungespeicherten Änderungen senden?",
+    "saveAndSendMessage": "Ihre Änderungen werden zuerst gespeichert, dann geht das Angebot an {{to}}.",
+    "reissueReason": "Grund",
+    "openReplacement": "{{number}} öffnen",
+    "sentNoticeTitle": "Gesendet {{at}}",
+    "sentNotice": "Sie können es noch ändern. Der Kunde sieht die Änderungen, nachdem Sie es erneut gesendet haben.",
+    "forCustomer": "für {{name}}",
+    "createdToast": "Entwurf erstellt.",
+    "createDraft": "Entwurf erstellen"
   },
   "crm": {
     "lineItems": {
@@ -8504,7 +8517,16 @@
       "sendWithCount": "Mit {{count}} Beleg(en) senden",
       "sendWithCount_one": "Mit {{count}} Beleg senden",
       "sendWithCount_other": "Mit {{count}} Belegen senden"
-    }
+    },
+    "saveAndSendTitle": "Mit ungespeicherten Änderungen senden?",
+    "saveAndSendMessage": "Ihre Änderungen werden zuerst gespeichert, dann geht die Rechnung an den Kunden.",
+    "saveAndSend": "Speichern & senden",
+    "cancelDraft": "Entwurf verwerfen",
+    "cancelWithStorno": "Mit Storno stornieren",
+    "forCustomer": "für {{name}}",
+    "issuedLockedTitle": "Ausgestellte Rechnungen können nicht geändert werden.",
+    "issuedLocked": "Zur Korrektur stornieren Sie sie mit einer Stornorechnung und stellen eine neue aus.",
+    "createDraft": "Rechnung erstellen"
   },
   "businessProfile": {
     "savedToast": "Geschäftsprofil gespeichert.",
@@ -9169,7 +9191,11 @@
         "collectHint": "Nur die erste unterzeichnende Person erhält jetzt einen Link, um ihre Angaben zu ergänzen. Vertrag, PDF und Preis werden erst danach erstellt und gehen dann an die übrigen Unterzeichnenden.",
         "requestDetails": "Angaben anfordern",
         "afterDetails": "Wird festgelegt, sobald die Kundschaft ihre Angaben ergänzt hat."
-      }
+      },
+      "saveAndSendTitle": "Mit ungespeicherten Änderungen senden?",
+      "saveAndSendMessage": "Ihre Änderungen werden zuerst gespeichert, dann prüfen Sie den Vertrag, bevor er verschickt wird.",
+      "saveAndReview": "Speichern & prüfen",
+      "cancelContract": "Vertrag stornieren"
     },
     "editor": {
       "backToDetail": "Zurück zum Vertrag",
@@ -9484,7 +9510,8 @@
         "compareTitle": "Was sich in „{{name}}“ geändert hat",
         "adopted_one": "{{count}} neue Klausel am Ende hinzugefügt",
         "adopted_other": "{{count}} neue Klauseln am Ende hinzugefügt",
-        "nothingNew": "Nichts Neues zu übernehmen — als geprüft markiert"
+        "nothingNew": "Nichts Neues zu übernehmen — als geprüft markiert",
+        "adopted": "{{count}} neue Klauseln am Ende hinzugefügt"
       }
     },
     "attachments": {
@@ -9676,7 +9703,8 @@
       "desktop": "Desktop",
       "phone": "Smartphone",
       "note": "Layout-Vorschau der Signierseite. Unterschrieben wird das PDF."
-    }
+    },
+    "forCustomer": "für {{name}}"
   },
   "messages": {
     "remoteContentBlocked": "Externe Bilder sind zum Schutz deiner Privatsphäre blockiert.",
@@ -10067,7 +10095,8 @@
       "advice": "Stellen Sie sicher, dass SPF, DKIM und DMARC für Ihre Versanddomain eingerichtet sind, senden Sie sich zuerst einen Test, und teilen Sie eine erste Kampagne nach Möglichkeit in mehrere kleinere Sendungen auf.",
       "duration": "Bei {{rate}}/Minute dauert dies etwa {{minutes}} Minuten. Die Versand-Warteschlange wird geteilt: Während der Kampagne können andere E-Mails — Galerie-Einladungen, Passwort-Zurücksetzungen — dahinter verzögert werden."
     },
-    "groupsHint": "Wer in den Gruppen ist, wird beim Versand ermittelt, nicht jetzt. Deaktivierte und abgemeldete Kunden werden ausgelassen."
+    "groupsHint": "Wer in den Gruppen ist, wird beim Versand ermittelt, nicht jetzt. Deaktivierte und abgemeldete Kunden werden ausgelassen.",
+    "queueShort": "Kampagne senden"
   },
   "documentVerification": {
     "title": "Bestätigen Sie, dass Sie es sind",

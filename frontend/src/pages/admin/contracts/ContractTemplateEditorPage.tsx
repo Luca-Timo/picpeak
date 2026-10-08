@@ -465,7 +465,7 @@ export const ContractTemplateEditorPage: React.FC = () => {
     if (!(await confirm({
       message: t('contracts.templates.draftFromVersionConfirm', 'Replace the current draft with a copy of version {{version}}?', { version }),
       variant: 'danger',
-      confirmLabel: t('contracts.templates.draftFromVersion', 'Replace the draft'),
+      confirmLabel: t('contracts.templates.draftFromVersion', 'New draft from this version'),
     }))) return;
     setBusy(true);
     try {
