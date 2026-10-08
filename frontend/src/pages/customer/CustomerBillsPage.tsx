@@ -228,7 +228,7 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
   // pair.
   const showOutstanding = !isStorno && !isCancelled && outstanding > 0;
 
-  // Token-derived, because `dark:` does not fire on the customer surface
+  // Token-derived: the chip follows the studio palette in light and dark
   // (see .status-chip in index.css).
   const statusClass = isStorno
     ? 'status-chip hue-storno'

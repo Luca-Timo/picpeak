@@ -1413,9 +1413,9 @@ export const ContractResponseView: React.FC<{ adapter: ContractDocumentAdapter }
   const queryClient = useQueryClient();
   // Honour branding dark/light mode the same way QuoteResponsePage
   // does — without this the page renders in light regardless of admin
-  // settings. The wrapper styling below still has `dark:` variants
-  // so the page reads cleanly in either mode. `isDark` drives the
-  // theme-aware logo pick in the header.
+  // settings. The wrapper reads the theme tokens, so it follows the
+  // palette in either mode. `isDark` drives the theme-aware logo pick in
+  // the header.
   const { isDark } = usePublicDarkMode();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);

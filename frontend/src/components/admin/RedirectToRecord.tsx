@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 
 /**
  * A retired `/:id/edit` URL: a document's page is its editor now (one page
@@ -7,5 +7,6 @@ import { Navigate, useParams } from 'react-router-dom';
  */
 export const RedirectToRecord: React.FC<{ base: string }> = ({ base }) => {
   const { id } = useParams<{ id: string }>();
-  return <Navigate to={`${base}/${id}`} replace />;
+  const { search, hash } = useLocation();
+  return <Navigate to={`${base}/${id}${search}${hash}`} replace />;
 };

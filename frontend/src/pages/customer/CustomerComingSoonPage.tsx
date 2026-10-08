@@ -32,7 +32,7 @@ export const CustomerComingSoonPage: React.FC<CustomerComingSoonPageProps> = ({
           <Icon className="w-7 h-7" />
         </div>
         <span
-          className="inline-block text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-semibold mb-3 bg-accent-soft text-on-accent-soft"
+          className="inline-block text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-semibold mb-3 bg-accent-soft text-theme"
         >
           {t('customer.comingSoon.tag', 'Coming soon')}
         </span>

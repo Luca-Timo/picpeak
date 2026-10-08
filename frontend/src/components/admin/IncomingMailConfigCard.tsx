@@ -57,7 +57,8 @@ export const IncomingMailConfigCard = forwardRef<IncomingMailConfigHandle, Incom
     },
     successMessage: t('email.incoming.savedToast', 'Incoming mail settings saved.'),
     invalidateKeys: [['incoming-mail-config']],
-    errorMessage: (e: any) => e?.response?.data?.error || e?.response?.data?.errors?.[0]?.msg || e.message || 'Failed',
+    // Named, because it can fail next to an SMTP save that went through.
+    errorMessage: (e: any) => `${t('email.incoming.title', 'Incoming mail (IMAP)')}: ${e?.response?.data?.error || e?.response?.data?.errors?.[0]?.msg || e.message || 'Failed'}`,
   });
 
   useEffect(() => {

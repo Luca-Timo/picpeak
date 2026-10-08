@@ -93,9 +93,8 @@ export function downloadErrorMessage(t: TFunction, code: string | undefined, sta
 
 // The chips used hard-coded light Tailwind colours, which left the one thing
 // this page exists to communicate unreadable on the portal's dark ground.
-// `dark:` variants do NOT fix it here — the portal themes through tokens
-// rather than the class the admin shell toggles on <html> — so the chip
-// styles are token-derived in index.css instead.
+// The portal themes through the studio palette's tokens, so the chip styles
+// are token-derived in index.css and follow it in light and dark.
 export const STATUS_STYLE: Record<CustomerDocument['status'], string> = {
   clean: 'status-chip hue-success',
   pending: 'status-chip hue-warning',

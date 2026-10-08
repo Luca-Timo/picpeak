@@ -88,6 +88,9 @@ export function usePublicDarkMode(): { isDark: boolean } {
   // Hold `.public-ui` for as long as the page is mounted.
   useEffect(() => {
     const root = document.documentElement;
+    // A public page never mounts beside the admin (whose provider removes
+    // .dark on unmount), so this is false in practice; it is kept so a
+    // future caller inside another .dark owner gets its class back.
     if (holders === 0) hadDarkBefore = root.classList.contains('dark');
     holders += 1;
     root.classList.add('public-ui');

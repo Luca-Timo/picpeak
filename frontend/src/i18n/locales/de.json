@@ -8120,7 +8120,6 @@
       "customerMessage": "Nachricht des Kunden"
     },
     "savedToast": "Angebot als Entwurf gespeichert.",
-    "edit": "Angebot bearbeiten",
     "new": "Neues Angebot",
     "preview": "PDF-Vorschau",
     "saveAndSend": "Speichern & senden",
@@ -8355,7 +8354,9 @@
     "sentNotice": "Sie können es noch ändern. Der Kunde sieht die Änderungen, nachdem Sie es erneut gesendet haben.",
     "forCustomer": "für {{name}}",
     "createdToast": "Entwurf erstellt.",
-    "createDraft": "Entwurf erstellen"
+    "createDraft": "Entwurf erstellen",
+    "unsavedSavedFirst": "Ihre ungespeicherten Änderungen werden zuerst gespeichert.",
+    "savedToastSent": "Angebot gespeichert."
   },
   "crm": {
     "lineItems": {
@@ -8573,7 +8574,6 @@
     "savedToast": "Rechnung gespeichert.",
     "savedToastMulti": "{{n}} Rechnungen erstellt.",
     "saveAndSpawn": "{{n}} Rechnungen erstellen",
-    "edit": "Rechnung bearbeiten",
     "customerSearch": "Kunde nach E-Mail oder Firma suchen…",
     "qrFormat": {
       "none": "Keiner (Override)",
@@ -9140,7 +9140,6 @@
       "auditTrail": "Audit-Verlauf",
       "auditTrailHelp": "Jedes auf diesem Vertrag erfasste Ereignis. Die Liste ist anhängend (append-only) und ist die Quelle der Wahrheit, falls der Vertrag angefochten wird.",
       "blocks": "Enthaltene Bausteine",
-      "cancel": "Stornieren",
       "cancelConfirm": "Diesen Vertrag stornieren? Der Signatur-Link des Kunden wird ungültig.",
       "cancelError": "Stornierung fehlgeschlagen",
       "cancelledToast": "Vertrag storniert.",
@@ -9165,7 +9164,6 @@
       "dates": "Daten",
       "downloadPdf": "PDF herunterladen",
       "downloadSignedPdf": "Signiertes PDF herunterladen",
-      "edit": "Bearbeiten",
       "fromQuote": "Aus Angebot",
       "issued": "Ausgestellt",
       "linkedInvoice": "Rechnung",
@@ -9275,13 +9273,11 @@
       "cancelContract": "Vertrag stornieren"
     },
     "editor": {
-      "backToDetail": "Zurück zum Vertrag",
       "create": "Entwurf erstellen",
       "createdToast": "Vertrag erstellt.",
       "customer": "Kunde",
       "disclaimerBody": "Die vorausgefüllten Baustein-Texte sind Beispiele des Maintainers, nicht von einem Anwalt verfasst. Lassen Sie die verwendeten Bausteine vor dem Versand für Ihre Rechtsordnung und Ihren Einsatzzweck prüfen — für den Inhalt des Vertrags bleiben Sie verantwortlich. Einen Entwurf können Sie trotzdem jederzeit speichern.",
       "disclaimerTitle": "Anwaltliche Prüfung empfohlen",
-      "saving": "Wird gespeichert…",
       "disclaimerLink": "CRM-Haftungshinweis lesen",
       "errors": {
         "createNotSaved": "Der Entwurf wurde nicht gespeichert.",
@@ -9322,20 +9318,13 @@
       "intro": "Einleitungstext (optional)",
       "issueDate": "Ausstellungsdatum",
       "language": "Sprache",
-      "locked": "Gesendete Verträge können nicht bearbeitet werden. Für Änderungen stornieren und einen neuen erstellen.",
       "noBlocksInSection": "Noch keine Bausteine für diesen Abschnitt.",
       "outro": "Schlusstext (optional)",
-      "popupBlocked": "Erlauben Sie Pop-ups für diese Seite, um die PDF-Vorschau anzuzeigen.",
-      "preview": "PDF-Vorschau",
-      "previewAfterSave": "Zuerst den Entwurf speichern, dann Vorschau anzeigen.",
-      "previewError": "Vorschau fehlgeschlagen",
-      "save": "Speichern",
       "saveError": "Speichern fehlgeschlagen",
       "savedToast": "Vertrag gespeichert.",
       "schriftformWarning": "Signaturtyp: einfache elektronische Signatur (EES). Ausreichend für routinemäßige Fotografieverträge in CH / DE / AT / FL. NICHT ausreichend für Dokumente, die gesetzlich Schriftform / forme qualifiée verlangen: Bürgschaft (DE § 766 BGB), Verbraucherdarlehensvertrag (DE § 492 BGB), befristete Arbeitsverträge (DE § 14 Abs. 4 TzBfG) und Ähnliches. Dafür ist eine qualifizierte elektronische Signatur (QES) eines Vertrauensdiensteanbieters erforderlich — picpeak bietet keine QES.",
       "searchCustomer": "Nach E-Mail suchen…",
       "systemBadge": "System",
-      "titleEdit": "Vertrag bearbeiten",
       "titleField": "Vertragstitel",
       "titleNew": "Neuer Vertrag",
       "titlePlaceholder": "z. B. Hochzeitsvertrag Doe / Müller",
@@ -10090,10 +10079,7 @@
     "empty": "Noch keine Kampagnen.",
     "allStatuses": "Alle Status",
     "filterByStatus": "Nach Status filtern",
-    "backToList": "Alle Kampagnen",
     "recipientsTitle": "Empfänger",
-    "notEditable": "Diese Kampagne wurde bereits eingereiht und kann nicht mehr bearbeitet werden.",
-    "viewCampaign": "Kampagne ansehen",
     "status": {
       "draft": "Entwurf",
       "queued": "Eingereiht",

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, RotateCw, Send, AlertCircle, CheckCircle2, Clock, Webhook } from 'lucide-react';
+import { ArrowLeft, RefreshCw, RotateCw, Send, AlertCircle, CheckCircle2, Clock, Webhook } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, ErrorState, Loading, Modal, Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '../../components/common';
 import type { BadgeTone } from '../../components/common';
 import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
@@ -155,6 +155,12 @@ export const WebhookDeliveriesPage: React.FC = () => {
         icon={<Webhook />}
         title={t('settings.webhooks.deliveries.notFound', 'Webhook not found.')}
         description={t('settings.webhooks.deliveries.notFoundHint', 'It may have been deleted. Settings › Webhooks lists the ones that exist.')}
+        action={(
+          <Link to="/admin/settings?tab=webhooks" className="btn btn-outline btn-sm inline-flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            {t('settings.webhooks.deliveries.back', 'Back to Settings')}
+          </Link>
+        )}
       />
     );
   }
@@ -165,6 +171,15 @@ export const WebhookDeliveriesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
+        {/* Webhooks live in a Settings tab, not in the sidebar, so the page
+            keeps its way back (UX.md § 9). */}
+        <Link
+          to="/admin/settings?tab=webhooks"
+          className="inline-flex items-center gap-1 mb-3 text-sm text-soft hover:text-heading"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t('settings.webhooks.deliveries.back', 'Back to Settings')}
+        </Link>
         <SectionPageHeader
           icon={Webhook}
           title={webhook.name}

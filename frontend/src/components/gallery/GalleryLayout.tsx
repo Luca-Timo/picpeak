@@ -638,8 +638,11 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
       {/* Colored banner — only when headerStyle === 'banner', regardless of layout */}
       {isBannerHeader && (
         <div
-          className="gallery-hero relative text-white overflow-hidden"
+          className="gallery-hero relative overflow-hidden"
           style={{
+            // The label colour the theme computes for its accent, so a pale
+            // accent keeps a readable title.
+            color: 'var(--color-accent-fg, #ffffff)',
             backgroundColor: theme.accentColor || 'var(--color-accent)',
             backgroundImage: theme.backgroundPattern !== 'none' 
               ? `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E")`
@@ -667,14 +670,14 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                     }}
                   />
                   {shouldShowCompanyName() && brandingSettings?.company_name && (
-                    <div className="mt-3 text-xl sm:text-2xl font-semibold text-white/90" style={{ textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)' }}>
+                    <div className="mt-3 text-xl sm:text-2xl font-semibold opacity-90" style={{ textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)' }}>
                       {brandingSettings.company_name}
                     </div>
                   )}
                 </div>
               )}
               {!shouldShowLogo('hero') && shouldShowCompanyName() && brandingSettings?.company_name && (
-                <div className="mb-6 text-2xl sm:text-3xl font-bold text-white" style={{ textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)' }}>
+                <div className="mb-6 text-2xl sm:text-3xl font-bold" style={{ textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)' }}>
                   {brandingSettings.company_name || 'PicPeak'}
                 </div>
               )}
@@ -692,7 +695,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
               
               {/* Event Details */}
               {(event.event_date || event.expires_at) && (
-                <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-white/80" style={{ textShadow: '0 1px 3px rgba(0, 0, 0, 0.3)' }}>
+                <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 opacity-80" style={{ textShadow: '0 1px 3px rgba(0, 0, 0, 0.3)' }}>
                   {event.event_date && (
                     <span className="flex items-center text-lg">
                       <Calendar className="w-5 h-5 mr-2" />

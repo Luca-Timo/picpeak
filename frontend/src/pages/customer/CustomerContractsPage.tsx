@@ -208,7 +208,7 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
   const handleDownload = () => openBlob(() => customerService.contractPdfUrl(c.id));
   const handleCertificate = () => openBlob(() => customerService.contractCertificateUrl(c.id));
 
-  // Token-derived, because `dark:` does not fire on the customer surface
+  // Token-derived: the chip follows the studio palette in light and dark
   // (see .status-chip in index.css). These were fixed light colours, so on a
   // dark portal the contract's status — the reason this list exists — was
   // dark text on a pale chip nobody could read.

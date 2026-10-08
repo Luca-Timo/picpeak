@@ -55,6 +55,12 @@ describe('Input', () => {
     expect(screen.getByText('Name is required').className).toContain('hue-danger');
   });
 
+  it('themed: the label and icons read the theme tokens too', () => {
+    render(<Input themed label="Email" leftIcon={<span data-testid="icon" />} />);
+    expect(screen.getByText('Email').className).toContain('text-theme');
+    expect(screen.getByTestId('icon').parentElement?.className).toBe('text-muted-theme');
+  });
+
   it('keeps the admin field without themed', () => {
     render(<Input label="Email" />);
     expect(screen.getByLabelText('Email').className).toMatch(/(^|\s)input(\s|$)/);
@@ -140,22 +146,6 @@ describe('status colours', () => {
     expect(root.style.getPropertyValue('--status-danger')).toBe('#ff0000');
     applyStatusColors(normalizeStatusColors({ danger: 'not-a-colour' }));
     expect(root.style.getPropertyValue('--status-danger')).toBe('');
-  });
-});
-
-describe('Input', () => {
-  it('themed: the field reads the theme tokens too, not only its label', () => {
-    render(<Input themed label="Email" leftIcon={<span data-testid="icon" />} />);
-    const field = screen.getByLabelText('Email');
-    expect(field.className).toContain('input-themed');
-    expect(field.className.split(' ')).not.toContain('input');
-    expect(screen.getByText('Email').className).toContain('text-theme');
-    expect(screen.getByTestId('icon').parentElement?.className).toBe('text-muted-theme');
-  });
-
-  it('keeps the admin input by default', () => {
-    render(<Input label="Name" />);
-    expect(screen.getByLabelText('Name').className.split(' ')).toContain('input');
   });
 });
 
