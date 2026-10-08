@@ -59,6 +59,37 @@ describe('migration 269 on SQLite', () => {
     await expect(migration.down(db)).resolves.toBeUndefined();
   });
 
+  it('grants photos.review to the roles running galleries, and the boot self-heal re-seeds it', async () => {
+    await db.schema.createTable('roles', (t) => { t.increments('id').primary(); t.string('name'); });
+    await db.schema.createTable('permissions', (t) => {
+      t.increments('id').primary(); t.string('name'); t.string('display_name'); t.string('category'); t.text('description');
+    });
+    await db.schema.createTable('role_permissions', (t) => { t.integer('role_id'); t.integer('permission_id'); });
+    for (const name of ['super_admin', 'editor', 'team_photographer']) await db('roles').insert({ name });
+    for (const name of ['photos.edit', 'events.edit']) await db('permissions').insert({ name });
+    const id = async (table, name) => (await db(table).where({ name }).first()).id;
+    const grant = async (role, perm) => db('role_permissions').insert({ role_id: await id('roles', role), permission_id: await id('permissions', perm) });
+    await grant('editor', 'photos.edit');
+    await grant('editor', 'events.edit');
+    // Holds photos.edit but not events.edit: its uploads are the reviewed ones.
+    await grant('team_photographer', 'photos.edit');
+    const holders = async () => (await db('role_permissions')
+      .join('roles', 'roles.id', 'role_permissions.role_id')
+      .join('permissions', 'permissions.id', 'role_permissions.permission_id')
+      .where('permissions.name', 'photos.review')
+      .pluck('roles.name')).sort();
+
+    await migration.up(db);
+    await migration.up(db);
+    expect(await holders()).toEqual(['editor', 'super_admin']);
+
+    // A restored pre-269 backup has no such permission; boot puts it back.
+    await db('role_permissions').where({ permission_id: await id('permissions', 'photos.review') }).del();
+    await db('permissions').where({ name: 'photos.review' }).del();
+    await require('../../src/services/_permissionsBoot').seedPermissionsAtBoot(db, null);
+    expect(await holders()).toEqual(['editor', 'super_admin']);
+  });
+
   it('does nothing without the base tables', async () => {
     await db.schema.dropTable('photos');
     await db.schema.dropTable('events');

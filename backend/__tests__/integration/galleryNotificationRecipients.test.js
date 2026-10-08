@@ -53,6 +53,7 @@ jest.mock('../../src/middleware/permissions', () => ({
 }));
 jest.mock('../../src/middleware/ownership', () => ({
   requireEventOwnership: (_req, _res, next) => next(),
+  requireEventOwner: (_req, _res, next) => next(),
   scopeEventsQuery: (query) => query,
   scopeEventsListQuery: (query) => query,
   withoutForeignEventSecrets: (event) => event,

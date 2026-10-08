@@ -25,9 +25,9 @@ const { parseBooleanInput } = require('../../utils/parsers');
 const eventTypeService = require('../../services/eventTypeService');
 const { normaliseEventTimeTriple } = require('../../services/eventService');
 const { hasColumnCached } = require('../../utils/schemaCache');
-const { requireEventOwnership, scopeEventsListQuery, withoutForeignEventSecrets, scopeEventsQuery, ownsEvent } = require('../../middleware/ownership');
+const { requireEventOwnership, requireEventOwner, scopeEventsListQuery, withoutForeignEventSecrets, scopeEventsQuery, ownsEvent } = require('../../middleware/ownership');
 const eventAdminAssignments = require('../../services/eventAdminAssignmentsService');
-const { mayReviewUploads } = require('../../services/uploadReviewService');
+const { mayReviewUploads, holdsForReview } = require('../../services/uploadReviewService');
 const { applyEventListSort } = require('./listSort');
 const { VIDEO_COUNT_SQL, VIDEO_DURATION_SQL } = require('../../utils/mediaTypeSql');
 
@@ -406,7 +406,9 @@ module.exports = (router) => {
   // username and role only. Registered before /:id, which would match it.
   router.get('/assignable-admins', adminAuth, requirePermission('events.edit'), async (req, res) => {
     try {
-      res.json({ admins: await eventAdminAssignments.listAssignableAdmins() });
+      res.json({ admins: await eventAdminAssignments.listAssignableAdmins({
+        includeSuperAdmins: req.admin.roleName === 'super_admin',
+      }) });
     } catch (error) {
       errorResponse(res, error, 500, 'Failed to fetch admin accounts');
     }
@@ -1306,13 +1308,22 @@ module.exports = (router) => {
         const previousAdminIds = (await db('event_admin_assignments').where('event_id', id).pluck('admin_user_id')).map(Number);
         const isOwner = ownsEvent(req.admin, stored);
         if (Array.isArray(req.body.assigned_admin_ids)) {
-          const submitted = await eventAdminAssignments.resolveAssignableIds(
-            req.body.assigned_admin_ids, stored.created_by, previousAdminIds);
-          const same = submitted.length === previousAdminIds.length && submitted.every((v) => previousAdminIds.includes(v));
-          if (!same && !isOwner) {
-            return res.status(403).json({ error: 'Only the gallery owner can change its team', code: 'EVENT_OWNER_REQUIRED' });
+          // A non-owner is compared on the raw ids, before validation, so the
+          // 400 for an unknown or inactive account never answers them: the
+          // route must not say which admin ids are live to someone who may not
+          // change the team anyway.
+          const same = (ids) => ids.length === previousAdminIds.length && ids.every((v) => previousAdminIds.includes(v));
+          if (!isOwner) {
+            const echoed = [...new Set(req.body.assigned_admin_ids.map(Number))]
+              .filter((v) => v !== Number(stored.created_by));
+            if (!same(echoed)) {
+              return res.status(403).json({ error: 'Only the gallery owner can change its team', code: 'EVENT_OWNER_REQUIRED' });
+            }
+          } else {
+            const submitted = await eventAdminAssignments.resolveAssignableIds(
+              req.body.assigned_admin_ids, stored.created_by, previousAdminIds);
+            if (!same(submitted)) assignedAdminIds = submitted;
           }
-          if (!same) assignedAdminIds = submitted;
         }
         if (Object.prototype.hasOwnProperty.call(updates, 'review_contributor_uploads')) {
           const next = parseBooleanInput(updates.review_contributor_uploads, false);
@@ -1506,7 +1517,8 @@ module.exports = (router) => {
       // leaves an already-watched event as it is stays an events.edit
       // operation, so a role without photos.upload can still edit the rest.
       if (Object.prototype.hasOwnProperty.call(updates, 'external_watch') || Object.prototype.hasOwnProperty.call(updates, 'external_path')) {
-        const current = await db('events').where('id', id).select('external_watch', 'external_path').first();
+        const current = await db('events').where('id', id)
+          .select('id', 'created_by', 'review_contributor_uploads', 'external_watch', 'external_path').first();
         const wasWatched = Boolean(current?.external_watch);
         const willWatch = Object.prototype.hasOwnProperty.call(updates, 'external_watch')
           ? Boolean(updates.external_watch)
@@ -1516,6 +1528,15 @@ module.exports = (router) => {
         if (willWatch && ((!wasWatched) || pathChanges)) {
           if (!(await userHasAllPermissions(req.admin.id, ['photos.upload']))) {
             return res.status(403).json({ error: 'The photos.upload permission is required to enable automatic imports for this folder' });
+          }
+          // The watcher imports visible, past the owner's review (issue 743),
+          // so a team member whose uploads wait for it cannot start one; the
+          // manual folder import refuses them the same way.
+          if (await holdsForReview(req.admin, current)) {
+            return res.status(403).json({
+              error: 'Uploads to this event wait for review; automatic folder imports are not available',
+              code: 'UPLOAD_REVIEW_REQUIRED',
+            });
           }
         }
       }
@@ -2010,7 +2031,7 @@ module.exports = (router) => {
     }
   });
 
-  router.delete('/:id', adminAuth, requirePermission('events.delete'), requireEventOwnership, async (req, res) => {
+  router.delete('/:id', adminAuth, requirePermission('events.delete'), requireEventOwner, async (req, res) => {
     try {
       const { id } = req.params;
       await deleteEventCascade(id, { id: req.admin.id, username: req.admin.username });

@@ -101,6 +101,7 @@ describe('gallery team members and upload review (issue 743)', () => {
     app.use(cookieParser());
     app.use('/api/admin/events', require('../../src/routes/adminEvents'));
     app.use('/api/admin/photos', require('../../src/routes/adminPhotos'));
+    app.use('/api/admin/archives', require('../../src/routes/adminArchives'));
     app.use('/api/admin/external-media', require('../../src/routes/adminExternalMedia'));
     app.use('/api/gallery', require('../../src/routes/gallery'));
     // eslint-disable-next-line no-unused-vars
@@ -214,7 +215,8 @@ describe('gallery team members and upload review (issue 743)', () => {
       expect(principal.assignedEventIds).toContain(id.event);
 
       expect((await filterOwnedEventIds(principal, [id.event])).denied).toEqual([id.event]);
-      expect((await filterOwnedEventIds(principal, [id.event], { honourManageAll: true })).allowed).toEqual([id.event]);
+      // The bulk callers delete and archive, which stay the owner's.
+      expect((await filterOwnedEventIds(principal, [id.event], { honourManageAll: true })).denied).toEqual([id.event]);
 
       const scoped = await scopeEventsQuery(db('events'), principal).pluck('id');
       expect(scoped.map(Number)).toContain(id.event);
@@ -401,6 +403,125 @@ describe('gallery team members and upload review (issue 743)', () => {
       const foreign = await as(request(app).post(`/api/admin/photos/${other}/photos/moderation`), 'lead')
         .send({ photoIds: [heldId], action: 'approve' });
       expect(foreign.status).toBe(403);
+    });
+  });
+
+  describe('what an assignment does not hand over (review round 1)', () => {
+    let eventId;
+
+    beforeAll(async () => {
+      // A custom role that runs galleries but was created after migration
+      // 269, so it holds events.edit and photos.edit without photos.review:
+      // its uploads are held.
+      const [roleRow] = await db('roles').insert({
+        name: 'gallery_hand', display_name: 'Gallery hand', is_system: false, priority: 44,
+        created_at: now(), updated_at: now(),
+      }).returning('id');
+      const roleId = roleRow?.id ?? roleRow;
+      const perms = await db('permissions').whereIn('name', [
+        'events.view', 'events.edit', 'events.delete', 'events.archive', 'events.support',
+        'archives.view', 'archives.delete', 'photos.view', 'photos.upload', 'photos.edit',
+      ]).select('id');
+      await db('role_permissions').insert(perms.map((p) => ({ role_id: roleId, permission_id: p.id })));
+      require('../../src/middleware/permissions').clearPermissionCache();
+      id.hand = await mkAdmin('hand', 'gallery_hand');
+
+      eventId = await mkEvent('round-one', id.owner);
+      await db('events').where({ id: eventId }).update({ review_contributor_uploads: true });
+      await fs.promises.mkdir(path.join(process.env.STORAGE_PATH, 'events', 'active', 'round-one'), { recursive: true });
+      await db('event_admin_assignments').insert([
+        { event_id: eventId, admin_user_id: id.hand, assigned_by: id.owner },
+        { event_id: eventId, admin_user_id: id.team, assigned_by: id.owner },
+      ]);
+    });
+
+    it('keeps delete, archive and the stored password with the owner', async () => {
+      const ok = await as(request(app).get(`/api/admin/events/${eventId}`), 'hand');
+      expect(ok.status).toBe(200);
+      expect(ok.body.can_manage_assignments).toBe(false);
+
+      const calls = [
+        ['get', `/api/admin/events/${eventId}/password`],
+        ['post', `/api/admin/events/${eventId}/reset-password`],
+        ['post', `/api/admin/events/${eventId}/resend-email`],
+        ['post', `/api/admin/events/${eventId}/archive`],
+        ['delete', `/api/admin/events/${eventId}`],
+        ['delete', `/api/admin/archives/${eventId}`],
+      ];
+      for (const [verb, url] of calls) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await as(request(app)[verb](url), 'hand').send({});
+        expect([verb, url, res.status]).toEqual([verb, url, 403]);
+      }
+      const bulk = await as(request(app).post('/api/admin/events/bulk-delete'), 'hand').send({ eventIds: [eventId] });
+      expect(bulk.body.deleted ?? bulk.body.deletedCount ?? 0).toBeFalsy();
+      expect(await db('events').where({ id: eventId }).first()).toBeTruthy();
+    });
+
+    it('answers a non-owner 403 before saying which admin ids are live', async () => {
+      const res = await as(request(app).put(`/api/admin/events/${eventId}`), 'hand')
+        .send({ assigned_admin_ids: [id.hand, id.team, 987654] });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('EVENT_OWNER_REQUIRED');
+    });
+
+    it('lists super admins as assignable to a super admin only', async () => {
+      const superRows = await db('admin_users').insert({
+        username: 'team-root', email: 'team-root@example.com', password_hash: 'x', must_change_password: false, created_at: now(),
+      }).returning('id');
+      const rootId = superRows[0]?.id ?? superRows[0];
+      await assignAdminRole(db, rootId, 'super_admin');
+      tok.root = mintAdminToken(rootId);
+
+      const names = async (who) => (await as(request(app).get('/api/admin/events/assignable-admins'), who)).body.admins.map((a) => a.username);
+      expect(await names('owner')).not.toContain('team-root');
+      expect(await names('root')).toContain('team-root');
+    });
+
+    it('does not let a held team member start a folder watcher', async () => {
+      const res = await as(request(app).put(`/api/admin/events/${eventId}`), 'hand')
+        .send({ source_mode: 'reference', external_path: 'somewhere', external_watch: true });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('UPLOAD_REVIEW_REQUIRED');
+    });
+
+    it('holds photo.uploaded until approval, and keeps a held photo\'s category from guests', async () => {
+      const webhookService = require('../../src/services/webhookService');
+      const fire = jest.spyOn(webhookService, 'fire').mockResolvedValue(undefined);
+      try {
+        const [catRow] = await db('photo_categories').insert({
+          name: 'Backstage', slug: 'backstage', event_id: eventId, is_global: false, created_at: now(),
+        }).returning('id');
+        const catId = catRow?.id ?? catRow;
+
+        const held = await as(request(app).post(`/api/admin/photos/${eventId}/upload`), 'hand')
+          .field('category_id', String(catId))
+          .attach('photos', jpeg, { filename: 'hand.jpg', contentType: 'image/jpeg' });
+        expect(held.status).toBe(202);
+        const heldId = held.body.photo_ids[0];
+        await db('photos').where({ id: heldId }).update({ processing_status: 'complete', category_id: catId });
+        expect(fire.mock.calls.filter(([type]) => type === 'photo.uploaded')).toHaveLength(0);
+
+        const event = await db('events').where({ id: eventId }).first();
+        for (const accessLevel of ['client', undefined]) {
+          const token = jwt.sign(
+            { eventId: event.id, eventSlug: event.slug, type: 'gallery', ...(accessLevel ? { accessLevel } : {}) },
+            process.env.JWT_SECRET, { expiresIn: '1h', issuer: 'picpeak-auth' });
+          // eslint-disable-next-line no-await-in-loop
+          const res = await request(app).get(`/api/gallery/${event.slug}/photos`).set('Authorization', `Bearer ${token}`);
+          expect(res.status).toBe(200);
+          expect(JSON.stringify(res.body.categories || [])).not.toContain('Backstage');
+        }
+
+        const approve = await as(request(app).post(`/api/admin/photos/${eventId}/photos/moderation`), 'owner')
+          .send({ photoIds: [heldId], action: 'approve' });
+        expect(approve.status).toBe(200);
+        const fired = fire.mock.calls.filter(([type]) => type === 'photo.uploaded');
+        expect(fired).toHaveLength(1);
+        expect(fired[0][1].photo.id).toBe(heldId);
+      } finally {
+        fire.mockRestore();
+      }
     });
   });
 });

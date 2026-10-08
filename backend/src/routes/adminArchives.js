@@ -9,7 +9,7 @@ const { slugify } = require('../utils/slug');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const StreamZip = require('node-stream-zip');
-const { requireEventOwnership, scopeEventsListQuery } = require('../middleware/ownership');
+const { requireEventOwnership, requireEventOwner, scopeEventsListQuery } = require('../middleware/ownership');
 const { assertZipEntriesWithin } = require('../utils/safePath');
 const { escapeLikePattern, likeWithEscape } = require('../utils/sqlSecurity');
 const logger = require('../utils/logger');
@@ -444,6 +444,9 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
       // Photo credits (#1561). A guest erased while the event was archived
       // had their name cleared from rows that no longer existed, so the
       // manifest still holds it; only a guest still on the event keeps theirs.
+      // The uploading account (issue 743) comes back only while it exists:
+      // the column is a foreign key on PostgreSQL.
+      const liveAdminIds = new Set((await db('admin_users').pluck('id')).map(Number));
       const activeGuestIds = new Set((await db('gallery_guests')
         .where({ event_id: archive.id, is_deleted: formatBoolean(false) })
         .pluck('id')).map(Number));
@@ -731,6 +734,8 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
           ...(['pending', 'rejected'].includes(manifestEntry?.moderation_status)
             ? { moderation_status: manifestEntry.moderation_status, visibility: 'hidden' }
             : { moderation_status: null, visibility: 'visible' }),
+          uploaded_by_admin_id: liveAdminIds.has(Number(manifestEntry?.uploaded_by_admin_id))
+            ? Number(manifestEntry.uploaded_by_admin_id) : null,
         });
       }
 
@@ -859,7 +864,7 @@ router.get('/:id/download', adminAuth, requirePermission('archives.download'), r
 });
 
 // Delete archive permanently
-router.delete('/:id', adminAuth, requirePermission('archives.delete'), requireEventOwnership, async (req, res) => {
+router.delete('/:id', adminAuth, requirePermission('archives.delete'), requireEventOwner, async (req, res) => {
   try {
     const archive = await db('events')
       .where('id', req.params.id)

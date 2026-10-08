@@ -48,7 +48,7 @@ const REVIEW_PERMISSION = {
   description: 'Approve or reject photos team members upload to a gallery under review, and upload to it without review.',
 };
 
-async function upReviewPermission(knex) {
+async function seedReviewPermission(knex) {
   for (const table of ['permissions', 'role_permissions', 'roles']) {
     if (!(await knex.schema.hasTable(table))) return;
   }
@@ -125,7 +125,7 @@ exports.up = async function up(knex) {
     });
   }
 
-  await upReviewPermission(knex);
+  await seedReviewPermission(knex);
 };
 
 exports.down = async function down(knex) {
@@ -152,3 +152,7 @@ exports.down = async function down(knex) {
   await drop('admin_users', ['credit_name']);
   await knex.schema.dropTableIfExists('event_admin_assignments');
 };
+
+// The boot self-heal (services/_permissionsBoot.js) re-seeds the permission
+// after a restore of a backup taken before this migration.
+exports.seedReviewPermission = seedReviewPermission;

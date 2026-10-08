@@ -1316,12 +1316,12 @@ router.post('/:eventId/photos/moderation', adminAuth, requirePermission(['photos
       return res.status(403).json({ error: 'Only the gallery owner or a reviewer can review uploads', code: 'REVIEWER_REQUIRED' });
     }
 
-    const updated = await moderatePhotos(event.id, photoIds, action);
+    const { updated, photoIds: moved } = await moderatePhotos(event.id, photoIds, action);
     if (updated > 0) {
       // Approved photos join the guest download bundle.
       if (action === 'approve') downloadZipService.invalidate(event.id);
       await logActivity(action === 'approve' ? 'photos_review_approved' : 'photos_review_rejected',
-        { count: updated, eventName: event.event_name },
+        { count: updated, photoIds: moved, eventName: event.event_name },
         event.id,
         { type: 'admin', id: req.admin.id, name: req.admin.username }
       );

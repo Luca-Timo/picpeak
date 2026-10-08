@@ -21,10 +21,16 @@ function toApi(row) {
 }
 
 /** Active admin accounts the picker offers: id, username and role, no emails. */
-async function listAssignableAdmins() {
-  const rows = await db('admin_users')
+async function listAssignableAdmins({ includeSuperAdmins = false } = {}) {
+  const query = db('admin_users')
     .leftJoin('roles', 'roles.id', 'admin_users.role_id')
-    .where('admin_users.is_active', formatBoolean(true))
+    .where('admin_users.is_active', formatBoolean(true));
+  // A super_admin reaches every gallery already, and which logins hold it is
+  // not for every events.edit holder to read; only a super_admin sees them.
+  if (!includeSuperAdmins) {
+    query.where((q) => q.whereNull('roles.name').orWhereNot('roles.name', 'super_admin'));
+  }
+  const rows = await query
     .select(adminColumns)
     .orderBy('admin_users.username', 'asc');
   return rows.map(toApi);

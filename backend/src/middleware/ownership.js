@@ -77,6 +77,19 @@ function seesAllEvents(admin) {
  * ownerless ones.
  */
 function requireEventOwnership(req, res, next) {
+  return checkEvent(req, res, next, canAccessEvent);
+}
+
+/**
+ * requireEventOwnership without the assignment: for what an assignment must
+ * not hand over (issue 743) — deleting or archiving the gallery, and its
+ * stored password, client PIN and password reset.
+ */
+function requireEventOwner(req, res, next) {
+  return checkEvent(req, res, next, ownsEvent);
+}
+
+function checkEvent(req, res, next, mayAct) {
   if (managesAllEvents(req.admin)) {
     return next();
   }
@@ -94,8 +107,8 @@ function requireEventOwnership(req, res, next) {
         return res.status(404).json({ error: 'Event not found' });
       }
       // Allow access if: event has no owner (legacy/system), admin owns it,
-      // or admin is assigned to it
-      if (!canAccessEvent(req.admin, event)) {
+      // or (requireEventOwnership only) admin is assigned to it
+      if (!mayAct(req.admin, event)) {
         return res.status(403).json({ error: 'Access denied' });
       }
       next();
@@ -116,13 +129,20 @@ function requireEventOwnership(req, res, next) {
  * requireEventOwnership enforces per-row. The event id column is the one
  * beside `column` ('events.created_by' -> 'events.id').
  */
-function scopeEventsQuery(query, admin, column = 'created_by') {
+function scopeEventsQuery(query, admin, column = 'created_by', { assignments = true } = {}) {
   if (managesAllEvents(admin)) {
     return query;
   }
   const idColumn = column.replace(/created_by$/, 'id');
-  return query.where((q) => q.whereNull(column).orWhere(column, admin.id)
-    .orWhereIn(idColumn, db('event_admin_assignments').select('event_id').where('admin_user_id', admin.id)));
+  return query.where((q) => {
+    q.whereNull(column).orWhere(column, admin.id);
+    // Every principal loads its assignments first (loadAssignedEventIds), so
+    // the flag says whether the table exists yet. `assignments: false` is the
+    // requireEventOwner rule.
+    if (assignments && assignmentsTableReady) {
+      q.orWhereIn(idColumn, db('event_admin_assignments').select('event_id').where('admin_user_id', admin.id));
+    }
+  });
 }
 
 /**
@@ -161,10 +181,11 @@ function withoutForeignEventSecrets(event, admin) {
  * land in `denied` — deliberately indistinguishable, so bulk routes
  * don't become an ownership/existence oracle.
  *
- * `honourManageAll` lets events.manage_all through as well, and the events
- * the admin is assigned to (migration 269); only gallery routes pass it, so
- * neither the permission nor an assignment reaches CRM or transfer data
- * hanging off another owner's event (GHSA-wrg5).
+ * `honourManageAll` lets events.manage_all through as well; only gallery
+ * routes pass it, so the permission never reaches CRM or transfer data
+ * hanging off another owner's event (GHSA-wrg5). An assignment (migration
+ * 269) never counts here: the bulk callers delete and archive, which stay
+ * the owner's.
  *
  * @returns {Promise<{allowed: Array, denied: Array}>}
  */
@@ -172,10 +193,9 @@ async function filterOwnedEventIds(admin, eventIds, { honourManageAll = false } 
   if (admin.roleName === 'super_admin' || (honourManageAll && managesAllEvents(admin))) {
     return { allowed: [...eventIds], denied: [] };
   }
-  const query = db('events').whereIn('id', eventIds);
-  const rows = await (honourManageAll
-    ? scopeEventsQuery(query, admin)
-    : query.andWhere((q) => q.whereNull('created_by').orWhere('created_by', admin.id)))
+  const rows = await db('events')
+    .whereIn('id', eventIds)
+    .andWhere((q) => q.whereNull('created_by').orWhere('created_by', admin.id))
     .select('id');
   const allowedSet = new Set(rows.map((r) => r.id));
   const allowed = [];
@@ -279,6 +299,7 @@ module.exports = {
   managesAllEvents,
   seesAllEvents,
   requireEventOwnership,
+  requireEventOwner,
   filterOwnedEventIds,
   scopeEventsQuery,
   scopeEventsListQuery,

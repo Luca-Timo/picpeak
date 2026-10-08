@@ -340,10 +340,13 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
   }
 
   // Get actual categories used by photos in this event
-  // This includes both global categories and event-specific ones
-  const usedFilterIds = hiddenForGuest ? [] : await db('photos')
+  // This includes both global categories and event-specific ones. Only
+  // photos this viewer may see count, as for the folders below: a category
+  // holding nothing but hidden photos, or a team upload under review
+  // (issue 743), must not ship its name.
+  const usedFilterIds = hiddenForGuest ? [] : await applyPhotoVisibilityFilter(db('photos')
     .where('event_id', event.id)
-    .whereNotNull('category_id')
+    .whereNotNull('category_id'), accessLevel)
     .distinct('category_id')
     .pluck('category_id');
   // Folders (issue 1786): every folder that holds photos, plus all of its
