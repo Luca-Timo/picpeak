@@ -88,6 +88,9 @@ export const useTheme = () => {
   return context;
 };
 
+/** The theme context, or `undefined` outside a ThemeProvider (tests, isolated renders). */
+export const useOptionalTheme = (): ThemeContextType | undefined => useContext(ThemeContext);
+
 interface ThemeProviderProps {
   children: ReactNode;
   initialTheme?: ThemeConfig;

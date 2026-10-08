@@ -17,7 +17,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Download, FolderOpen, Inbox, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-import { Button, Card, Loading, useConfirm } from '../../components/common';
+import { Button, Card, EmptyState, ErrorState, Loading, useConfirm } from '../../components/common';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { formatFileSize } from '../../utils/fileSize';
 import {
@@ -165,7 +165,7 @@ export const CustomerDocumentList: React.FC<{ documents: CustomerDocument[]; sho
   };
 
   return (
-    <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+    <ul className="divide-y divide-border-token">
       {documents.map((doc) => (
         <li key={doc.id} className="p-4 flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0 flex-1">
@@ -239,7 +239,7 @@ export const CustomerDocumentsPage: React.FC = () => {
   const { t } = useTranslation();
   const { format: fmtDate } = useLocalizedDate();
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['customer-documents'],
     queryFn: () => customerService.listDocuments(),
   });
@@ -272,11 +272,17 @@ export const CustomerDocumentsPage: React.FC = () => {
     return (
       <div className="container py-8">
         <h1 className="text-2xl font-bold text-theme mb-2">{t('customer.documents.title', 'Documents')}</h1>
-        <p className={status === 403 ? 'text-muted-theme' : 'text-status hue-danger'}>
-          {status === 403
-            ? t('customer.documents.disabled', 'Documents are not available for your account.')
-            : t('customer.documents.loadError', 'Could not load your documents.')}
-        </p>
+        {status === 403 ? (
+          <p className="text-muted-theme">
+            {t('customer.documents.disabled', 'Documents are not available for your account.')}
+          </p>
+        ) : (
+          <ErrorState
+            title={t('customer.documents.loadError', 'Could not load your documents.')}
+            onRetry={() => { void refetch(); }}
+            retrying={isFetching}
+          />
+        )}
       </div>
     );
   }
@@ -375,7 +381,7 @@ export const CustomerDocumentsPage: React.FC = () => {
             <Inbox className="w-5 h-5" />
             {t('customer.documents.requests.title', 'Requested by your photographer')}
           </h2>
-          <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+          <ul className="divide-y divide-border-token">
             {requests.map((r) => (
               <li key={r.id} className="p-4 flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0 flex-1">
@@ -445,12 +451,7 @@ export const CustomerDocumentsPage: React.FC = () => {
                 value={eventId}
                 disabled={uploading}
                 onChange={(e) => setEventId(e.target.value)}
-                className="h-10 w-full sm:w-56 rounded-lg border px-2 text-sm"
-                style={{
-                  backgroundColor: 'var(--color-surface)',
-                  borderColor: 'var(--color-surface-border)',
-                  color: 'var(--color-text)',
-                }}
+                className="input-themed w-full sm:w-56"
               >
                 <option value="">{t('customer.documents.noEvent', 'No event')}</option>
                 {events!.map((ev) => (
@@ -499,9 +500,7 @@ export const CustomerDocumentsPage: React.FC = () => {
 
       {documents.length === 0 ? (
         <Card padding="lg">
-          <p className="text-center text-muted-theme py-8">
-            {t('customer.documents.empty', 'No documents yet.')}
-          </p>
+          <EmptyState size="inline" title={t('customer.documents.empty', 'No documents yet.')} />
         </Card>
       ) : (
         <Card padding="none">

@@ -12,6 +12,7 @@ import { Tabs } from '../Tabs';
 import { Switch } from '../Switch';
 import { ErrorState } from '../EmptyState';
 import { DecimalInput } from '../DecimalInput';
+import { Input } from '../Input';
 import { Table, TableBody, TableRow, TableCell } from '../Table';
 import { applyStatusColors, normalizeStatusColors } from '../../../utils/statusColors';
 
@@ -139,6 +140,22 @@ describe('status colours', () => {
     expect(root.style.getPropertyValue('--status-danger')).toBe('#ff0000');
     applyStatusColors(normalizeStatusColors({ danger: 'not-a-colour' }));
     expect(root.style.getPropertyValue('--status-danger')).toBe('');
+  });
+});
+
+describe('Input', () => {
+  it('themed: the field reads the theme tokens too, not only its label', () => {
+    render(<Input themed label="Email" leftIcon={<span data-testid="icon" />} />);
+    const field = screen.getByLabelText('Email');
+    expect(field.className).toContain('input-themed');
+    expect(field.className.split(' ')).not.toContain('input');
+    expect(screen.getByText('Email').className).toContain('text-theme');
+    expect(screen.getByTestId('icon').parentElement?.className).toBe('text-muted-theme');
+  });
+
+  it('keeps the admin input by default', () => {
+    render(<Input label="Name" />);
+    expect(screen.getByLabelText('Name').className.split(' ')).toContain('input');
   });
 });
 

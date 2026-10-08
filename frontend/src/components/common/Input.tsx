@@ -7,10 +7,10 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   helperText?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
-  // Inside a gallery: the field, its label, icons, helper and error text
-  // follow the gallery theme's tokens. The admin .input reads the UI tokens,
-  // which only answer the admin's dark mode, so on a dark gallery theme it
-  // stayed a white box under a near-black page.
+  // On a themed page (gallery, customer portal, public pages): the field, its
+  // label, icons and helper text follow the operator's theme tokens. Without
+  // it the field keeps the admin's `.input` colours, which on a dark gallery
+  // theme left a white field under a themed label.
   themed?: boolean;
 }
 
