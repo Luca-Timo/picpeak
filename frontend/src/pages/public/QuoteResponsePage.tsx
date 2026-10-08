@@ -371,9 +371,9 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
               <tr className="border-b border-border-token text-muted-theme">
                 <th className="text-left py-2 w-10">#</th>
                 <th className="text-left py-2">{t('quoteResponse.description', 'Description')}</th>
-                <th className="text-right py-2 w-16">{t('quoteResponse.qty', 'Qty')}</th>
-                <th className="text-right py-2 w-24">{t('quoteResponse.unit', 'Unit')}</th>
-                <th className="text-right py-2 w-24">{t('quoteResponse.total', 'Total')}</th>
+                <th className="text-right py-2 pl-4 w-16 whitespace-nowrap">{t('quoteResponse.qty', 'Qty')}</th>
+                <th className="text-right py-2 pl-4 w-24 whitespace-nowrap">{t('quoteResponse.unit', 'Unit')}</th>
+                <th className="text-right py-2 pl-4 w-24 whitespace-nowrap">{t('quoteResponse.total', 'Total')}</th>
               </tr>
             </thead>
             <tbody>
@@ -431,11 +431,11 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
                           </span>
                         )}
                       </td>
-                      <td className={`py-2 text-right ${dim}`}>{quantityText}</td>
-                      <td className={`py-2 text-right tabular-nums ${dim}`}>
+                      <td className={`py-2 pl-4 text-right whitespace-nowrap ${dim}`}>{quantityText}</td>
+                      <td className={`py-2 pl-4 text-right tabular-nums whitespace-nowrap ${dim}`}>
                         {priceless || isDiscount || packageSum ? '' : formatMoneyMinor(Number(li.unitPriceMinor), quote.currency)}
                       </td>
-                      <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''} ${dim}`}>
+                      <td className={`py-2 pl-4 text-right tabular-nums whitespace-nowrap ${isSub ? 'italic' : ''} ${dim}`}>
                         {priceless
                           ? ''
                           : isSub

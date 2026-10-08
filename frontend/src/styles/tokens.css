@@ -287,3 +287,22 @@
   --shared-fill: var(--ui-fill);
   --shared-surface: var(--ui-panel);
 }
+
+/* Accent as text (`text-accent`: links, inline actions). applyTheme() writes
+ * the accent nudged until it reads (4.5:1): on the studio palette for the
+ * gallery, portal and public pages, and on the admin's light and dark panels.
+ * An accent that already reads is written unchanged. */
+:root {
+  --accent-text: var(--color-accent-text, var(--color-accent));
+}
+.admin-ui,
+.ui-light {
+  --accent-text: var(--ui-accent-text-light, var(--color-accent));
+}
+.admin-ui.dark,
+.ui-dark {
+  --accent-text: var(--ui-accent-text-dark, var(--color-accent));
+}
+.public-ui {
+  --accent-text: var(--color-accent-text, var(--color-accent));
+}

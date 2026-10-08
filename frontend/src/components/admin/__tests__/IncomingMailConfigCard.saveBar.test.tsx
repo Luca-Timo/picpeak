@@ -44,7 +44,7 @@ describe('IncomingMailConfigCard — saves with the page', () => {
   it('has no Save button of its own and reports an edit as dirty', async () => {
     const { states, host } = await setup();
     expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
-    expect(states.at(-1)).toEqual({ dirty: false, saving: false });
+    await waitFor(() => expect(states.at(-1)).toEqual({ dirty: false, saving: false }));
     fireEvent.change(host, { target: { value: 'mail.example.com' } });
     await waitFor(() => expect(states.at(-1)?.dirty).toBe(true));
   });

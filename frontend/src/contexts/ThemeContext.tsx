@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { ThemeConfig, EventTheme, GALLERY_THEME_PRESETS } from '../types/theme.types';
 import { fontsService, extractFamilyName, type FontDefinition } from '../services/fonts.service';
 import { applyForceColorMode } from '../utils/themeMigration';
-import { getReadableForeground } from '../utils/contrast';
+import { getReadableForeground, readableAccentText } from '../utils/contrast';
 import { applyStatusColors, normalizeStatusColors } from '../utils/statusColors';
 import { usePublicSettings } from '../hooks/usePublicSettings';
 
@@ -153,6 +153,14 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
       // this via `var(--color-accent-fg, #ffffff)` so a pale accent doesn't
       // leave the button text unreadable (PR #401 review follow-up).
       root.style.setProperty('--color-accent-fg', getReadableForeground(themeConfig.accentColor));
+      // Accent as TEXT (links, inline actions): the accent itself when it
+      // reads, else nudged until it does — on the studio palette's cards and
+      // page, and on the admin's light and dark panels (tokens.css picks).
+      const surface = themeConfig.surfaceColor || '#ffffff';
+      const page = themeConfig.backgroundColor || surface;
+      root.style.setProperty('--color-accent-text', readableAccentText(readableAccentText(themeConfig.accentColor, surface), page));
+      root.style.setProperty('--ui-accent-text-light', readableAccentText(themeConfig.accentColor, '#ffffff'));
+      root.style.setProperty('--ui-accent-text-dark', readableAccentText(themeConfig.accentColor, '#262626'));
     }
 
     // Accent-dark: filled CTA background. Falls back to primaryColor for

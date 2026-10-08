@@ -267,7 +267,8 @@
   }
 
   .text-accent {
-    color: var(--color-accent);
+    /* The accent, made readable as text where it is not (tokens.css). */
+    color: var(--accent-text, var(--color-accent));
   }
 
   .text-accent-dark {

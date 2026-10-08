@@ -7,6 +7,11 @@ export default {
   ],
   theme: {
     extend: {
+      // `text-accent` reads the accent nudged until it reads as text
+      // (tokens.css › --accent-text); fills and borders keep the raw accent.
+      textColor: {
+        accent: 'var(--accent-text)',
+      },
       colors: {
         // 8-token CI palette aliases — these read CSS variables that are set
         // either by ThemeContext.applyTheme (gallery + branding) or by the

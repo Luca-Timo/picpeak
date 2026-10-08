@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio, getReadableForeground, relativeLuminance } from '../contrast';
+import { contrastRatio, getReadableForeground, readableAccentText, relativeLuminance } from '../contrast';
 
 describe('getReadableForeground', () => {
   describe('against the legacy hardcoded #ffffff fallback', () => {
@@ -77,5 +77,27 @@ describe('contrastRatio', () => {
   it('matches a known mid-tone pair', () => {
     // tailwind blue-600 on white, as published by WebAIM's checker.
     expect(contrastRatio('#2563EB', '#FFFFFF')).toBeCloseTo(5.17, 2);
+  });
+});
+
+describe('readableAccentText', () => {
+  it('keeps an accent that already reads', () => {
+    expect(readableAccentText('#017C7C', '#FFFFFF')).toBe('#017C7C');
+  });
+
+  it('darkens a pastel accent on a light card until it reads, keeping its hue', () => {
+    const text = readableAccentText('#E8B4A0', '#FFFFFF');
+    expect(contrastRatio(text, '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+    expect(text).not.toBe('#000000');
+  });
+
+  it('lightens a dark accent on a dark panel', () => {
+    const text = readableAccentText('#014E4E', '#262626');
+    expect(contrastRatio(text, '#262626')).toBeGreaterThanOrEqual(4.5);
+    expect(relativeLuminance(text)).toBeGreaterThan(relativeLuminance('#014E4E'));
+  });
+
+  it('returns unparseable input unchanged', () => {
+    expect(readableAccentText('var(--x)', '#FFFFFF')).toBe('var(--x)');
   });
 });
