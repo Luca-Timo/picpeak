@@ -9,6 +9,7 @@ import { Button, MarkdownContent, PoweredBy } from '../common';
 import { DynamicFavicon } from '../common/DynamicFavicon';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGuestIdentityOptional } from '../../contexts/GuestIdentityContext';
+import { GalleryConfirmDialog } from './GalleryConfirmDialog';
 import { buildResourceUrl } from '../../utils/url';
 import { cmsService, type PublicCMSPage } from '../../services/cms.service';
 import type { HeaderStyleType } from '../../types/theme.types';
@@ -145,6 +146,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
     ? (brandingSettings?.logo_url_dark || brandingSettings?.logo_url)
     : (brandingSettings?.logo_url || brandingSettings?.logo_url_dark);
   const guestIdentity = useGuestIdentityOptional();
+  const [forgetOpen, setForgetOpen] = React.useState(false);
 
   // Footer legal-link config. Cached aggressively because the toggle state
   // changes rarely and the gallery footer renders on every page view.
@@ -821,16 +823,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                   <button
                     type="button"
                     className="text-xs text-muted-theme hover:text-theme transition-colors"
-                    onClick={async () => {
-                      // Outside guest identity mode the identity is only an
-                      // uploader name; feedback never belonged to it (#1561).
-                      const message = guestIdentity.identityMode === 'guest'
-                        ? t('gallery.footer.forgetMeConfirm', 'Your name and selections will be removed from this gallery.')
-                        : t('gallery.footer.forgetMeConfirmUploads', 'Your name will be removed from the photos you uploaded to this gallery.');
-                      if (window.confirm(message)) {
-                        await guestIdentity.forget();
-                      }
-                    }}
+                    onClick={() => setForgetOpen(true)}
                   >
                     {t('gallery.footer.forgetMe', 'Forget me ({{name}})', { name: guestIdentity.identity.name })}
                   </button>
@@ -853,6 +846,25 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
           )}
         </div>
       </footer>
+
+      {guestIdentity?.identity && (
+        <GalleryConfirmDialog
+          open={forgetOpen}
+          variant="danger"
+          title={t('gallery.footer.forgetMeTitle', 'Forget me?')}
+          // Outside guest identity mode the identity is only an uploader
+          // name; feedback never belonged to it (#1561).
+          message={guestIdentity.identityMode === 'guest'
+            ? t('gallery.footer.forgetMeConfirm', 'Your name and selections will be removed from this gallery.')
+            : t('gallery.footer.forgetMeConfirmUploads', 'Your name will be removed from the photos you uploaded to this gallery.')}
+          confirmLabel={t('gallery.footer.forgetMeAction', 'Forget me')}
+          onCancel={() => setForgetOpen(false)}
+          onConfirm={async () => {
+            setForgetOpen(false);
+            await guestIdentity.forget();
+          }}
+        />
+      )}
 
       {/* Promotional banner (#440) — rendered below the footer when
           branding_promo_position = 'below_footer'. */}

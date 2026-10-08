@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Search, X, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -6,6 +6,7 @@ import { AuthenticatedImage } from '../common/AuthenticatedImage';
 import type { GalleryPerson, Photo } from '../../types';
 import { faceCropStyle } from './faceCrop';
 import { facePreviewUrl } from './imageTiers';
+import { useGalleryDialog } from './hooks/useGalleryDialog';
 
 /**
  * "Show all" people (#1074).
@@ -46,6 +47,9 @@ export const PeopleSheet: React.FC<PeopleSheetProps> = ({
     return people.filter((p) => p.label?.toLowerCase().includes(q));
   }, [people, query]);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  useGalleryDialog({ open, onClose, panelRef });
+
   if (!open) return null;
 
   return (
@@ -57,6 +61,7 @@ export const PeopleSheet: React.FC<PeopleSheetProps> = ({
       />
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={t('gallery.people.title', { defaultValue: 'People in this gallery' })}

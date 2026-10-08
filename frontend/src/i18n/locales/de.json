@@ -930,7 +930,8 @@
       "nothingToUpload": "Keine der ausgewählten Dateien kann hochgeladen werden: Alle liegen in versteckten oder übersprungenen Ordnern.",
       "keptForNext": "Dateien, die während der Vorbereitung der Ordner hinzukamen, sind noch ausgewählt: {{count}}."
     },
-    "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch."
+    "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch.",
+    "removeFile": "{{name}} entfernen"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -1949,7 +1950,9 @@
       "forgetMeConfirmUploads": "Ihr Name wird von den Fotos entfernt, die Sie in diese Galerie hochgeladen haben.",
       "forgetMe": "Mich vergessen ({{name}})",
       "notYou": "Nicht Sie?",
-      "socials": "Soziale Netzwerke"
+      "socials": "Soziale Netzwerke",
+      "forgetMeTitle": "Mich vergessen?",
+      "forgetMeAction": "Mich vergessen"
     },
     "photosCount_one": "{{count}} Foto",
     "photosCount_other": "{{count}} Fotos",

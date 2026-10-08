@@ -930,7 +930,8 @@
       "nothingToUpload": "None of the selected files can be uploaded: they are all in hidden or skipped folders.",
       "keptForNext": "Files added while the folders were prepared are still selected: {{count}}."
     },
-    "largeFileReplaceSkipped": "Replace-by-name is not supported for files above the batch size; upload it without replace."
+    "largeFileReplaceSkipped": "Replace-by-name is not supported for files above the batch size; upload it without replace.",
+    "removeFile": "Remove {{name}}"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -1396,7 +1397,9 @@
       "forgetMeConfirmUploads": "Your name will be removed from the photos you uploaded to this gallery.",
       "forgetMe": "Forget me ({{name}})",
       "notYou": "Not you?",
-      "socials": "Social media"
+      "socials": "Social media",
+      "forgetMeTitle": "Forget me?",
+      "forgetMeAction": "Forget me"
     },
     "photosCount_one": "{{count}} photo",
     "photosCount_other": "{{count}} photos",
