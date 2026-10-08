@@ -3,11 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Edit2, Trash2, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { categoriesService, type PhotoCategory } from '../../services/categories.service';
-import { Button } from '../common';
+import { Button, useConfirm } from '../common';
 import { useMutationWithToast, useModal } from '../../hooks';
 
 export const CategoryManager: React.FC = () => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const addingModal = useModal();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -89,10 +90,13 @@ export const CategoryManager: React.FC = () => {
     }
   };
 
-  const handleDelete = (category: PhotoCategory) => {
-    if (window.confirm(t('categories.deleteConfirm', { name: category.name }))) {
-      deleteMutation.mutate(category.id);
-    }
+  const handleDelete = async (category: PhotoCategory) => {
+    const ok = await confirm({
+      message: t('categories.deleteConfirm', 'Delete the category "{{name}}"? A category that still holds photos cannot be deleted; move them first. This cannot be undone.', { name: category.name }),
+      variant: 'danger',
+      confirmLabel: t('categories.deleteCategoryTitle', 'Delete category'),
+    });
+    if (ok) deleteMutation.mutate(category.id);
   };
 
   const startEdit = (category: PhotoCategory) => {

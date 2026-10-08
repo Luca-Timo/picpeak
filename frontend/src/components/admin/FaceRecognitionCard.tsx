@@ -22,7 +22,7 @@ import { toast } from 'react-toastify';
 import { Users, RefreshCw, Trash2, AlertTriangle, ShieldCheck, SlidersHorizontal, ExternalLink } from 'lucide-react';
 import { PeopleManagerModal } from './PeopleManagerModal';
 
-import { Button, Card, Loading } from '../common';
+import { Button, Card, Loading, useConfirm } from '../common';
 import { api } from '../../config/api';
 
 interface FacesPayload {
@@ -69,6 +69,7 @@ interface FaceRecognitionCardProps {
 
 export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventId, isArchived, bare = false }) => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [saving, setSaving] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [autoCategories, setAutoCategories] = useState(false);
@@ -230,9 +231,13 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
   const purge = async () => {
     // Irreversible and covers biometric data — a plain confirm is the least
     // this deserves.
-    const ok = window.confirm(t('admin.faces.confirmDelete', {
-      defaultValue: 'Delete all detected people and face data for this gallery? This cannot be undone. Photos are not affected.',
-    }));
+    const ok = await confirm({
+      message: t('admin.faces.confirmDelete', {
+        defaultValue: 'Delete all detected people and face data for this gallery? This cannot be undone. Photos are not affected.',
+      }),
+      variant: 'danger',
+      confirmLabel: t('admin.faces.delete', { defaultValue: 'Delete all face data' }),
+    });
     if (!ok) return;
 
     setSaving(true);

@@ -11,7 +11,7 @@ import { uploadsService } from '../../services/uploads.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { getPhotoViewMode, setPhotoViewMode, type PhotoViewMode } from '../../utils/photoViewPrefs';
 import { defaultCategoryLabel, isVideoItem, mediaSplitLabel, selectLabel, splitMediaCount } from '../../utils/mediaCounts';
-import { Button, ColumnMenuHeader } from '../common';
+import { Button, ColumnMenuHeader, useConfirm } from '../common';
 import type { ColumnMenuOption } from '../common';
 import { PermissionGate } from './PermissionGate';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
@@ -65,6 +65,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
   canModerate = false
 }) => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { format: formatDate } = useLocalizedDate();
   const queryClient = useQueryClient();
   // The same test the tiles below use to tell a video from a photo.
@@ -232,7 +233,11 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
   const handleDeleteSingle = async (photo: AdminPhoto, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!confirm(`Are you sure you want to delete "${photo.filename}"?`)) {
+    if (!(await confirm({
+      message: t('admin.photos.deleteOneConfirm', 'Delete "{{name}}"? The photo is removed from the gallery for good. This cannot be undone.', { name: photo.filename }),
+      variant: 'danger',
+      confirmLabel: t('admin.photos.deleteOneAction', 'Delete photo'),
+    }))) {
       return;
     }
 
@@ -255,7 +260,11 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
     if (selectedPhotos.size === 0) return;
 
     const count = selectedPhotos.size;
-    if (!confirm(`Are you sure you want to delete ${count} photo${count > 1 ? 's' : ''}?`)) {
+    if (!(await confirm({
+      message: t('admin.photos.deleteManyConfirm', 'Delete {{count}} photos? They are removed from the gallery. This cannot be undone.', { count }),
+      variant: 'danger',
+      confirmLabel: t('admin.photos.deleteManyAction', 'Delete {{count}} photos', { count }),
+    }))) {
       return;
     }
 

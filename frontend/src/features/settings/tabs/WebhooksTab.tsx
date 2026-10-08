@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { Trash2, Copy, AlertTriangle, Activity, CheckCircle2, XCircle } from 'lucide-react';
-import { Button, Card, Input, Loading } from '../../../components/common';
+import { Button, Card, Input, Loading, useConfirm } from '../../../components/common';
 import { api } from '../../../config/api';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 
@@ -40,6 +40,7 @@ interface WebhookRow {
  */
 export const WebhooksTab: React.FC = () => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
@@ -343,10 +344,13 @@ export const WebhooksTab: React.FC = () => {
                             size="sm"
                             variant="ghost"
                             leftIcon={<Trash2 className="w-4 h-4" />}
-                            onClick={() => {
-                              if (confirm(t('settings.webhooks.confirmDelete', { name: wh.name, defaultValue: `Delete "${wh.name}"? Pending deliveries are also removed.` }))) {
-                                deleteMutation.mutate(wh.id);
-                              }
+                            onClick={async () => {
+                              if (!(await confirm({
+                                message: t('settings.webhooks.confirmDelete', { name: wh.name, defaultValue: `Delete "${wh.name}"? Pending deliveries are also removed.` }),
+                                variant: 'danger',
+                                confirmLabel: t('settings.webhooks.deleteAction', 'Delete webhook'),
+                              }))) return;
+                              deleteMutation.mutate(wh.id);
                             }}
                           >
                             {t('settings.webhooks.delete', 'Delete')}

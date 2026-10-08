@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Eye, Download, UserPlus, Grid3x3, List } from 'lucide-react';
-import { Card, Button, Loading } from '../common';
+import { Card, Button, Loading, useConfirm } from '../common';
 import { guestsService, AdminGuest } from '../../services/guests.service';
 import { AdminGuestDetail } from './AdminGuestDetail';
 import { GuestSelectionsAggregate } from './GuestSelectionsAggregate';
@@ -20,6 +20,7 @@ type View = 'list' | 'aggregate';
 
 export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, eventName }) => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { format: fmtDate } = useLocalizedDate();
   const [view, setView] = useState<View>('list');
   const [selectedGuest, setSelectedGuest] = useState<AdminGuest | null>(null);
@@ -54,10 +55,13 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
     errorMessage: () => t('admin.guests.mergedError', 'Failed to merge guests'),
   });
 
-  const handleDelete = (guest: AdminGuest) => {
-    if (window.confirm(t('admin.guests.forgetGuestConfirm', 'Remove this guest? Their picks will be anonymized but kept in aggregate totals.'))) {
-      deleteMutation.mutate(guest.id);
-    }
+  const handleDelete = async (guest: AdminGuest) => {
+    const ok = await confirm({
+      message: t('admin.guests.forgetGuestConfirm', 'Remove this guest? Their picks will be anonymized but kept in aggregate totals.'),
+      variant: 'danger',
+      confirmLabel: t('admin.guests.forgetGuest', 'Remove guest'),
+    });
+    if (ok) deleteMutation.mutate(guest.id);
   };
 
   const handleExport = async (guest: AdminGuest, format: 'txt' | 'csv' | 'json') => {
@@ -98,7 +102,7 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
     );
   };
 
-  const performMerge = () => {
+  const performMerge = async () => {
     if (mergeSelection.length < 2) {
       toast.warning(t('admin.guests.mergeSelectAtLeastTwo', 'Select at least 2 guests to merge'));
       return;
@@ -120,9 +124,12 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
       'Merge {{count}} guests into {{name}}? This cannot be undone.',
       { count: mergeSelection.length, name: keepLabel }
     );
-    if (window.confirm(confirmMsg)) {
-      mergeMutation.mutate({ keepId, mergeIds });
-    }
+    const ok = await confirm({
+      message: confirmMsg,
+      variant: 'danger',
+      confirmLabel: t('admin.guests.mergeNow', 'Merge selected'),
+    });
+    if (ok) mergeMutation.mutate({ keepId, mergeIds });
   };
 
   // Stable identity so the duplicate grouping below is not recomputed on

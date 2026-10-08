@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Clock, AlertTriangle } from 'lucide-react';
-import { Button, Card, LocalizedDateInput, TimeField } from '../common';
+import { Button, Card, LocalizedDateInput, TimeField, useConfirm } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { parseLocaleDecimal, parseDuration } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
@@ -51,6 +51,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
   customerId, customerHourlyRateMinor, billingCadence, onHourlyRateChange, compact,
 }) => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { flags } = useFeatureFlags();
@@ -530,11 +531,14 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
                       <button
                         type="button"
                         disabled={locked || deleteMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm(t('customers.hours.confirmDelete',
-                            'Delete this entry? If it has been billed onto a draft, the matching invoice line will also be removed.') as string)) {
-                            deleteMutation.mutate(e.id);
-                          }
+                        onClick={async () => {
+                          if (!(await confirm({
+                            message: t('customers.hours.confirmDelete',
+                              'Delete this entry? If it has been billed onto a draft, the matching invoice line will also be removed.') as string,
+                            variant: 'danger',
+                            confirmLabel: t('customers.hours.deleteEntry', 'Delete entry') as string,
+                          }))) return;
+                          deleteMutation.mutate(e.id);
                         }}
                         className="text-xs text-danger-text hover:underline disabled:text-faint disabled:cursor-not-allowed"
                         title={locked ? t('customers.hours.locked',

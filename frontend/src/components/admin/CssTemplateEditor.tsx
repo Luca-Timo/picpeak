@@ -103,8 +103,12 @@ export const CssTemplateEditor: React.FC = () => {
     setActiveSlot(slot);
   };
 
-  const handleReset = () => {
-    if (!confirm(t('cssTemplates.resetConfirm', 'Reset this template to the default? Your changes will be lost.'))) {
+  const handleReset = async () => {
+    if (!(await confirmDialog({
+      message: t('cssTemplates.resetConfirm', 'Reset this template to the default? Your changes will be lost.'),
+      variant: 'danger',
+      confirmLabel: t('cssTemplates.resetToDefault', 'Reset to Default'),
+    }))) {
       return;
     }
     resetMutation.mutate();

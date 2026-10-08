@@ -8,7 +8,7 @@ import {
   CheckCircle,
   User
 } from 'lucide-react';
-import { Card, Loading, Button } from '../common';
+import { Card, Loading, Button, useConfirm } from '../common';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { feedbackService, type FeedbackResponse, type PhotoFeedback } from '../../services/feedback.service';
 import { toast } from 'react-toastify';
@@ -29,6 +29,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
   maxItems = 5
 }) => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { formatDateTime } = useLocalizedDate();
   const queryClient = useQueryClient();
   const showAllModal = useModal();
@@ -166,10 +167,13 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
                         size="sm"
                         variant="ghost"
                         leftIcon={<Trash2 className="w-4 h-4" />}
-                        onClick={() => {
-                          if (confirm(t('feedback.confirmDelete', 'Are you sure you want to delete this comment?'))) {
-                            deleteMutation.mutate(item.id.toString());
-                          }
+                        onClick={async () => {
+                          if (!(await confirm({
+                            message: t('feedback.confirmDelete', 'Delete this feedback? It is removed for good. This cannot be undone.'),
+                            variant: 'danger',
+                            confirmLabel: t('feedback.deleteAction', 'Delete feedback'),
+                          }))) return;
+                          deleteMutation.mutate(item.id.toString());
                         }}
                         isLoading={deleteMutation.isPending}
                         className="text-danger-text hover:bg-danger-soft"

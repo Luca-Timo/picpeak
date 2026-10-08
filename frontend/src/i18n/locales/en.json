@@ -1505,7 +1505,7 @@
     "failedToDeleteCategory": "Failed to delete category",
     "categoryName": "Category name",
     "noCategoriesYet": "No categories yet. Create your first category to organize photos.",
-    "deleteConfirm": "Are you sure you want to delete \"{{name}}\"?",
+    "deleteConfirm": "Delete the category \"{{name}}\"? A category that still holds photos cannot be deleted; move them first. This cannot be undone.",
     "setCoverPhoto": "Set Cover Photo",
     "removeCoverPhoto": "Remove Cover Photo",
     "coverPhotoSet": "Cover photo set successfully",
@@ -1635,7 +1635,8 @@
         "invalidSlug": "Short URLs must be lowercase letters, digits, and hyphens (1–64 chars)."
       },
       "hits_one": "{{count}} hits",
-      "hits_other": "{{count}} hits"
+      "hits_other": "{{count}} hits",
+      "deleteAction": "Delete short URL"
     },
     "resetGalleryPassword": "Reset Gallery Password",
     "resendCreationEmail": "Resend Creation Email",
@@ -2569,7 +2570,7 @@
       "filterDeleted": "Word filter deleted successfully",
       "deleteError": "Failed to delete word filter",
       "wordRequired": "Please enter a word to filter",
-      "confirmDelete": "Are you sure you want to delete this word filter?",
+      "confirmDelete": "Delete this word filter? Comments are no longer checked against it. This cannot be undone.",
       "loading": "Loading word filters...",
       "noMatchingFilters": "No matching filters found",
       "noFilters": "No word filters configured yet",
@@ -2581,7 +2582,8 @@
       "lowDescription": "Word is flagged for review but not automatically blocked",
       "moderateDescription": "Comment requires manual approval before being visible",
       "highDescription": "Comment is automatically hidden and requires admin review",
-      "blockDescription": "Comment is rejected immediately and cannot be submitted"
+      "blockDescription": "Comment is rejected immediately and cannot be submitted",
+      "deleteAction": "Delete filter"
     },
     "styling": {
       "title": "Custom CSS"
@@ -2741,7 +2743,8 @@
       "confirmRevoke": "Revoke \"{{name}}\"? Existing integrations using this token will start getting 401.",
       "revoke": "Revoke",
       "empty": "No tokens yet. Generate one above to get started.",
-      "preview": "Preview"
+      "preview": "Preview",
+      "revokeAction": "Revoke token"
     },
     "webhooks": {
       "title": "Webhooks",
@@ -2820,7 +2823,8 @@
           "success": "success",
           "failed": "failed"
         }
-      }
+      },
+      "deleteAction": "Delete webhook"
     },
     "sectionLabel": "Settings section",
     "navAriaLabel": "Settings navigation",
@@ -4441,7 +4445,13 @@
         "filterNone": "No name"
       },
       "approvedBy": "Approved: {{value}}",
-      "rejectedBy": "Rejected: {{value}}"
+      "rejectedBy": "Rejected: {{value}}",
+      "deleteOneConfirm": "Delete \"{{name}}\"? The photo is removed from the gallery for good. This cannot be undone.",
+      "deleteOneAction": "Delete photo",
+      "deleteManyConfirm_one": "Delete {{count}} photo? It is removed from the gallery. This cannot be undone.",
+      "deleteManyConfirm_other": "Delete {{count}} photos? They are removed from the gallery. This cannot be undone.",
+      "deleteManyAction_one": "Delete {{count}} photo",
+      "deleteManyAction_other": "Delete {{count}} photos"
     },
     "events": {
       "tabs": {
@@ -5634,7 +5644,8 @@
         "ARTIFACT_OUT_OF_SCOPE": "This backup's files are outside the configured backup destination, so nothing was deleted",
         "ARTIFACT_DELETE_FAILED": "The backup manifest could not be removed, so the record was kept",
         "FORBIDDEN": "You do not have permission to delete backups"
-      }
+      },
+      "deleteAction": "Delete backup"
     },
     "restore": {
       "superAdminOnly": "Restoring a backup replaces all data on this instance, user accounts and roles included, so only a Super Admin can do it.",
@@ -5988,7 +5999,7 @@
     "approve": "Approve",
     "hide": "Hide",
     "unhide": "Unhide",
-    "confirmDelete": "Are you sure you want to delete this feedback?",
+    "confirmDelete": "Delete this feedback? It is removed for good. This cannot be undone.",
     "avgRating": "Average Rating",
     "totalRatings_one": "{{count}} ratings",
     "totalRatings_other": "{{count}} ratings",
@@ -6072,7 +6083,8 @@
     "decisionError": "Failed to save your decision",
     "decisionType": "your decision",
     "youApproved": "You approved this photo",
-    "youRejected": "You rejected this photo"
+    "youRejected": "You rejected this photo",
+    "deleteAction": "Delete feedback"
   },
   "filter": {
     "feedbackFilters": "Feedback Filters",
@@ -6975,7 +6987,8 @@
         "createFailed": "Failed to log entry"
       },
       "unbilledCount_one": "{{count}} unbilled entries totaling {{total}}",
-      "unbilledCount_other": "{{count}} unbilled entries totaling {{total}}"
+      "unbilledCount_other": "{{count}} unbilled entries totaling {{total}}",
+      "deleteEntry": "Delete entry"
     },
     "create": {
       "openButton": "Create passive customer",
@@ -7892,7 +7905,8 @@
       "number": "Account number",
       "name": "Name",
       "type": "Type",
-      "confirmDelete": "Delete this account?"
+      "confirmDelete": "Delete account {{number}} \"{{name}}\"? It can no longer be used for bookings or the export. This cannot be undone.",
+      "deleteAction": "Delete account"
     },
     "vat": {
       "addTitle": "Add VAT code",
@@ -7903,8 +7917,9 @@
       "direction": "Direction",
       "account": "VAT account",
       "noAccount": "— none —",
-      "confirmDelete": "Delete this VAT code?",
-      "legacyRate": "{{rate}}% (not configured)"
+      "confirmDelete": "Delete VAT code \"{{code}}\"? It can no longer be picked for new documents. This cannot be undone.",
+      "legacyRate": "{{rate}}% (not configured)",
+      "deleteAction": "Delete VAT code"
     },
     "export": {
       "title": "Treuhänder export",

@@ -13,7 +13,7 @@ import {
   Search
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Card, Button, Input, Loading } from '../common';
+import { Card, Button, Input, Loading, useConfirm } from '../common';
 import { feedbackService } from '../../services/feedback.service';
 import { useMutationWithToast } from '../../hooks';
 
@@ -28,6 +28,7 @@ interface WordFilter {
 
 export const WordFilterManager: React.FC = () => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   
   const [newWord, setNewWord] = useState('');
@@ -122,10 +123,13 @@ export const WordFilterManager: React.FC = () => {
     });
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm(t('settings.moderation.confirmDelete', 'Are you sure you want to delete this word filter?'))) {
-      deleteMutation.mutate(id);
-    }
+  const handleDelete = async (id: number) => {
+    const ok = await confirm({
+      message: t('settings.moderation.confirmDelete', 'Delete this word filter? Comments are no longer checked against it. This cannot be undone.'),
+      variant: 'danger',
+      confirmLabel: t('settings.moderation.deleteAction', 'Delete filter'),
+    });
+    if (ok) deleteMutation.mutate(id);
   };
 
   const getSeverityIcon = (severity: string) => {

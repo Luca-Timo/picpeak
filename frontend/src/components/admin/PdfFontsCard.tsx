@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Type } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Button, Card } from '../common';
+import { Button, Card, useConfirm } from '../common';
 import { PermissionGate } from './PermissionGate';
 import { pdfThemesService } from '../../services/pdfThemes.service';
 
@@ -31,6 +31,7 @@ function apiError(err: unknown): { message?: string; code?: string } {
 
 export const PdfFontsCard: React.FC = () => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ['pdf-fonts'], queryFn: () => pdfThemesService.fonts() });
   const [name, setName] = useState('');
@@ -74,7 +75,11 @@ export const PdfFontsCard: React.FC = () => {
   };
 
   const archive = async (id: number) => {
-    if (!window.confirm(t('branding.pdfFonts.archiveConfirm', 'Archive this font? Documents whose theme uses it fall back to Helvetica.') as string)) return;
+    if (!(await confirm({
+      message: t('branding.pdfFonts.archiveConfirm', 'Archive this font? Documents whose theme uses it fall back to Helvetica.') as string,
+      variant: 'danger',
+      confirmLabel: t('branding.pdfFonts.archive', 'Archive') as string,
+    }))) return;
     try {
       await pdfThemesService.archiveFont(id);
       await refresh();

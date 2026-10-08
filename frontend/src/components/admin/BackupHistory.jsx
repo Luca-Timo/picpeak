@@ -21,7 +21,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Input, Loading } from '../common';
+import { Button, Card, Input, Loading, useConfirm } from '../common';
 import { api } from '../../config/api';
 import { useMutationWithToast } from '../../hooks';
 // Per [[feedback_respect_general_format_settings]]: route every displayed
@@ -54,6 +54,7 @@ const formatBytes = (bytes) => {
 
 export const BackupHistory = () => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -114,10 +115,13 @@ export const BackupHistory = () => {
     setExpandedRows(newExpanded);
   };
 
-  const handleDelete = (backup) => {
-    if (window.confirm(t('backup.history.deleteConfirm', { date: format(new Date(backup.created_at)) }))) {
-      deleteMutation.mutate(backup.id);
-    }
+  const handleDelete = async (backup) => {
+    const ok = await confirm({
+      message: t('backup.history.deleteConfirm', { date: format(new Date(backup.created_at)) }),
+      variant: 'danger',
+      confirmLabel: t('backup.history.deleteAction', 'Delete backup'),
+    });
+    if (ok) deleteMutation.mutate(backup.id);
   };
 
   if (isLoading) {

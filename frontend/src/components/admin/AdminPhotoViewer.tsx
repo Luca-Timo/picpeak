@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminPhoto } from '../../services/photos.service';
 import { photosService } from '../../services/photos.service';
 import { feedbackService, type PhotoFeedback, type FeedbackSummary } from '../../services/feedback.service';
-import { Button } from '../common';
+import { Button, useConfirm } from '../common';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { AdminAuthenticatedVideo } from './AdminAuthenticatedVideo';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
@@ -48,6 +48,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
 }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const { t } = useTranslation();
+  const confirm = useConfirm();
   // The photographer's own triage mark (#1044 follow-up). Held locally and
   // seeded from the row so the star/colour UI responds instantly; the grid
   // picks it up when its query is invalidated.
@@ -90,7 +91,11 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete "${currentPhoto.filename}"?`)) {
+    if (!(await confirm({
+      message: t('admin.photos.deleteOneConfirm', 'Delete "{{name}}"? The photo is removed from the gallery for good. This cannot be undone.', { name: currentPhoto.filename }),
+      variant: 'danger',
+      confirmLabel: t('admin.photos.deleteOneAction', 'Delete photo'),
+    }))) {
       return;
     }
 
@@ -715,10 +720,13 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                               )}
                               
                               <button
-                                onClick={() => {
-                                  if (confirm('Are you sure you want to delete this comment?')) {
-                                    deleteFeedbackMutation.mutate(comment.id.toString());
-                                  }
+                                onClick={async () => {
+                                  if (!(await confirm({
+                                    message: t('feedback.confirmDelete', 'Delete this feedback? It is removed for good. This cannot be undone.'),
+                                    variant: 'danger',
+                                    confirmLabel: t('feedback.deleteAction', 'Delete feedback'),
+                                  }))) return;
+                                  deleteFeedbackMutation.mutate(comment.id.toString());
                                 }}
                                 disabled={deleteFeedbackMutation.isPending}
                                 className="text-xs px-2 py-1 bg-danger hover:opacity-90 text-white rounded"
