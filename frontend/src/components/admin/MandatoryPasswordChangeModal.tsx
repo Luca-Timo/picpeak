@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Input, Card } from '../common';
+import { Button, Input, Card, Notice } from '../common';
 import { adminService } from '../../services/admin.service';
 
 export const MandatoryPasswordChangeModal: React.FC = () => {
@@ -200,21 +200,15 @@ export const MandatoryPasswordChangeModal: React.FC = () => {
             </div>
 
             {/* Password Requirements */}
-            <div className="bg-info-soft border border-info-line rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-info-text">
-                  <p className="font-medium">{t('passwordChange.requirements')}</p>
-                  <ul className="list-disc list-inside mt-1 space-y-1">
-                    <li>{t('mandatoryPasswordChange.minLength')}</li>
-                    <li>{t('mandatoryPasswordChange.mustContainUpperLower')}</li>
-                    <li>{t('mandatoryPasswordChange.mustContainNumbers')}</li>
-                    <li>{t('mandatoryPasswordChange.mustContainSpecial')}</li>
-                    <li>{t('passwordChange.mustDiffer')}</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+            <Notice tone="info" title={t('passwordChange.requirements')}>
+              <ul className="list-disc list-inside space-y-1">
+                <li>{t('mandatoryPasswordChange.minLength')}</li>
+                <li>{t('mandatoryPasswordChange.mustContainUpperLower')}</li>
+                <li>{t('mandatoryPasswordChange.mustContainNumbers')}</li>
+                <li>{t('mandatoryPasswordChange.mustContainSpecial')}</li>
+                <li>{t('passwordChange.mustDiffer')}</li>
+              </ul>
+            </Notice>
 
             {/* Action Button */}
             <div className="pt-2">

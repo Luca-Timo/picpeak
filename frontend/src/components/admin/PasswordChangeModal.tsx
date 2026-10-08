@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { X, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Lock, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Input, Card } from '../common';
+import { Button, Input, Modal, Notice } from '../common';
 import { adminService } from '../../services/admin.service';
 
 interface PasswordChangeModalProps {
@@ -97,20 +97,33 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-md">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-heading">{t('passwordChange.title')}</h2>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-hover rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-muted" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      closeOnBackdrop={false}
+      size="sm"
+      title={t('passwordChange.title')}
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+          >
+            {t('passwordChange.cancel')}
+          </Button>
+          <Button
+            type="submit"
+            form="password-change-form"
+            variant="primary"
+            isLoading={changePasswordMutation.isPending}
+          >
+            {t('passwordChange.title')}
+          </Button>
+        </>
+      }
+    >
+          <form id="password-change-form" onSubmit={handleSubmit} className="space-y-4">
             {/* Current Password */}
             <div>
               <label htmlFor="currentPassword" className="block text-sm font-medium text-body mb-1">
@@ -196,39 +209,13 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
             </div>
 
             {/* Password Requirements */}
-            <div className="bg-info-soft border border-info-line rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-info-text">
-                  <p className="font-medium">{t('passwordChange.requirements')}</p>
-                  <ul className="list-disc list-inside mt-1 space-y-1">
-                    <li>{t('passwordChange.minLength')}</li>
-                    <li>{t('passwordChange.mustDiffer')}</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-              >
-                {t('passwordChange.cancel')}
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                isLoading={changePasswordMutation.isPending}
-              >
-                {t('passwordChange.title')}
-              </Button>
-            </div>
+            <Notice tone="info" size="sm" title={t('passwordChange.requirements')}>
+              <ul className="list-disc list-inside space-y-1">
+                <li>{t('passwordChange.minLength')}</li>
+                <li>{t('passwordChange.mustDiffer')}</li>
+              </ul>
+            </Notice>
           </form>
-        </div>
-      </Card>
-    </div>
+    </Modal>
   );
 };

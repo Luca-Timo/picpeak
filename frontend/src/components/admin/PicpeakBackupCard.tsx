@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { Download, Upload, AlertTriangle, ShieldAlert, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { Download, Upload, AlertTriangle, ShieldAlert, ExternalLink } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card } from '../common';
+import { Button, Card, Modal, Notice } from '../common';
 import { api } from '../../config/api';
 
 // Portable ".picpeak" roundtrip, split across two Backup Manager tabs:
@@ -75,12 +75,9 @@ export const PicpeakExportCard: React.FC = () => {
           />
           {t('backup.picpeak.includePhotos', 'Include original gallery photos (larger file)')}
         </label>
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-line bg-warning-soft p-3">
-          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning-text" />
-          <p className="text-xs text-warning-text">
-            {t('backup.picpeak.secretsWarning', 'This file contains secrets in plain text (email password, admin credentials, API keys). Store it securely and only transfer it over trusted channels.')}
-          </p>
-        </div>
+        <Notice tone="warning" size="sm" className="mt-3" icon={<ShieldAlert className="h-4 w-4" />}>
+          {t('backup.picpeak.secretsWarning', 'This file contains secrets in plain text (email password, admin credentials, API keys). Store it securely and only transfer it over trusted channels.')}
+        </Notice>
         <Button
           variant="outline"
           className="mt-3"
@@ -161,91 +158,78 @@ export const PicpeakRestoreCard: React.FC = () => {
       </Button>
 
       {result && (
-        <div className="mt-4 rounded-lg border border-success-line bg-success-soft p-4">
-          <div className="flex items-start gap-2">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-success-text" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-success-text">
-                {t('backup.picpeak.restoreDone', 'Backup restored.')}
-              </p>
-              <p className="mt-0.5 text-xs text-success-text">
-                {t('backup.picpeak.restoreSummary', '{{tables}} tables and {{files}} files restored.', {
-                  tables: result.tables,
-                  files: result.filesRestored,
-                })}
-              </p>
-              {result.crossEngine && (
-                <p className="mt-0.5 text-xs text-success-text">
-                  {t('backup.picpeak.crossEngineNote', 'Cross-engine restore: a SQLite backup was converted onto this PostgreSQL instance.')}
-                </p>
-              )}
-              {result.externalPathsConverted === false && (
-                <p className="mt-2 flex items-start gap-1 text-xs text-danger-text">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                  <span>
-                    {t('backup.picpeak.externalPathsFailedDetail',
-                      'External photo paths were not converted, so every referenced original is currently unreachable. Re-run the restore or the pending migrations once the cause is resolved.')}
-                    {result.externalPathError ? ` (${result.externalPathError})` : ''}
-                  </span>
-                </p>
-              )}
-              {result.usesExternalMedia && (
-                <p className="mt-2 flex items-start gap-1 text-xs text-warning-text">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                  <span>
-                    {t('backup.picpeak.externalMediaNote', 'This backup references an external-media library. Make sure external-media routing is configured on this instance.')}{' '}
-                    <a
-                      href="https://github.com/PicPeak/picpeak/blob/main/README.md"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-0.5 underline"
-                    >
-                      {t('backup.picpeak.externalMediaLink', 'Setup guide')}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </span>
-                </p>
-              )}
-              <Button variant="primary" size="sm" className="mt-3" onClick={() => window.location.reload()}>
-                {t('backup.picpeak.reload', 'Reload app')}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <Notice tone="success" className="mt-4" title={t('backup.picpeak.restoreDone', 'Backup restored.')}>
+          <p className="text-xs">
+            {t('backup.picpeak.restoreSummary', '{{tables}} tables and {{files}} files restored.', {
+              tables: result.tables,
+              files: result.filesRestored,
+            })}
+          </p>
+          {result.crossEngine && (
+            <p className="mt-0.5 text-xs">
+              {t('backup.picpeak.crossEngineNote', 'Cross-engine restore: a SQLite backup was converted onto this PostgreSQL instance.')}
+            </p>
+          )}
+          {result.externalPathsConverted === false && (
+            <p className="mt-2 flex items-start gap-1 text-xs text-danger-text">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>
+                {t('backup.picpeak.externalPathsFailedDetail',
+                  'External photo paths were not converted, so every referenced original is currently unreachable. Re-run the restore or the pending migrations once the cause is resolved.')}
+                {result.externalPathError ? ` (${result.externalPathError})` : ''}
+              </span>
+            </p>
+          )}
+          {result.usesExternalMedia && (
+            <p className="mt-2 flex items-start gap-1 text-xs text-warning-text">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>
+                {t('backup.picpeak.externalMediaNote', 'This backup references an external-media library. Make sure external-media routing is configured on this instance.')}{' '}
+                <a
+                  href="https://github.com/PicPeak/picpeak/blob/main/README.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 underline"
+                >
+                  {t('backup.picpeak.externalMediaLink', 'Setup guide')}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </span>
+            </p>
+          )}
+          <Button variant="primary" size="sm" className="mt-3" onClick={() => window.location.reload()}>
+            {t('backup.picpeak.reload', 'Reload app')}
+          </Button>
+        </Notice>
       )}
 
       {/* Destructive confirmation */}
-      {pendingFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-panel p-6 shadow-xl">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-6 w-6 flex-shrink-0 text-danger-text" />
-              <div>
-                <h3 className="text-lg font-semibold text-heading">
-                  {t('backup.picpeak.confirmTitle', 'Restore will delete all current data')}
-                </h3>
-                <p className="mt-2 text-sm text-body">
-                  {t('backup.picpeak.confirmBody', 'This permanently replaces ALL data on this instance with the uploaded backup, except your current account. This cannot be undone.')}
-                </p>
-                <p className="mt-2 truncate text-xs text-muted">{pendingFile.name}</p>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setPendingFile(null)} disabled={restoring}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                className="!bg-red-600 hover:!bg-red-700"
-                isLoading={restoring}
-                onClick={confirmRestore}
-              >
-                {t('backup.picpeak.confirmRestore', 'Delete & restore')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!pendingFile}
+        onClose={() => { if (!restoring) setPendingFile(null); }}
+        closeOnBackdrop={false}
+        size="sm"
+        title={t('backup.picpeak.confirmTitle', 'Restore will delete all current data')}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPendingFile(null)} disabled={restoring}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              isLoading={restoring}
+              onClick={confirmRestore}
+            >
+              {t('backup.picpeak.confirmRestore', 'Delete & restore')}
+            </Button>
+          </>
+        }
+      >
+        <Notice tone="danger">
+          {t('backup.picpeak.confirmBody', 'This permanently replaces ALL data on this instance with the uploaded backup, except your current account. This cannot be undone.')}
+        </Notice>
+        <p className="mt-2 truncate text-xs text-muted">{pendingFile?.name}</p>
+      </Modal>
     </Card>
   );
 };

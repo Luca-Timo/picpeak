@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, AlertCircle, CheckCircle, Loader2, Type, Mail } from 'lucide-react';
-import { Button, Input, Card } from '../common';
+import { Loader2, Type, Mail } from 'lucide-react';
+import { Button, Input, Modal, Notice } from '../common';
 
 interface EventRenameDialogProps {
   isOpen: boolean;
@@ -36,6 +36,7 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
 }) => {
   const { t } = useTranslation();
   const [newName, setNewName] = useState(eventName);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [resendEmail, setResendEmail] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -124,38 +125,58 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="max-w-lg w-full">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-heading">
-            {t('events.rename.title', 'Rename Event')}
-          </h2>
-          <button
-            onClick={onClose}
-            disabled={isRenaming}
-            className="text-faint hover:text-soft disabled:opacity-50"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  const renameDisabled =
+    !validationResult?.valid ||
+    isValidating ||
+    newName.trim() === eventName.trim() ||
+    newName.trim().length < 3;
 
+  const footer = renameResult?.success ? (
+    <Button variant="primary" onClick={onClose}>
+      {t('common.done', 'Done')}
+    </Button>
+  ) : renameResult?.error ? (
+    <>
+      <Button variant="outline" onClick={() => setRenameResult(null)}>
+        {t('common.retry', 'Retry')}
+      </Button>
+      <Button variant="primary" onClick={onClose}>
+        {t('common.close', 'Close')}
+      </Button>
+    </>
+  ) : isRenaming ? undefined : (
+    <>
+      <Button variant="outline" onClick={onClose}>
+        {t('common.cancel')}
+      </Button>
+      <Button
+        variant="primary"
+        onClick={handleRename}
+        disabled={renameDisabled}
+      >
+        {t('events.rename.confirm', 'Rename Event')}
+      </Button>
+    </>
+  );
+
+  return (
+    <Modal
+      open={isOpen}
+      onClose={() => { if (!isRenaming) onClose(); }}
+      closeOnBackdrop={false}
+      size="md"
+      initialFocusRef={nameInputRef}
+      title={t('events.rename.title', 'Rename Event')}
+      footer={footer}
+    >
         {renameResult?.success ? (
           // Success state
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-success-soft rounded-lg">
-              <CheckCircle className="w-6 h-6 text-success-text flex-shrink-0" />
-              <div>
-                <p className="font-medium text-success-text">
-                  {t('events.rename.success', 'Event renamed successfully!')}
-                </p>
-                {renameResult.filesRenamed !== undefined && renameResult.filesRenamed > 0 && (
-                  <p className="text-sm text-success-text mt-1">
-                    {t('events.rename.filesRenamed', '{{count}} files updated', { count: renameResult.filesRenamed })}
-                  </p>
-                )}
-              </div>
-            </div>
+            <Notice tone="success" title={t('events.rename.success', 'Event renamed successfully!')}>
+              {renameResult.filesRenamed !== undefined && renameResult.filesRenamed > 0
+                ? t('events.rename.filesRenamed', '{{count}} files updated', { count: renameResult.filesRenamed })
+                : null}
+            </Notice>
 
             {renameResult.newShareLink && (
               <div className="p-3 bg-subtle rounded-lg">
@@ -165,35 +186,12 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
                 <p className="text-sm text-heading break-all">{renameResult.newShareLink}</p>
               </div>
             )}
-
-            <div className="flex justify-end">
-              <Button variant="primary" onClick={onClose}>
-                {t('common.done', 'Done')}
-              </Button>
-            </div>
           </div>
         ) : renameResult?.error ? (
           // Error state
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-danger-soft rounded-lg">
-              <AlertCircle className="w-6 h-6 text-danger-text flex-shrink-0" />
-              <div>
-                <p className="font-medium text-danger-text">
-                  {t('events.rename.failed', 'Rename failed')}
-                </p>
-                <p className="text-sm text-danger-text mt-1">{renameResult.error}</p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setRenameResult(null)}>
-                {t('common.retry', 'Retry')}
-              </Button>
-              <Button variant="primary" onClick={onClose}>
-                {t('common.close', 'Close')}
-              </Button>
-            </div>
-          </div>
+          <Notice tone="danger" title={t('events.rename.failed', 'Rename failed')}>
+            {renameResult.error}
+          </Notice>
         ) : isRenaming ? (
           // Renaming in progress
           <div className="space-y-4 py-8">
@@ -216,6 +214,7 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
                 {t('events.rename.newName', 'New Event Name')}
               </label>
               <Input
+                ref={nameInputRef}
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -227,12 +226,10 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
 
             {/* New slug preview */}
             {validationResult?.valid && validationResult.newSlug && (
-              <div className="p-3 bg-success-soft rounded-lg">
-                <p className="text-sm text-success-text">
-                  <span className="font-medium">{t('events.rename.newUrl', 'New URL:')}</span>{' '}
-                  <span className="break-all">/gallery/{validationResult.newSlug}/...</span>
-                </p>
-              </div>
+              <Notice tone="success" size="sm">
+                <span className="font-medium">{t('events.rename.newUrl', 'New URL:')}</span>{' '}
+                <span className="break-all">/gallery/{validationResult.newSlug}/...</span>
+              </Notice>
             )}
 
             {/* Validation status */}
@@ -244,10 +241,9 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
             )}
 
             {validationResult && !validationResult.valid && (
-              <div className="flex items-center gap-2 p-3 bg-danger-soft rounded-lg">
-                <AlertCircle className="w-4 h-4 text-danger-text flex-shrink-0" />
-                <p className="text-sm text-danger-text">{validationResult.error}</p>
-              </div>
+              <Notice tone="danger" size="sm">
+                {validationResult.error}
+              </Notice>
             )}
 
             {/* Resend email option */}
@@ -274,41 +270,16 @@ export const EventRenameDialog: React.FC<EventRenameDialogProps> = ({
             )}
 
             {/* Warning */}
-            <div className="p-3 bg-warning-soft rounded-lg border border-warning-line">
-              <div className="flex gap-2">
-                <AlertCircle className="w-4 h-4 text-warning-text flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-warning-text">
-                  <p className="font-medium">{t('events.rename.warningTitle', 'Please note:')}</p>
-                  <ul className="mt-1 list-disc list-inside space-y-1">
-                    <li>{t('events.rename.warning1', 'The gallery URL will change')}</li>
-                    <li>{t('events.rename.warning2', 'Old URLs will automatically redirect to the new URL')}</li>
-                    <li>{t('events.rename.warning3', 'Photo files may be renamed')}</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={onClose}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleRename}
-                disabled={
-                  !validationResult?.valid ||
-                  isValidating ||
-                  newName.trim() === eventName.trim() ||
-                  newName.trim().length < 3
-                }
-              >
-                {t('events.rename.confirm', 'Rename Event')}
-              </Button>
-            </div>
+            <Notice tone="warning" size="sm" title={t('events.rename.warningTitle', 'Please note:')}>
+              <ul className="list-disc list-inside space-y-1">
+                <li>{t('events.rename.warning1', 'The gallery URL will change')}</li>
+                <li>{t('events.rename.warning2', 'Old URLs will automatically redirect to the new URL')}</li>
+                <li>{t('events.rename.warning3', 'Photo files may be renamed')}</li>
+              </ul>
+            </Notice>
           </div>
         )}
-      </Card>
-    </div>
+    </Modal>
   );
 };
 
