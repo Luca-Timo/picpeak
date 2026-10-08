@@ -57,7 +57,7 @@ export const AnalyticsPage: React.FC = () => {
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('7d');
   const [isEmbedMode, setIsEmbedMode] = useState(false);
   
-  // Check if Umami is configured from settings or environment
+  // Check if Umami is configured in the admin settings
   const [umamiConfig, setUmamiConfig] = useState<{ url?: string; shareUrl?: string; enabled?: boolean; cookieDomain?: string | null }>({});
   const dashboardProps = analyticsDashboardFrameProps(umamiConfig.shareUrl, umamiConfig.cookieDomain);
   // The new tab is the primary way in: it needs neither credentialless iframe

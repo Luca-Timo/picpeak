@@ -156,11 +156,18 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
       // Accent as TEXT (links, inline actions): the accent itself when it
       // reads, else nudged until it does — on the studio palette's cards and
       // page, and on the admin's light and dark panels (tokens.css picks).
-      const surface = themeConfig.surfaceColor || '#ffffff';
+      // Same fallback as --color-surface below: a dark theme without its own
+      // surface colour paints #1a1a1a, not white.
+      const surface = themeConfig.surfaceColor
+        || (resolveColorMode(themeConfig.colorMode) === 'dark' ? '#1a1a1a' : '#ffffff');
       const page = themeConfig.backgroundColor || surface;
       root.style.setProperty('--color-accent-text', readableAccentText(readableAccentText(themeConfig.accentColor, surface), page));
       root.style.setProperty('--ui-accent-text-light', readableAccentText(themeConfig.accentColor, '#ffffff'));
       root.style.setProperty('--ui-accent-text-dark', readableAccentText(themeConfig.accentColor, '#262626'));
+    } else {
+      // No accent: drop the previous theme's text values, so nothing stale
+      // outlives a palette switch.
+      ['--color-accent-text', '--ui-accent-text-light', '--ui-accent-text-dark'].forEach((v) => root.style.removeProperty(v));
     }
 
     // Accent-dark: filled CTA background. Falls back to primaryColor for

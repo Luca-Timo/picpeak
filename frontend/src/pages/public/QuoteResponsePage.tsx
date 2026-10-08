@@ -366,127 +366,131 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
             </p>
           )}
 
-          <table className="w-full text-sm my-4">
-            <thead>
-              <tr className="border-b border-border-token text-muted-theme">
-                <th className="text-left py-2 w-10">#</th>
-                <th className="text-left py-2">{t('quoteResponse.description', 'Description')}</th>
-                <th className="text-right py-2 pl-4 w-16 whitespace-nowrap">{t('quoteResponse.qty', 'Qty')}</th>
-                <th className="text-right py-2 pl-4 w-24 whitespace-nowrap">{t('quoteResponse.unit', 'Unit')}</th>
-                <th className="text-right py-2 pl-4 w-24 whitespace-nowrap">{t('quoteResponse.total', 'Total')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                // Migration 119 — sub-items + details_text. Top-level
-                // items get a numeric position; sub-items show empty
-                // position + indented description + parenthesised
-                // (display-only) line total. A non-empty detailsText
-                // renders as a small italic grey line directly below
-                // its parent. Sub-items with unit_price = 0 leave the
-                // price columns empty (transparency list only).
-                let topCount = 0;
-                const rows: React.ReactNode[] = [];
-                // A package whose price is the sum of its sub-items has no
-                // unit price of its own — the same rule as the PDF.
-                const parents = new Set<string>();
-                for (const item of quote.lineItems) {
-                  if (item.parentLineItemId != null) parents.add(`id:${item.parentLineItemId}`);
-                  if (item.parentPosition != null) parents.add(`pos:${item.parentPosition}`);
-                }
-                for (const li of quote.lineItems) {
-                  const isSub = li.parentLineItemId != null || li.parentPosition != null;
-                  // Discount lines (#1451) are numbered, but carry no quantity or unit price.
-                  const isDiscount = li.lineKind === 'discount';
-                  if (!isSub) topCount += 1;
-                  const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
-                  const packageSum = !isSub && !Number(li.unitPriceMinor)
-                    && (parents.has(`id:${li.id}`) || parents.has(`pos:${li.position}`));
-                  const unitLabel = li.unit ? t(`crm.lineItems.unitShort.${li.unit}`, li.unit) : '';
-                  const quantityText = isDiscount
-                    ? ''
-                    : li.unit === 'flat' ? unitLabel : `${Number(li.quantity)}${unitLabel ? ` ${unitLabel}` : ''}`;
-                  // Optional add-ons (#1451): sub-items follow their parent.
-                  const addOnPosition = isSub ? li.parentPosition : li.position;
-                  const isAddOn = !!li.isOptional && !isDiscount;
-                  const addOnChosen = isAddOn && addOnPosition != null ? isChosen(addOnPosition, li.selected) : true;
-                  // A not-booked add-on is dimmed — except its Book button.
-                  const dim = addOnChosen ? '' : 'opacity-60';
-                  const lineTotalMinor = lineTotalOverrides.get(li.position) ?? Number(li.lineTotalMinor);
-                  const hasDetails = !!li.detailsText && String(li.detailsText).trim().length > 0;
-                  // An add-on's status (with its Book / Remove booking button)
-                  // is the last line of the item: title, details, status.
-                  const hasStatus = isAddOn && !isSub;
-                  const itemBorder = 'border-b border-border-token';
-                  rows.push(
-                    <tr key={`row-${li.position}`} className={`${hasDetails || hasStatus ? '' : itemBorder} ${
-                      isSub ? 'text-muted-theme' : ''
-                    }`}>
-                      <td className={`py-2 ${dim}`}>{isSub ? '' : topCount}</td>
-                      <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''} ${dim}`}>
-                        {isSub ? '• ' : ''}{li.description}
-                        {hasStatus && canChoose && (
-                          <span className="ml-2 inline-block rounded px-1.5 py-0.5 text-xs bg-elevated text-theme">
-                            {t('quoteResponse.addons.optional', 'Optional')}
-                          </span>
-                        )}
-                      </td>
-                      <td className={`py-2 pl-4 text-right whitespace-nowrap ${dim}`}>{quantityText}</td>
-                      <td className={`py-2 pl-4 text-right tabular-nums whitespace-nowrap ${dim}`}>
-                        {priceless || isDiscount || packageSum ? '' : formatMoneyMinor(Number(li.unitPriceMinor), quote.currency)}
-                      </td>
-                      <td className={`py-2 pl-4 text-right tabular-nums whitespace-nowrap ${isSub ? 'italic' : ''} ${dim}`}>
-                        {priceless
-                          ? ''
-                          : isSub
-                            ? `(${formatMoneyMinor(lineTotalMinor, quote.currency)})`
-                            : formatMoneyMinor(lineTotalMinor, quote.currency)}
-                      </td>
-                    </tr>
-                  );
-                  if (hasDetails) {
-                    rows.push(
-                      <tr key={`details-${li.position}`} className={hasStatus ? '' : itemBorder}>
-                        <td className="py-1"></td>
-                        <td className={`py-1 text-xs italic text-muted-theme whitespace-pre-line ${isSub ? 'pl-10' : 'pl-4'} ${dim}`}
-                          colSpan={4}>
-                          {li.detailsText}
-                        </td>
-                      </tr>
-                    );
+          {/* On a phone the unit price column steps aside (quantity and total
+              stay); anything still too wide scrolls inside the card. */}
+          <div className="overflow-x-auto my-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border-token text-muted-theme">
+                  <th className="text-left py-2 w-10">#</th>
+                  <th className="text-left py-2">{t('quoteResponse.description', 'Description')}</th>
+                  <th className="text-right py-2 pl-2 sm:pl-4 w-16 whitespace-nowrap">{t('quoteResponse.qty', 'Qty')}</th>
+                  <th className="hidden sm:table-cell text-right py-2 pl-4 w-24 whitespace-nowrap">{t('quoteResponse.unit', 'Unit')}</th>
+                  <th className="text-right py-2 pl-2 sm:pl-4 w-24 whitespace-nowrap">{t('quoteResponse.total', 'Total')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  // Migration 119 — sub-items + details_text. Top-level
+                  // items get a numeric position; sub-items show empty
+                  // position + indented description + parenthesised
+                  // (display-only) line total. A non-empty detailsText
+                  // renders as a small italic grey line directly below
+                  // its parent. Sub-items with unit_price = 0 leave the
+                  // price columns empty (transparency list only).
+                  let topCount = 0;
+                  const rows: React.ReactNode[] = [];
+                  // A package whose price is the sum of its sub-items has no
+                  // unit price of its own — the same rule as the PDF.
+                  const parents = new Set<string>();
+                  for (const item of quote.lineItems) {
+                    if (item.parentLineItemId != null) parents.add(`id:${item.parentLineItemId}`);
+                    if (item.parentPosition != null) parents.add(`pos:${item.parentPosition}`);
                   }
-                  if (hasStatus) {
+                  for (const li of quote.lineItems) {
+                    const isSub = li.parentLineItemId != null || li.parentPosition != null;
+                    // Discount lines (#1451) are numbered, but carry no quantity or unit price.
+                    const isDiscount = li.lineKind === 'discount';
+                    if (!isSub) topCount += 1;
+                    const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
+                    const packageSum = !isSub && !Number(li.unitPriceMinor)
+                      && (parents.has(`id:${li.id}`) || parents.has(`pos:${li.position}`));
+                    const unitLabel = li.unit ? t(`crm.lineItems.unitShort.${li.unit}`, li.unit) : '';
+                    const quantityText = isDiscount
+                      ? ''
+                      : li.unit === 'flat' ? unitLabel : `${Number(li.quantity)}${unitLabel ? ` ${unitLabel}` : ''}`;
+                    // Optional add-ons (#1451): sub-items follow their parent.
+                    const addOnPosition = isSub ? li.parentPosition : li.position;
+                    const isAddOn = !!li.isOptional && !isDiscount;
+                    const addOnChosen = isAddOn && addOnPosition != null ? isChosen(addOnPosition, li.selected) : true;
+                    // A not-booked add-on is dimmed — except its Book button.
+                    const dim = addOnChosen ? '' : 'opacity-60';
+                    const lineTotalMinor = lineTotalOverrides.get(li.position) ?? Number(li.lineTotalMinor);
+                    const hasDetails = !!li.detailsText && String(li.detailsText).trim().length > 0;
+                    // An add-on's status (with its Book / Remove booking button)
+                    // is the last line of the item: title, details, status.
+                    const hasStatus = isAddOn && !isSub;
+                    const itemBorder = 'border-b border-border-token';
                     rows.push(
-                      <tr key={`status-${li.position}`} className={itemBorder}>
-                        <td className="pb-2"></td>
-                        <td className="pb-2" colSpan={4}>
-                          {canChoose ? (
-                            <div className="flex items-center gap-2 flex-wrap text-xs">
-                              <span className={`italic text-muted-theme ${dim}`}>
-                                <AddOnBookingState booked={addOnChosen} />
-                              </span>
-                              <AddOnBookButton
-                                booked={addOnChosen}
-                                disabled={busy}
-                                onToggle={() => toggleAddOn(li.position, !addOnChosen)}
-                              />
-                            </div>
-                          ) : (
-                            <span className={`inline-block rounded px-1.5 py-0.5 text-xs bg-elevated text-theme ${dim}`}>
-                              {addOnChosen
-                                ? t('quoteResponse.addons.included', 'Booked')
-                                : t('quoteResponse.addons.notChosen', 'Not booked')}
+                      <tr key={`row-${li.position}`} className={`${hasDetails || hasStatus ? '' : itemBorder} ${
+                        isSub ? 'text-muted-theme' : ''
+                      }`}>
+                        <td className={`py-2 ${dim}`}>{isSub ? '' : topCount}</td>
+                        <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''} ${dim}`}>
+                          {isSub ? '• ' : ''}{li.description}
+                          {hasStatus && canChoose && (
+                            <span className="ml-2 inline-block rounded px-1.5 py-0.5 text-xs bg-elevated text-theme">
+                              {t('quoteResponse.addons.optional', 'Optional')}
                             </span>
                           )}
                         </td>
+                        <td className={`py-2 pl-2 sm:pl-4 text-right whitespace-nowrap ${dim}`}>{quantityText}</td>
+                        <td className={`hidden sm:table-cell py-2 pl-4 text-right tabular-nums whitespace-nowrap ${dim}`}>
+                          {priceless || isDiscount || packageSum ? '' : formatMoneyMinor(Number(li.unitPriceMinor), quote.currency)}
+                        </td>
+                        <td className={`py-2 pl-2 sm:pl-4 text-right tabular-nums whitespace-nowrap ${isSub ? 'italic' : ''} ${dim}`}>
+                          {priceless
+                            ? ''
+                            : isSub
+                              ? `(${formatMoneyMinor(lineTotalMinor, quote.currency)})`
+                              : formatMoneyMinor(lineTotalMinor, quote.currency)}
+                        </td>
                       </tr>
                     );
+                    if (hasDetails) {
+                      rows.push(
+                        <tr key={`details-${li.position}`} className={hasStatus ? '' : itemBorder}>
+                          <td className="py-1"></td>
+                          <td className={`py-1 text-xs italic text-muted-theme whitespace-pre-line ${isSub ? 'pl-10' : 'pl-4'} ${dim}`}
+                            colSpan={4}>
+                            {li.detailsText}
+                          </td>
+                        </tr>
+                      );
+                    }
+                    if (hasStatus) {
+                      rows.push(
+                        <tr key={`status-${li.position}`} className={itemBorder}>
+                          <td className="pb-2"></td>
+                          <td className="pb-2" colSpan={4}>
+                            {canChoose ? (
+                              <div className="flex items-center gap-2 flex-wrap text-xs">
+                                <span className={`italic text-muted-theme ${dim}`}>
+                                  <AddOnBookingState booked={addOnChosen} />
+                                </span>
+                                <AddOnBookButton
+                                  booked={addOnChosen}
+                                  disabled={busy}
+                                  onToggle={() => toggleAddOn(li.position, !addOnChosen)}
+                                />
+                              </div>
+                            ) : (
+                              <span className={`inline-block rounded px-1.5 py-0.5 text-xs bg-elevated text-theme ${dim}`}>
+                                {addOnChosen
+                                  ? t('quoteResponse.addons.included', 'Booked')
+                                  : t('quoteResponse.addons.notChosen', 'Not booked')}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    }
                   }
-                }
-                return rows;
-              })()}
-            </tbody>
-          </table>
+                  return rows;
+                })()}
+              </tbody>
+            </table>
+          </div>
 
           <div className="flex flex-col items-end gap-1 text-sm border-t border-border-token pt-3">
             <div className="flex gap-6"><span className="text-muted-theme">{t('quoteResponse.subtotal', 'Subtotal')}:</span>
