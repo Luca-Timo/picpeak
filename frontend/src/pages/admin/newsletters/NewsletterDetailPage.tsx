@@ -21,6 +21,7 @@ import {
   newslettersService, type RecipientStatus,
 } from '../../../services/newsletters.service';
 import { StatusChip } from './NewsletterListPage';
+import { NewsletterComposerPage } from './NewsletterComposerPage';
 
 const RECIPIENT_STATUS_STYLES: Record<RecipientStatus, string> = {
   queued: 'text-soft',
@@ -90,6 +91,8 @@ export const NewsletterDetailPage: React.FC = () => {
 
   if (isLoading || !data) return <Loading />;
   const { campaign } = data;
+  // One page per campaign: a draft's page is its composer.
+  if (campaign.status === 'draft' && canSend) return <NewsletterComposerPage campaignId={campaignId} />;
   const inFlight = campaign.status === 'queued' || campaign.status === 'sending';
   const progress = campaign.recipientCount > 0
     ? Math.round(((campaign.sentCount + campaign.failedCount) / campaign.recipientCount) * 100)

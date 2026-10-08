@@ -63,7 +63,7 @@ export const NewsletterListPage: React.FC = () => {
         name: t('newsletters.untitled', 'Untitled campaign'),
         subject: t('newsletters.untitledSubject', 'Newsletter'),
       });
-      navigate(`/admin/clients/newsletters/${campaign.id}/edit`);
+      navigate(`/admin/clients/newsletters/${campaign.id}`);
     } catch {
       toast.error(t('newsletters.createFailed', 'Could not create the campaign.'));
     }
@@ -152,7 +152,7 @@ export const NewsletterListPage: React.FC = () => {
                         // page has no edit action, so linking a draft there
                         // left the operator with no way to resume it.
                         to={c.status === 'draft' && canSend
-                          ? `/admin/clients/newsletters/${c.id}/edit`
+                          ? `/admin/clients/newsletters/${c.id}`
                           : `/admin/clients/newsletters/${c.id}`}
                         className="font-medium hover:underline"
                         style={{ color: 'var(--color-accent)' }}

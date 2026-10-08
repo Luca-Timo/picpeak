@@ -43,7 +43,6 @@ import { CrmDevelopmentPage } from './pages/admin/clients/CrmDevelopmentPage';
 // Newsletter campaigns (#1264). Gated by the `newsletters` flag inside the
 // Clients block; the API refuses these routes independently when it is off.
 import { NewsletterListPage } from './pages/admin/newsletters/NewsletterListPage';
-import { NewsletterComposerPage } from './pages/admin/newsletters/NewsletterComposerPage';
 import { NewsletterDetailPage } from './pages/admin/newsletters/NewsletterDetailPage';
 import { TaxReportPage } from './pages/admin/clients/TaxReportPage';
 import { HoursLoggingPage } from './pages/admin/clients/HoursLoggingPage';
@@ -405,7 +404,7 @@ function App() {
                           <Route element={<RequireFeature flag="newsletters" />}>
                             <Route path="newsletters" element={<NewsletterListPage />} />
                             <Route path="newsletters/:id" element={<NewsletterDetailPage />} />
-                            <Route path="newsletters/:id/edit" element={<NewsletterComposerPage />} />
+                            <Route path="newsletters/:id/edit" element={<RedirectToRecord base="/admin/clients/newsletters" />} />
                           </Route>
                           {/* Developer tools — gated by `crmDevelopment`. */}
                           <Route element={<RequireFeature flag="crmDevelopment" />}>
