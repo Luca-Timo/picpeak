@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { ConfirmDialogProvider, useConfirm } from '../ConfirmDialog';
 import { vi, describe, it, expect } from 'vitest';
 import { Badge } from '../Badge';
 import { Notice } from '../Notice';
@@ -132,5 +134,28 @@ describe('TableCell', () => {
     const cell = screen.getByText('Total');
     expect(cell.className).toContain('text-heading');
     expect(cell.className).not.toContain('text-body');
+  });
+});
+
+describe('Modal under a confirm', () => {
+  it('Escape closes only the confirm on top, not the dialog beneath it', async () => {
+    const onClose = vi.fn();
+    let answer: boolean | undefined;
+    const Harness = () => {
+      const confirm = useConfirm();
+      return (
+        <Modal open onClose={onClose} title="Transfer">
+          <button onClick={async () => { answer = await confirm({ message: 'Delete it?' }); }}>Delete</button>
+        </Modal>
+      );
+    };
+    render(<ConfirmDialogProvider><Harness /></ConfirmDialogProvider>);
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await screen.findByText('Delete it?');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(answer).toBe(false));
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

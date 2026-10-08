@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, AlertTriangle, X } from 'lucide-react';
 import { Button } from './Button';
 import { Card } from './Card';
+import { pushDialogLayer } from './Modal';
 
 /**
  * Promise-based confirm dialog (#640 part C, ported from 8digit/picpeak@88bfde1).
@@ -93,7 +94,9 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (!options) return;
     cancelButtonRef.current?.focus();
+    const layer = pushDialogLayer();
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!layer.isTop()) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         settle(false);
@@ -107,7 +110,10 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      layer.release();
+    };
   }, [options, settle]);
 
   const variant = options?.variant ?? 'primary';

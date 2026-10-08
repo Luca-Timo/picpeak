@@ -39,6 +39,21 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
  * the opener afterwards, and the page behind does not scroll. On a phone it
  * is a sheet from the bottom. For a yes/no question use `useConfirm()`.
  */
+// Open dialogs, newest last. Keys go to the top one only: Escape on a confirm
+// opened over a dialog closes the confirm, not both. Overlays that are not a
+// Modal (the confirm dialog) join with pushDialogLayer.
+const openStack: object[] = [];
+
+/** Registers an open overlay; returns whether it is the top one, and a release. */
+export function pushDialogLayer(): { isTop: () => boolean; release: () => void } {
+  const token = {};
+  openStack.push(token);
+  return {
+    isTop: () => openStack[openStack.length - 1] === token,
+    release: () => { const i = openStack.indexOf(token); if (i >= 0) openStack.splice(i, 1); },
+  };
+}
+
 export const Modal: React.FC<ModalProps> = ({
   open,
   onClose,
@@ -68,7 +83,9 @@ export const Modal: React.FC<ModalProps> = ({
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
 
+    const layer = pushDialogLayer();
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!layer.isTop()) return;
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current();
@@ -90,6 +107,7 @@ export const Modal: React.FC<ModalProps> = ({
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      layer.release();
       document.body.style.overflow = overflow;
       opener?.focus?.();
     };
