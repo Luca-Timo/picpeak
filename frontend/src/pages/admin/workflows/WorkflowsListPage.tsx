@@ -13,6 +13,7 @@ import { Plus, Workflow as WorkflowIcon, Inbox, Trash2, Pencil, FlaskConical } f
 import { Badge, Button, Card, EmptyState, ErrorState, Loading, Modal, useConfirm } from '../../../components/common';
 import { SectionPageHeader } from '../../../components/admin/SectionPageHeader';
 import { useMutationWithToast } from '../../../hooks';
+import { usePermissions } from '../../../contexts/PermissionsContext';
 import { workflowsService, type WorkflowSummary, type WorkflowSavePayload, type WorkflowTestResult } from '../../../services/workflows.service';
 
 const NEW_WORKFLOW: WorkflowSavePayload = {
@@ -31,6 +32,9 @@ export const WorkflowsListPage: React.FC = () => {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const confirm = useConfirm();
+  // The server only lets a super admin delete a workflow (it takes every
+  // owner's run history with it), so nobody else is offered the button.
+  const { isSuperAdmin } = usePermissions();
 
   const { data: workflows, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ['workflows'],
@@ -175,7 +179,7 @@ export const WorkflowsListPage: React.FC = () => {
                 <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/automation/workflows/${w.id}`)} aria-label={t('common.edit', 'Edit') as string}>
                   <Pencil className="w-4 h-4" />
                 </Button>
-                {!isBuiltin(w) && (
+                {isSuperAdmin && !isBuiltin(w) && (
                   <Button
                     variant="ghost"
                     size="sm"

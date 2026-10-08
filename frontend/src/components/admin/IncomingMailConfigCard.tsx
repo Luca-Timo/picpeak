@@ -18,6 +18,7 @@ import { Server, User, Lock, Eye, EyeOff, FolderSearch, PlugZap, Mailbox, Refres
 import { Button, Card, Input, Loading } from '../common';
 import { emailService, type IncomingMailConfig, type ImapFolder } from '../../services/email.service';
 import { useMutationWithToast, useModal } from '../../hooks';
+import { mailPolicyError } from '../../utils/mailErrors';
 
 const labelCls = 'block text-sm font-medium text-body mb-1';
 const selectCls = 'w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark';
@@ -58,7 +59,7 @@ export const IncomingMailConfigCard = forwardRef<IncomingMailConfigHandle, Incom
     successMessage: t('email.incoming.savedToast', 'Incoming mail settings saved.'),
     invalidateKeys: [['incoming-mail-config']],
     // Named, because it can fail next to an SMTP save that went through.
-    errorMessage: (e: any) => `${t('email.incoming.title', 'Incoming mail (IMAP)')}: ${e?.response?.data?.error || e?.response?.data?.errors?.[0]?.msg || e.message || 'Failed'}`,
+    errorMessage: (e: any) => `${t('email.incoming.title', 'Incoming mail (IMAP)')}: ${mailPolicyError(e, t) || e?.response?.data?.error || e?.response?.data?.errors?.[0]?.msg || e.message || 'Failed'}`,
   });
 
   useEffect(() => {
@@ -76,13 +77,13 @@ export const IncomingMailConfigCard = forwardRef<IncomingMailConfigHandle, Incom
   const test = useMutationWithToast({
     mutationFn: () => emailService.testIncoming(cfg),
     successMessage: (r) => t('email.incoming.testOk', 'Connected to {{folder}} — {{messages}} messages, {{unseen}} unread.', { folder: r.folder, messages: r.messages, unseen: r.unseen }),
-    errorMessage: (e: any) => e?.response?.data?.error || e.message || t('email.incoming.testFailed', 'Connection failed.'),
+    errorMessage: (e: any) => mailPolicyError(e, t) || e?.response?.data?.error || e.message || t('email.incoming.testFailed', 'Connection failed.'),
   });
 
   const roundTrip = useMutationWithToast({
     mutationFn: () => emailService.roundTripIncoming(),
     successMessage: (r) => t('email.incoming.roundTripOk', 'Round-trip OK — delivered to {{recipient}} in {{seconds}}s.', { recipient: r.recipient, seconds: r.seconds }),
-    errorMessage: (e: any) => e?.response?.data?.error || e.message || t('email.incoming.roundTripFailed', 'Round-trip test failed.'),
+    errorMessage: (e: any) => mailPolicyError(e, t) || e?.response?.data?.error || e.message || t('email.incoming.roundTripFailed', 'Round-trip test failed.'),
   });
 
   const poll = useMutation({
@@ -99,7 +100,7 @@ export const IncomingMailConfigCard = forwardRef<IncomingMailConfigHandle, Incom
         qc.invalidateQueries({ queryKey: ['received-emails'] });
       }
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || e.message || t('email.incoming.pollFailed', 'Mailbox poll failed.')),
+    onError: (e: any) => toast.error(mailPolicyError(e, t) || e?.response?.data?.error || e.message || t('email.incoming.pollFailed', 'Mailbox poll failed.')),
   });
 
   const detect = useMutation({
@@ -120,7 +121,7 @@ export const IncomingMailConfigCard = forwardRef<IncomingMailConfigHandle, Incom
         toast.info(t('email.incoming.noFolders', 'No folders returned by the server.'));
       }
     },
-    onError: (e: any) => toast.error(e?.response?.data?.error || e.message || t('email.incoming.detectFailed', 'Could not detect folders.')),
+    onError: (e: any) => toast.error(mailPolicyError(e, t) || e?.response?.data?.error || e.message || t('email.incoming.detectFailed', 'Could not detect folders.')),
   });
 
   if (isLoading) return <Loading />;
