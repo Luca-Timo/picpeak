@@ -2690,7 +2690,10 @@
         "folderStructureOn": "Ordnerstruktur an",
         "folderStructureOff": "Uploads ohne Ordner",
         "firstLookDue": "erste Auswahl, vollständige Galerie bis {{date}}",
-        "firstLook": "erste Auswahl, mehr folgt"
+        "firstLook": "erste Auswahl, mehr folgt",
+        "teamMembers_one": "{{count}} Teammitglied",
+        "teamMembers_other": "{{count}} Teammitglieder",
+        "teamReview": "Team-Uploads werden geprüft"
       },
       "undoSection": "Diesen Bereich zurücksetzen",
       "delivery": "Ordner & Auslieferung"
@@ -2773,7 +2776,9 @@
       "loadFailed": "Die Admin-Konten konnten nicht geladen werden.",
       "noResults": "Keine weiteren Admin-Konten gefunden.",
       "reviewUploads": "Uploads von Teammitgliedern vor der Veröffentlichung prüfen",
-      "reviewUploadsHelp": "Fotos, die ein Teammitglied hochlädt, bleiben für Gäste und Kunden verborgen, bis Sie sie im Tab Fotos freigeben."
+      "reviewUploadsHelp": "Betrifft Uploads von Teammitgliedern, deren Rolle die Berechtigung „Review Team Uploads“ nicht hat: Sie bleiben für Gäste und Kunden verborgen, bis Sie oder eine prüfende Person sie im Tab Fotos freigeben. Die Rollen Admin, Editor und Solo Photographer haben diese Berechtigung standardmäßig, ihre Uploads werden nie zurückgehalten.",
+      "reviewUploadsHelpMember": "Ihre Uploads in diese Galerie bleiben für Gäste und Kunden verborgen, bis der Galerie-Inhaber oder eine prüfende Person sie freigibt.",
+      "reviewUploadsHelpReviewer": "Uploads von Teammitgliedern ohne die Berechtigung „Review Team Uploads“ warten im Tab Fotos auf Freigabe. Ihre eigenen werden sofort veröffentlicht."
     }
   },
   "settings": {
@@ -5147,7 +5152,12 @@
       "self_update_withdrawn": "In-App-Update-Anfrage abgebrochen",
       "self_update_finished": "In-App-Update beendet: {{state}} ({{from_version}} → {{to_version}})",
       "photo_decision": "Foto freigegeben oder abgelehnt in {{eventName}}",
-      "guest_feedback_decision": "Gast hat ein Foto freigegeben oder abgelehnt in {{eventName}}"
+      "guest_feedback_decision": "Gast hat ein Foto freigegeben oder abgelehnt in {{eventName}}",
+      "event_team_changed": "Team geändert für {{eventName}}",
+      "photos_review_approved_one": "{{count}} Team-Upload in {{eventName}} freigegeben",
+      "photos_review_approved_other": "{{count}} Team-Uploads in {{eventName}} freigegeben",
+      "photos_review_rejected_one": "{{count}} Team-Upload in {{eventName}} abgelehnt",
+      "photos_review_rejected_other": "{{count}} Team-Uploads in {{eventName}} abgelehnt"
     },
     "people": {
       "title": "Personen in dieser Galerie",

@@ -843,7 +843,10 @@
         "folderStructureOn": "Mapstructuur aan",
         "folderStructureOff": "Uploads zonder mappen",
         "firstLookDue": "eerste selectie, volledige galerie uiterlijk {{date}}",
-        "firstLook": "eerste selectie, meer volgt"
+        "firstLook": "eerste selectie, meer volgt",
+        "teamMembers_one": "{{count}} teamlid",
+        "teamMembers_other": "{{count}} teamleden",
+        "teamReview": "teamuploads worden gecontroleerd"
       }
     },
     "folders": {
@@ -914,7 +917,9 @@
       "loadFailed": "De beheerdersaccounts konden niet worden geladen.",
       "noResults": "Geen andere beheerdersaccounts gevonden.",
       "reviewUploads": "Uploads van teamleden controleren voordat ze worden gepubliceerd",
-      "reviewUploadsHelp": "Foto's die een teamlid uploadt, blijven verborgen voor gasten en klanten totdat u ze goedkeurt op het tabblad Foto's."
+      "reviewUploadsHelp": "Houdt uploads tegen van teamleden wier rol de machtiging „Review Team Uploads” niet heeft: ze blijven verborgen voor gasten en klanten totdat u of een beoordelaar ze goedkeurt op het tabblad Foto's. De rollen Admin, Editor en Solo Photographer hebben die machtiging standaard, dus hun uploads worden nooit tegengehouden.",
+      "reviewUploadsHelpMember": "Uw uploads naar deze galerij blijven verborgen voor gasten en klanten totdat de eigenaar of een beoordelaar ze goedkeurt.",
+      "reviewUploadsHelpReviewer": "Uploads van teamleden zonder de machtiging „Review Team Uploads” wachten op goedkeuring op het tabblad Foto's. Die van u worden direct gepubliceerd."
     }
   },
   "settings": {
@@ -2186,7 +2191,12 @@
       "delivery_due_soon": "Volledige galerie voor {{eventName}} is bijna verschuldigd",
       "delivery_overdue": "Volledige galerie voor {{eventName}} is te laat",
       "photo_decision": "Foto goedgekeurd of afgewezen in {{eventName}}",
-      "guest_feedback_decision": "Gast heeft een foto goedgekeurd of afgewezen in {{eventName}}"
+      "guest_feedback_decision": "Gast heeft een foto goedgekeurd of afgewezen in {{eventName}}",
+      "event_team_changed": "Team gewijzigd voor {{eventName}}",
+      "photos_review_approved_one": "{{count}} teamupload goedgekeurd in {{eventName}}",
+      "photos_review_approved_other": "{{count}} teamuploads goedgekeurd in {{eventName}}",
+      "photos_review_rejected_one": "{{count}} teamupload afgewezen in {{eventName}}",
+      "photos_review_rejected_other": "{{count}} teamuploads afgewezen in {{eventName}}"
     },
     "catalogedMedia": "{{size}} gecatalogiseerd",
     "storageUnavailable": "niet beschikbaar",

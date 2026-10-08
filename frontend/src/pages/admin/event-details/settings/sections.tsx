@@ -51,7 +51,7 @@ export const GeneralSection: React.FC<FieldsProps & {
    * Feeds the password generator, as on the create form, and says whether
    * this admin may change the team (issue 743).
    */
-  event?: Pick<Event, 'event_name' | 'event_date' | 'event_type' | 'can_manage_assignments' | 'created_by'>;
+  event?: Pick<Event, 'event_name' | 'event_date' | 'event_type' | 'can_manage_assignments' | 'can_review_uploads' | 'created_by'>;
 }> = ({ f, set, phoneFieldEnabled, event }) => {
   const { t } = useTranslation();
   const [showPassword, setShowPassword] = useState(false);
@@ -183,7 +183,13 @@ export const GeneralSection: React.FC<FieldsProps & {
             </span>
           </label>
           <p className="text-xs text-muted mt-1 ml-6">
-            {t('events.team.reviewUploadsHelp', 'Photos a team member uploads stay hidden from guests and clients until you approve them on the Photos tab.')}
+            {/* The owner's help explains the switch; a team member, who only
+                sees it, is told what it means for their own uploads. */}
+            {canManageTeam
+              ? t('events.team.reviewUploadsHelp', 'Holds uploads from team members whose role lacks the “Review Team Uploads” permission: they stay hidden from guests and clients until you or a reviewer approve them on the Photos tab. The Admin, Editor and Solo Photographer roles hold that permission by default, so their uploads are never held.')
+              : event?.can_review_uploads === true
+                ? t('events.team.reviewUploadsHelpReviewer', 'Uploads from team members without the “Review Team Uploads” permission wait for approval on the Photos tab. Yours are published right away.')
+                : t('events.team.reviewUploadsHelpMember', 'Your uploads to this gallery stay hidden from guests and clients until the owner or a reviewer approves them.')}
           </p>
         </div>
       )}

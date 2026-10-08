@@ -1971,7 +1971,12 @@
         "folderStructureOn": "Struktura map vklopljena",
         "folderStructureOff": "Nalaganja brez map",
         "firstLookDue": "prvi izbor, celotna galerija do {{date}}",
-        "firstLook": "prvi izbor, več sledi"
+        "firstLook": "prvi izbor, več sledi",
+        "teamMembers_one": "{{count}} član ekipe",
+        "teamMembers_two": "{{count}} člana ekipe",
+        "teamMembers_few": "{{count}} člani ekipe",
+        "teamMembers_other": "{{count}} članov ekipe",
+        "teamReview": "nalaganja ekipe se pregledujejo"
       }
     },
     "folders": {
@@ -2062,7 +2067,9 @@
       "loadFailed": "Skrbniških računov ni bilo mogoče naložiti.",
       "noResults": "Ni drugih ustreznih skrbniških računov.",
       "reviewUploads": "Preglej nalaganja članov ekipe pred objavo",
-      "reviewUploadsHelp": "Fotografije, ki jih naloži član ekipe, ostanejo skrite gostom in strankam, dokler jih ne odobrite na zavihku Fotografije."
+      "reviewUploadsHelp": "Zadrži nalaganja članov ekipe, katerih vloga nima dovoljenja »Review Team Uploads«: ostanejo skrita gostom in strankam, dokler jih vi ali pregledovalec ne odobrite na zavihku Fotografije. Vloge Admin, Editor in Solo Photographer imajo to dovoljenje privzeto, zato njihova nalaganja nikoli niso zadržana.",
+      "reviewUploadsHelpMember": "Vaša nalaganja v to galerijo ostanejo skrita gostom in strankam, dokler jih lastnik ali pregledovalec ne odobri.",
+      "reviewUploadsHelpReviewer": "Nalaganja članov ekipe brez dovoljenja »Review Team Uploads« čakajo na odobritev na zavihku Fotografije. Vaša so objavljena takoj."
     }
   },
   "settings": {
@@ -4168,7 +4175,16 @@
       "delivery_due_soon": "Rok za celotno galerijo {{eventName}} se bliža",
       "delivery_overdue": "Celotna galerija {{eventName}} zamuja",
       "photo_decision": "Fotografija odobrena ali zavrnjena v {{eventName}}",
-      "guest_feedback_decision": "Gost je odobril ali zavrnil fotografijo v {{eventName}}"
+      "guest_feedback_decision": "Gost je odobril ali zavrnil fotografijo v {{eventName}}",
+      "event_team_changed": "Ekipa spremenjena za {{eventName}}",
+      "photos_review_approved_one": "{{count}} nalaganje ekipe odobreno v {{eventName}}",
+      "photos_review_approved_two": "{{count}} nalaganji ekipe odobreni v {{eventName}}",
+      "photos_review_approved_few": "{{count}} nalaganja ekipe odobrena v {{eventName}}",
+      "photos_review_approved_other": "{{count}} nalaganj ekipe odobrenih v {{eventName}}",
+      "photos_review_rejected_one": "{{count}} nalaganje ekipe zavrnjeno v {{eventName}}",
+      "photos_review_rejected_two": "{{count}} nalaganji ekipe zavrnjeni v {{eventName}}",
+      "photos_review_rejected_few": "{{count}} nalaganja ekipe zavrnjena v {{eventName}}",
+      "photos_review_rejected_other": "{{count}} nalaganj ekipe zavrnjenih v {{eventName}}"
     },
     "people": {
       "title": "Osebe v tej galeriji",

@@ -897,7 +897,12 @@
         "folderStructureOn": "Структура папок включена",
         "folderStructureOff": "Загрузки без папок",
         "firstLookDue": "первая подборка, полная галерея к {{date}}",
-        "firstLook": "первая подборка, остальное позже"
+        "firstLook": "первая подборка, остальное позже",
+        "teamMembers_one": "{{count}} участник команды",
+        "teamMembers_few": "{{count}} участника команды",
+        "teamMembers_many": "{{count}} участников команды",
+        "teamMembers_other": "{{count}} участников команды",
+        "teamReview": "загрузки команды проверяются"
       }
     },
     "folders": {
@@ -970,7 +975,9 @@
       "loadFailed": "Не удалось загрузить учётные записи администраторов.",
       "noResults": "Других подходящих учётных записей нет.",
       "reviewUploads": "Проверять загрузки участников команды перед публикацией",
-      "reviewUploadsHelp": "Фото, загруженные участником команды, скрыты от гостей и клиентов, пока вы не одобрите их на вкладке «Фото»."
+      "reviewUploadsHelp": "Задерживает загрузки участников команды, чья роль не имеет разрешения «Review Team Uploads»: они скрыты от гостей и клиентов, пока вы или проверяющий не одобрите их на вкладке «Фото». Роли Admin, Editor и Solo Photographer имеют это разрешение по умолчанию, поэтому их загрузки никогда не задерживаются.",
+      "reviewUploadsHelpMember": "Ваши загрузки в эту галерею скрыты от гостей и клиентов, пока владелец или проверяющий их не одобрит.",
+      "reviewUploadsHelpReviewer": "Загрузки участников команды без разрешения «Review Team Uploads» ждут одобрения на вкладке «Фото». Ваши публикуются сразу."
     }
   },
   "settings": {
@@ -2264,7 +2271,16 @@
       "delivery_due_soon": "Скоро срок полной галереи «{{eventName}}»",
       "delivery_overdue": "Полная галерея «{{eventName}}» просрочена",
       "photo_decision": "Фото одобрено или отклонено в {{eventName}}",
-      "guest_feedback_decision": "Гость одобрил или отклонил фото в {{eventName}}"
+      "guest_feedback_decision": "Гость одобрил или отклонил фото в {{eventName}}",
+      "event_team_changed": "Команда изменена: {{eventName}}",
+      "photos_review_approved_one": "{{count}} загрузка команды одобрена в {{eventName}}",
+      "photos_review_approved_few": "{{count}} загрузки команды одобрены в {{eventName}}",
+      "photos_review_approved_many": "{{count}} загрузок команды одобрено в {{eventName}}",
+      "photos_review_approved_other": "{{count}} загрузок команды одобрено в {{eventName}}",
+      "photos_review_rejected_one": "{{count}} загрузка команды отклонена в {{eventName}}",
+      "photos_review_rejected_few": "{{count}} загрузки команды отклонены в {{eventName}}",
+      "photos_review_rejected_many": "{{count}} загрузок команды отклонено в {{eventName}}",
+      "photos_review_rejected_other": "{{count}} загрузок команды отклонено в {{eventName}}"
     },
     "catalogedMedia": "{{size}} в каталоге",
     "storageUnavailable": "недоступно",

@@ -503,11 +503,16 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                       size="sm"
                       onClick={async () => {
                         try {
-                          const result = await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'visible' });
-                          toast.success(t('admin.photos.visibleSuccess', 'Photos visible'));
-                          // Photos under review only go public through approval (issue 743).
-                          if (result?.skipped_under_review) {
-                            toast.info(t('photos.review.skippedOnShow', { count: result.skipped_under_review }));
+                          const ids = Array.from(selectedPhotos);
+                          const result = await photosService.bulkUpdatePhotos(eventId, ids, { visibility: 'visible' });
+                          // Photos under review only go public through approval (issue 743);
+                          // the success line is only true for the ones that changed.
+                          const skipped = result?.skipped_under_review ?? 0;
+                          if (skipped < ids.length) {
+                            toast.success(t('admin.photos.visibleSuccess', 'Photos visible'));
+                          }
+                          if (skipped > 0) {
+                            toast.info(t('photos.review.skippedOnShow', { count: skipped }));
                           }
                           onPhotosDeleted();
                         } catch { toast.error(t('common.error')); }

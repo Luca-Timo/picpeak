@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ThumbsUp, ThumbsDown, MessageSquareText } from 'lucide-react';
@@ -49,6 +49,8 @@ export const PhotoDecision: React.FC<PhotoDecisionProps> = ({
   const [pending, setPending] = useState<Submission | null>(null);
   const [showReason, setShowReason] = useState(false);
   const [reasonDraft, setReasonDraft] = useState(myReason || '');
+  const reasonInputRef = useRef<HTMLTextAreaElement>(null);
+  const reasonToggleRef = useRef<HTMLButtonElement>(null);
 
   // A different photo, or a reason that changed underneath (another tab),
   // starts from what the server holds.
@@ -58,6 +60,10 @@ export const PhotoDecision: React.FC<PhotoDecisionProps> = ({
   useEffect(() => {
     setShowReason(false);
   }, [photoId]);
+  // The form exists to be typed into: put the caret there as it opens.
+  useEffect(() => {
+    if (showReason) reasonInputRef.current?.focus();
+  }, [showReason]);
 
   const mutation = useMutation({
     mutationFn: (data: Submission) => feedbackService.submitFeedback(gallerySlug, photoId, {
@@ -171,6 +177,7 @@ export const PhotoDecision: React.FC<PhotoDecisionProps> = ({
         </button>
         {myDecision === 'rejected' && (
           <button
+            ref={reasonToggleRef}
             type="button"
             onClick={() => setShowReason((open) => !open)}
             aria-expanded={showReason}
@@ -185,18 +192,31 @@ export const PhotoDecision: React.FC<PhotoDecisionProps> = ({
 
       {showReason && myDecision === 'rejected' && (
         <form
-          className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72 p-3 rounded-lg shadow-xl bg-surface border border-surface z-40 space-y-2"
+          // The toolbar is pinned to the bottom of the lightbox, so on desktop
+          // the form opens upward. Phones keep it near the top: the soft
+          // keyboard covers the lower half and the toolbar wraps to a height
+          // that varies with the enabled buttons.
+          className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:bottom-full sm:mb-2 sm:w-72 p-3 rounded-lg shadow-xl bg-surface border border-surface z-40 space-y-2"
           onSubmit={(e) => {
             e.preventDefault();
             void submit({ decision: 'rejected', reason: reasonDraft });
           }}
           // The lightbox's shortcut keys must not fire while typing a reason.
-          onKeyDown={(e) => e.stopPropagation()}
+          // Escape closes only this form, not the lightbox behind it.
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setShowReason(false);
+              reasonToggleRef.current?.focus();
+            }
+          }}
         >
           <label className="block text-sm font-medium" style={{ color: 'var(--color-text)' }} htmlFor={`decision-reason-${photoId}`}>
             {t('feedback.decisionReasonLabel', 'Why are you rejecting this photo? (optional)')}
           </label>
           <textarea
+            ref={reasonInputRef}
             id={`decision-reason-${photoId}`}
             value={reasonDraft}
             onChange={(e) => setReasonDraft(e.target.value)}

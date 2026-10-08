@@ -862,7 +862,10 @@
         "folderStructureOn": "Estructura de carpetas activada",
         "folderStructureOff": "Subidas sin carpetas",
         "firstLookDue": "primera selección, galería completa para el {{date}}",
-        "firstLook": "primera selección, más después"
+        "firstLook": "primera selección, más después",
+        "teamMembers_one": "{{count}} miembro del equipo",
+        "teamMembers_other": "{{count}} miembros del equipo",
+        "teamReview": "subidas del equipo revisadas"
       }
     },
     "folders": {
@@ -933,7 +936,9 @@
       "loadFailed": "No se pudieron cargar las cuentas de administrador.",
       "noResults": "No hay otras cuentas de administrador que coincidan.",
       "reviewUploads": "Revisar las subidas de los miembros del equipo antes de publicarlas",
-      "reviewUploadsHelp": "Las fotos que sube un miembro del equipo permanecen ocultas para invitados y clientes hasta que usted las apruebe en la pestaña Fotos."
+      "reviewUploadsHelp": "Retiene las subidas de los miembros del equipo cuyo rol no tiene el permiso «Review Team Uploads»: permanecen ocultas para invitados y clientes hasta que usted o un revisor las aprueben en la pestaña Fotos. Los roles Admin, Editor y Solo Photographer tienen ese permiso por defecto, así que sus subidas nunca se retienen.",
+      "reviewUploadsHelpMember": "Sus subidas a esta galería permanecen ocultas para invitados y clientes hasta que el propietario o un revisor las apruebe.",
+      "reviewUploadsHelpReviewer": "Las subidas de los miembros del equipo sin el permiso «Review Team Uploads» esperan aprobación en la pestaña Fotos. Las suyas se publican de inmediato."
     }
   },
   "settings": {
@@ -1863,7 +1868,12 @@
       "delivery_due_soon": "La galería completa de {{eventName}} vence pronto",
       "delivery_overdue": "La galería completa de {{eventName}} está atrasada",
       "photo_decision": "Foto aprobada o rechazada en {{eventName}}",
-      "guest_feedback_decision": "Un invitado aprobó o rechazó una foto en {{eventName}}"
+      "guest_feedback_decision": "Un invitado aprobó o rechazó una foto en {{eventName}}",
+      "event_team_changed": "Equipo modificado en {{eventName}}",
+      "photos_review_approved_one": "{{count}} subida del equipo aprobada en {{eventName}}",
+      "photos_review_approved_other": "{{count}} subidas del equipo aprobadas en {{eventName}}",
+      "photos_review_rejected_one": "{{count}} subida del equipo rechazada en {{eventName}}",
+      "photos_review_rejected_other": "{{count}} subidas del equipo rechazadas en {{eventName}}"
     },
     "userManagement": "Gestión de usuarios",
     "inviteUser": "Invitar usuario",

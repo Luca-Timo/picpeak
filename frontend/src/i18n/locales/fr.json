@@ -854,7 +854,10 @@
         "folderStructureOn": "Arborescence activée",
         "folderStructureOff": "Envois sans dossiers",
         "firstLookDue": "première sélection, galerie complète pour le {{date}}",
-        "firstLook": "première sélection, la suite après"
+        "firstLook": "première sélection, la suite après",
+        "teamMembers_one": "{{count}} membre de l'équipe",
+        "teamMembers_other": "{{count}} membres de l'équipe",
+        "teamReview": "envois de l'équipe vérifiés"
       }
     },
     "folders": {
@@ -926,7 +929,9 @@
       "loadFailed": "Impossible de charger les comptes administrateur.",
       "noResults": "Aucun autre compte administrateur ne correspond.",
       "reviewUploads": "Vérifier les envois des membres de l'équipe avant publication",
-      "reviewUploadsHelp": "Les photos envoyées par un membre de l'équipe restent masquées pour les invités et les clients jusqu'à ce que vous les approuviez dans l'onglet Photos."
+      "reviewUploadsHelp": "Retient les envois des membres de l'équipe dont le rôle n'a pas l'autorisation « Review Team Uploads » : ils restent masqués pour les invités et les clients jusqu'à ce que vous ou un réviseur les approuviez dans l'onglet Photos. Les rôles Admin, Editor et Solo Photographer ont cette autorisation par défaut, leurs envois ne sont donc jamais retenus.",
+      "reviewUploadsHelpMember": "Vos envois dans cette galerie restent masqués pour les invités et les clients jusqu'à ce que le propriétaire ou un réviseur les approuve.",
+      "reviewUploadsHelpReviewer": "Les envois des membres de l'équipe sans l'autorisation « Review Team Uploads » attendent une approbation dans l'onglet Photos. Les vôtres sont publiés immédiatement."
     }
   },
   "settings": {
@@ -2229,7 +2234,12 @@
       "delivery_due_soon": "La galerie complète de {{eventName}} arrive à échéance",
       "delivery_overdue": "La galerie complète de {{eventName}} est en retard",
       "photo_decision": "Photo approuvée ou refusée dans {{eventName}}",
-      "guest_feedback_decision": "Un invité a approuvé ou refusé une photo dans {{eventName}}"
+      "guest_feedback_decision": "Un invité a approuvé ou refusé une photo dans {{eventName}}",
+      "event_team_changed": "Équipe modifiée pour {{eventName}}",
+      "photos_review_approved_one": "{{count}} envoi de l'équipe approuvé dans {{eventName}}",
+      "photos_review_approved_other": "{{count}} envois de l'équipe approuvés dans {{eventName}}",
+      "photos_review_rejected_one": "{{count}} envoi de l'équipe refusé dans {{eventName}}",
+      "photos_review_rejected_other": "{{count}} envois de l'équipe refusés dans {{eventName}}"
     },
     "catalogedMedia": "{{size}} catalogués",
     "storageUnavailable": "indisponible",

@@ -974,7 +974,7 @@ export const CreateEventPage: React.FC = () => {
                       </span>
                     </label>
                     <p className="text-xs text-muted mt-1 ml-6">
-                      {t('events.team.reviewUploadsHelp', 'Photos a team member uploads stay hidden from guests and clients until you approve them on the Photos tab.')}
+                      {t('events.team.reviewUploadsHelp', 'Holds uploads from team members whose role lacks the “Review Team Uploads” permission: they stay hidden from guests and clients until you or a reviewer approve them on the Photos tab. The Admin, Editor and Solo Photographer roles hold that permission by default, so their uploads are never held.')}
                     </p>
                   </div>
                 </>

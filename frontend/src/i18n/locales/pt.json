@@ -969,7 +969,10 @@
         "folderStructureOn": "Estrutura de pastas ativada",
         "folderStructureOff": "Envios sem pastas",
         "firstLookDue": "primeira seleção, galeria completa até {{date}}",
-        "firstLook": "primeira seleção, mais depois"
+        "firstLook": "primeira seleção, mais depois",
+        "teamMembers_one": "{{count}} membro da equipe",
+        "teamMembers_other": "{{count}} membros da equipe",
+        "teamReview": "envios da equipe revisados"
       }
     },
     "folders": {
@@ -1041,7 +1044,9 @@
       "loadFailed": "Não foi possível carregar as contas de administrador.",
       "noResults": "Nenhuma outra conta de administrador encontrada.",
       "reviewUploads": "Revisar os envios dos membros da equipe antes da publicação",
-      "reviewUploadsHelp": "As fotos enviadas por um membro da equipe ficam ocultas para convidados e clientes até que você as aprove na aba Fotos."
+      "reviewUploadsHelp": "Retém os envios dos membros da equipe cuja função não tem a permissão “Review Team Uploads”: eles ficam ocultos para convidados e clientes até que você ou um revisor os aprove na aba Fotos. As funções Admin, Editor e Solo Photographer têm essa permissão por padrão, então os envios delas nunca ficam retidos.",
+      "reviewUploadsHelpMember": "Seus envios para esta galeria ficam ocultos para convidados e clientes até que o proprietário ou um revisor os aprove.",
+      "reviewUploadsHelpReviewer": "Os envios de membros da equipe sem a permissão “Review Team Uploads” aguardam aprovação na aba Fotos. Os seus são publicados imediatamente."
     }
   },
   "settings": {
@@ -2322,7 +2327,12 @@
       "delivery_due_soon": "A galeria completa de {{eventName}} vence em breve",
       "delivery_overdue": "A galeria completa de {{eventName}} está atrasada",
       "photo_decision": "Foto aprovada ou rejeitada em {{eventName}}",
-      "guest_feedback_decision": "Um convidado aprovou ou rejeitou uma foto em {{eventName}}"
+      "guest_feedback_decision": "Um convidado aprovou ou rejeitou uma foto em {{eventName}}",
+      "event_team_changed": "Equipe alterada em {{eventName}}",
+      "photos_review_approved_one": "{{count}} envio da equipe aprovado em {{eventName}}",
+      "photos_review_approved_other": "{{count}} envios da equipe aprovados em {{eventName}}",
+      "photos_review_rejected_one": "{{count}} envio da equipe rejeitado em {{eventName}}",
+      "photos_review_rejected_other": "{{count}} envios da equipe rejeitados em {{eventName}}"
     },
     "catalogedMedia": "{{size}} catalogados",
     "storageUnavailable": "indisponível",

@@ -100,6 +100,15 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
     queryFn: () => photosService.getModerationCounts(eventId),
     enabled: Number.isFinite(eventId),
   });
+
+  // Deleting, hiding/showing or reviewing photos from this tab changes the
+  // review bar's counts too, so every refresh also re-reads them.
+  const refreshAfterPhotoChange = () => {
+    refetchPhotos();
+    queryClient.invalidateQueries({ queryKey: ['admin-event', id] });
+    queryClient.invalidateQueries({ queryKey: ['admin-photo-credits', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['admin-event-photos', id, 'moderation'] });
+  };
   const moderationFilter = photoFilters.moderation;
   const setModerationFilter = (value: PhotoFilterParams['moderation']) =>
     setPhotoFilters((prev) => ({ ...prev, moderation: value }));
@@ -310,11 +319,7 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
           photos={photos}
           eventId={parseInt(id!)}
           onPhotoClick={(photo, index) => setSelectedPhoto({ photo, index })}
-          onPhotosDeleted={() => {
-            refetchPhotos();
-            queryClient.invalidateQueries({ queryKey: ['admin-event', id] });
-            queryClient.invalidateQueries({ queryKey: ['admin-photo-credits', eventId] });
-          }}
+          onPhotosDeleted={refreshAfterPhotoChange}
           onSelectionChange={setSelectedPhotoIds}
           categories={filterCategories}
           folders={folders}
@@ -333,9 +338,7 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
           eventId={parseInt(id!)}
           onClose={() => setSelectedPhoto(null)}
           onPhotoDeleted={() => {
-            refetchPhotos();
-            queryClient.invalidateQueries({ queryKey: ['admin-event', id] });
-            queryClient.invalidateQueries({ queryKey: ['admin-photo-credits', eventId] });
+            refreshAfterPhotoChange();
             setSelectedPhoto(null);
           }}
           categories={filterCategories}

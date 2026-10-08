@@ -2152,7 +2152,10 @@
         "folderStructureOn": "Folder structure on",
         "folderStructureOff": "Flat uploads",
         "firstLookDue": "first look, full gallery by {{date}}",
-        "firstLook": "first look, more to come"
+        "firstLook": "first look, more to come",
+        "teamMembers_one": "{{count}} team member",
+        "teamMembers_other": "{{count}} team members",
+        "teamReview": "team uploads reviewed"
       },
       "undoSection": "Undo changes in this section",
       "delivery": "Folders & delivery"
@@ -2235,7 +2238,9 @@
       "loadFailed": "The admin accounts could not be loaded.",
       "noResults": "No other admin accounts match.",
       "reviewUploads": "Review team members' uploads before they are published",
-      "reviewUploadsHelp": "Photos a team member uploads stay hidden from guests and clients until you approve them on the Photos tab."
+      "reviewUploadsHelp": "Holds uploads from team members whose role lacks the “Review Team Uploads” permission: they stay hidden from guests and clients until you or a reviewer approve them on the Photos tab. The Admin, Editor and Solo Photographer roles hold that permission by default, so their uploads are never held.",
+      "reviewUploadsHelpMember": "Your uploads to this gallery stay hidden from guests and clients until the owner or a reviewer approves them.",
+      "reviewUploadsHelpReviewer": "Uploads from team members without the “Review Team Uploads” permission wait for approval on the Photos tab. Yours are published right away."
     }
   },
   "settings": {
@@ -4678,7 +4683,12 @@
       "self_update_withdrawn": "In-app update request cancelled",
       "self_update_finished": "In-app update finished: {{state}} ({{from_version}} → {{to_version}})",
       "photo_decision": "Photo approved or rejected in {{eventName}}",
-      "guest_feedback_decision": "Guest approved or rejected a photo in {{eventName}}"
+      "guest_feedback_decision": "Guest approved or rejected a photo in {{eventName}}",
+      "event_team_changed": "Team changed for {{eventName}}",
+      "photos_review_approved_one": "{{count}} team upload approved in {{eventName}}",
+      "photos_review_approved_other": "{{count}} team uploads approved in {{eventName}}",
+      "photos_review_rejected_one": "{{count}} team upload rejected in {{eventName}}",
+      "photos_review_rejected_other": "{{count}} team uploads rejected in {{eventName}}"
     },
     "people": {
       "title": "People in this gallery",

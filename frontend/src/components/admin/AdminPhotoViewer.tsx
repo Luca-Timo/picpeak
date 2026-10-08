@@ -752,7 +752,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                         <span className="text-xs text-neutral-400 ml-auto">{fmtDateTime(item.created_at)}</span>
                       </div>
                       {item.comment_text && (
-                        <p className="text-sm text-neutral-300 mt-2">{item.comment_text}</p>
+                        <p className="text-sm text-neutral-300 mt-2 break-words [overflow-wrap:anywhere]">{item.comment_text}</p>
                       )}
                     </div>
                   ))}

@@ -95,6 +95,51 @@ describe('PhotoDecision (issue 744)', () => {
       feedback_type: 'decision', decision: 'rejected', comment_text: 'Eyes closed',
     });
   });
+  it('focuses the reason field as the form opens', async () => {
+    renderDecision('rejected');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Why? (optional)' }));
+
+    expect(screen.getByRole('textbox')).toHaveFocus();
+  });
+
+  it('closes the reason form on Escape without letting the key reach the lightbox', async () => {
+    const lightboxKeydown = vi.fn();
+    document.addEventListener('keydown', lightboxKeydown);
+    try {
+      renderDecision('rejected');
+      const toggle = screen.getByRole('button', { name: 'Why? (optional)' });
+      await userEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+      await userEvent.keyboard('{Escape}');
+
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(toggle).toHaveFocus();
+      expect(lightboxKeydown).not.toHaveBeenCalled();
+      expect(submitFeedback).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', lightboxKeydown);
+    }
+  });
+
+  it('keeps typed keys away from the lightbox shortcuts', async () => {
+    const lightboxKeydown = vi.fn();
+    document.addEventListener('keydown', lightboxKeydown);
+    try {
+      renderDecision('rejected');
+      await userEvent.click(screen.getByRole('button', { name: 'Why? (optional)' }));
+      lightboxKeydown.mockClear();
+
+      await userEvent.keyboard('ab');
+
+      expect(screen.getByRole('textbox')).toHaveValue('ab');
+      expect(lightboxKeydown).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', lightboxKeydown);
+    }
+  });
 });
 
 describe('decision surfaces (issue 744)', () => {
