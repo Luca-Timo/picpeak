@@ -154,7 +154,7 @@ export const PhotoComments: React.FC<PhotoCommentsProps> = ({
 
       {/* Comment Form */}
       {showCommentForm && (
-        <form onSubmit={handleSubmitComment} className="space-y-3 p-4 bg-surface rounded-lg border border-surface">
+        <form onSubmit={handleSubmitComment} className="space-y-3 p-4 bg-surface rounded-lg border border-border-token">
           {requireNameEmail && !isGuestMode && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input
@@ -180,7 +180,7 @@ export const PhotoComments: React.FC<PhotoCommentsProps> = ({
               onChange={(e) => setCommentText(e.target.value)}
               placeholder={t('feedback.writeComment', 'Write a comment...')}
               className={`w-full px-3 py-2 text-sm border rounded-lg resize-vertical min-h-[100px] focus:ring-2 focus:ring-accent focus:border-accent-dark ${
-                errors.comment_text ? 'border-danger' : 'border-surface'
+                errors.comment_text ? 'border-danger' : 'border-border-token'
               }`}
               rows={4}
               maxLength={500}

@@ -42,7 +42,7 @@ export const GalleryBreadcrumb: React.FC<GalleryBreadcrumbProps> = ({ trail, onN
           type="button"
           onClick={() => onNavigate(parent ? folderKey(parent) : null)}
           aria-label={t('gallery.folderUp', 'Back to {{name}}', { name: parent ? parent.name : rootLabel })}
-          className="sm:hidden shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-surface bg-surface focus:outline-none focus:ring-2 focus:ring-accent"
+          className="sm:hidden shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-token bg-surface focus:outline-none focus:ring-2 focus:ring-accent"
           style={{ color: 'var(--color-text)' }}
         >
           <ChevronLeft className="w-4 h-4" />

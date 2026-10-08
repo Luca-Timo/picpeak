@@ -84,7 +84,7 @@ export const GuestNamePromptModal: React.FC<GuestNamePromptModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="guest-prompt-title"
-        className="relative bg-surface border border-surface text-theme rounded-lg shadow-xl max-w-md w-full p-6"
+        className="relative bg-surface border border-border-token text-theme rounded-lg shadow-xl max-w-md w-full p-6"
       >
         {allowCancel && (
           <button
@@ -171,7 +171,7 @@ export const GuestNamePromptModal: React.FC<GuestNamePromptModalProps> = ({
               this block would render dark grey on a dark surface. The rest of
               the modal uses text-theme / text-muted-theme for exactly this
               reason. */}
-          <div className="pt-3 mt-1 border-t border-surface text-center">
+          <div className="pt-3 mt-1 border-t border-border-token text-center">
             <p className="text-sm text-muted-theme">
               {t(
                 'gallery.guestPrompt.returningHint',

@@ -209,7 +209,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
         `}
       >
         {/* Header */}
-        <div className="gallery-sidebar-header flex items-center justify-between p-4 border-b border-surface">
+        <div className="gallery-sidebar-header flex items-center justify-between p-4 border-b border-border-token">
           <h2 className="gallery-sidebar-title text-lg font-semibold text-theme">{t('gallery.filters')}</h2>
           <button
             onClick={onClose}
@@ -224,7 +224,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
         <div className="gallery-sidebar-content flex-1 overflow-y-auto">
           {/* Upload Section - Show prominently at top for mobile users */}
           {allowUploads && onUploadClick && (
-            <div className="gallery-sidebar-section gallery-sidebar-upload p-4 border-b border-surface">
+            <div className="gallery-sidebar-section gallery-sidebar-upload p-4 border-b border-border-token">
               <Button
                 variant="outline"
                 size="sm"
@@ -242,7 +242,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
 
           {/* Search Section - Hidden for carousel layout */}
           {galleryLayout !== 'carousel' && (
-            <div className="gallery-sidebar-section gallery-sidebar-search p-4 border-b border-surface">
+            <div className="gallery-sidebar-section gallery-sidebar-search p-4 border-b border-border-token">
               <div className="relative">
                 <Search className="gallery-sidebar-search-icon absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-theme" />
                 <input
@@ -250,7 +250,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
                   value={searchTerm}
                   onChange={(e) => onSearchChange(e.target.value)}
                   placeholder={t('gallery.searchPlaceholder')}
-                  className="gallery-sidebar-search-input w-full pl-10 pr-4 py-2 bg-surface border border-surface rounded-lg text-theme placeholder:text-muted-theme focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                  className="gallery-sidebar-search-input w-full pl-10 pr-4 py-2 bg-surface border border-border-token rounded-lg text-theme placeholder:text-muted-theme focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                 />
               </div>
             </div>
@@ -258,7 +258,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
 
           {/* Download Section - Hidden if gallery is expired or downloads disabled */}
           {allowDownloads && (
-            <div className="gallery-sidebar-section gallery-sidebar-downloads p-4 border-b border-surface">
+            <div className="gallery-sidebar-section gallery-sidebar-downloads p-4 border-b border-border-token">
               <h3 className="gallery-sidebar-section-title text-sm font-semibold text-muted-theme mb-3 flex items-center gap-2">
                 <Download className="w-4 h-4" />
                 {t('gallery.download')}
@@ -338,7 +338,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
               of Download: a proofing gallery often has downloads off, and the
               list is for the RAW editor, not for downloading. */}
           {onCopyFilenames && copyFilenamesCount > 0 && (
-            <div className="gallery-sidebar-section gallery-sidebar-filenames p-4 border-b border-surface">
+            <div className="gallery-sidebar-section gallery-sidebar-filenames p-4 border-b border-border-token">
               <Button
                 variant="outline"
                 size="sm"
@@ -356,7 +356,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
 
           {/* Feedback Filter Section */}
           {feedbackEnabled && onFilterChange && (
-            <div className="gallery-sidebar-section gallery-sidebar-feedback p-4 border-b border-surface">
+            <div className="gallery-sidebar-section gallery-sidebar-feedback p-4 border-b border-border-token">
               <GalleryFilter
                 activeFilters={activeFilters}
                 // Unlike the single-select category/sort buttons, feedback
@@ -395,7 +395,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
           {creditPhotos && onCreditChange && (
             <CreditFilterChips
               variant="list"
-              className="gallery-sidebar-section p-4 border-b border-surface"
+              className="gallery-sidebar-section p-4 border-b border-border-token"
               photos={creditPhotos}
               selectedKey={selectedCreditKey}
               onChange={(key) => {
@@ -409,7 +409,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
               categories below: containment applies there too, so this is the
               only way into a folder from the sidebar. */}
           {folderTree && folderTree.nodes.length > 0 && (
-            <div className="gallery-sidebar-section gallery-sidebar-folders p-4 border-b border-surface">
+            <div className="gallery-sidebar-section gallery-sidebar-folders p-4 border-b border-border-token">
               <h3 className="gallery-sidebar-section-title text-sm font-semibold text-muted-theme mb-3 flex items-center gap-2">
                 <FolderTree className="w-4 h-4" />
                 {t('gallery.folders', 'Folders')}
@@ -430,7 +430,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
 
           {/* Categories Section - Hidden for carousel layout */}
           {galleryLayout !== 'carousel' && categories.length > 0 && (
-            <div className="gallery-sidebar-section gallery-sidebar-categories p-4 border-b border-surface">
+            <div className="gallery-sidebar-section gallery-sidebar-categories p-4 border-b border-border-token">
               <h3 className="gallery-sidebar-section-title text-sm font-semibold text-muted-theme mb-3 flex items-center gap-2">
                 <Filter className="w-4 h-4" />
                 {t('gallery.categories')}
@@ -486,7 +486,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
           )}
 
           {showMediaFilter && onMediaFilterChange && (
-            <div className="gallery-sidebar-section gallery-sidebar-media p-4 border-b border-surface">
+            <div className="gallery-sidebar-section gallery-sidebar-media p-4 border-b border-border-token">
               <h3 className="gallery-sidebar-section-title text-sm font-semibold text-muted-theme mb-3 flex items-center gap-2">
                 <Filter className="w-4 h-4" />
                 {t('gallery.mediaType', 'Media')}

@@ -75,7 +75,7 @@ export const FeedbackLimitReachedModal: React.FC<FeedbackLimitReachedModalProps>
           bg-surface text-theme
           rounded-2xl sm:rounded-xl
           shadow-2xl
-          border border-surface
+          border border-border-token
           overflow-hidden
           animate-[slide-up_0.2s_ease-out]
           pb-[env(safe-area-inset-bottom)]

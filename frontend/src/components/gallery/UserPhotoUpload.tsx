@@ -462,7 +462,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
         className="w-full sm:max-w-2xl bg-surface text-theme flex flex-col max-h-[100vh] sm:max-h-[90vh] rounded-2xl shadow-xl overflow-hidden"
       >
         {/* Fixed Header */}
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-surface flex-shrink-0">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-border-token flex-shrink-0">
           <h2 id="user-photo-upload-title" className="text-lg sm:text-xl font-semibold text-theme">{t('upload.uploadPhotos')}</h2>
           <button
             type="button"
@@ -478,7 +478,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-h-0">
             {/* Uploader name (#1561) */}
             {askName && (
-              <div className="mb-4 sm:mb-6 rounded-lg border border-surface p-3 sm:p-4" data-testid="uploader-name-step">
+              <div className="mb-4 sm:mb-6 rounded-lg border border-border-token p-3 sm:p-4" data-testid="uploader-name-step">
                 {identity ? (
                   <div className="flex items-center justify-between gap-3">
                     <p className="flex items-center gap-2 text-sm text-theme min-w-0">
@@ -538,7 +538,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
               <label className="block">
                 <div
                   className={`border-2 border-dashed rounded-lg p-6 sm:p-8 text-center hover:border-accent-dark transition-colors cursor-pointer ${
-                    isDragOver ? 'border-accent-dark bg-accent-dark/10' : 'border-surface'
+                    isDragOver ? 'border-accent-dark bg-accent-dark/10' : 'border-border-token'
                   }`}
                   onDragOver={handleDragOver}
                   onDragEnter={handleDragOver}
@@ -651,7 +651,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
         </div>
 
         {/* Fixed Footer */}
-        <div className="flex items-center justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-surface bg-surface flex-shrink-0">
+        <div className="flex items-center justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-border-token bg-surface flex-shrink-0">
           <Button
             variant="outline"
             onClick={onClose}

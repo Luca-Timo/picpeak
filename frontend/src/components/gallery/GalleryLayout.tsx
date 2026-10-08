@@ -277,7 +277,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
       : 'text-center';
 
   const promoSlot = promoMarkdown ? (
-    <div className="gallery-promo border-t border-surface bg-surface/50">
+    <div className="gallery-promo border-t border-border-token bg-surface/50">
       {/*
        * Inner block uses .container (matches the footer's container
        * width) + the alignment class. We deliberately drop the
@@ -313,7 +313,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   })().trim();
 
   const infoSlot = infoMarkdown ? (
-    <div className="gallery-info-banner border-b border-surface bg-surface/50">
+    <div className="gallery-info-banner border-b border-border-token bg-surface/50">
       <div className="container py-3 sm:py-4 px-4">
         <MarkdownContent
           source={infoMarkdown}
@@ -337,7 +337,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
       <DynamicFavicon />
 
       {/* Header structure */}
-      <header className={`gallery-header bg-surface border-b border-surface sticky top-0 z-40 ${isHeroHeader || isBannerHeader ? 'shadow-sm' : ''}`}>
+      <header className={`gallery-header bg-surface border-b border-border-token sticky top-0 z-40 ${isHeroHeader || isBannerHeader ? 'shadow-sm' : ''}`}>
         {/* Standard / Banner header - full bar with logo, event info, and actions (all layouts) */}
         {!isHeroHeader && !isMinimalHeader && !isNoHeader && (
           <div className="container py-3 relative">
@@ -731,7 +731,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
       {promoPosition === 'above_footer' && promoSlot}
 
       {/* Footer */}
-      <footer className="gallery-footer mt-8 sm:mt-12 py-6 sm:py-8 border-t border-surface">
+      <footer className="gallery-footer mt-8 sm:mt-12 py-6 sm:py-8 border-t border-border-token">
         <div className="container text-center px-4">
           {brandingSettings?.support_email && (
             <p className="text-xs sm:text-sm text-muted-theme mb-2">

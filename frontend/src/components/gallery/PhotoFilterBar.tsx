@@ -125,7 +125,7 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
           </Button>
           
           {showSortMenu && (
-            <div className="absolute right-0 md:right-auto md:left-0 mt-2 w-48 bg-surface rounded-lg shadow-lg border border-surface py-1 z-10">
+            <div className="absolute right-0 md:right-auto md:left-0 mt-2 w-48 bg-surface rounded-lg shadow-lg border border-border-token py-1 z-10">
               <button
                 onClick={() => {
                   onSortChange('date');
@@ -184,7 +184,7 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
 
               {/* Sort direction (#889) */}
               {onSortDescChange && (
-                <div className="border-t border-surface mt-1 pt-1">
+                <div className="border-t border-border-token mt-1 pt-1">
                   <button
                     onClick={() => {
                       onSortDescChange(false);

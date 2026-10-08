@@ -97,7 +97,7 @@ export const GuestRecoveryModal: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="guest-recovery-title"
-        className="relative bg-surface border border-surface text-theme rounded-lg shadow-xl max-w-md w-full p-6"
+        className="relative bg-surface border border-border-token text-theme rounded-lg shadow-xl max-w-md w-full p-6"
       >
         <button
           type="button"
