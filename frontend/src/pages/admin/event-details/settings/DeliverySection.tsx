@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, Clock, FolderTree, Sparkles } from 'lucide-react';
 import type { Event } from '../../../../types';
-import { Button, Input, LocalizedDateInput } from '../../../../components/common';
+import { Button, Input, LocalizedDateInput, Notice } from '../../../../components/common';
 import { useLocalizedDate } from '../../../../hooks/useLocalizedDate';
 import { usePermission } from '../../../../hooks/usePermission';
 import { eventsService } from '../../../../services/events.service';
@@ -187,9 +187,9 @@ export const DeliverySection: React.FC<FieldsProps & { event: Event; onChanged: 
         )}
 
         {f.delivery_status === 'complete' && savedPartial && (
-          <p className="text-xs rounded-lg bg-warning-soft text-warning-text px-3 py-2">
+          <Notice tone="warning" size="sm">
             {t('events.delivery.switchOffHint', 'Saving "Complete" here only removes the note and placeholders — no email is sent. Use "Full gallery is ready" to tell the customer.')}
-          </p>
+          </Notice>
         )}
       </SectionCard>
 

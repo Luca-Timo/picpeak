@@ -14,7 +14,8 @@ import {
   Inbox,
   Check,
   X,
-  Sparkles
+  Sparkles,
+  LayoutDashboard
 } from 'lucide-react';
 import { parseISO } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
@@ -26,6 +27,7 @@ import { useMutationWithToast } from '../../hooks';
 
 import { Button, Card, Loading } from '../../components/common';
 import { UpdateNotification } from '../../components/admin/UpdateNotification';
+import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
 import { WhatsNewBanner } from '../../components/admin/WhatsNewBanner';
 import { CrmOverviewSection } from '../../components/admin/CrmOverviewSection';
 import { useQuery } from '@tanstack/react-query';
@@ -274,7 +276,7 @@ export const AdminDashboard: React.FC = () => {
       title: t('admin.archivedEvents'),
       value: dashboardStats?.archivedEvents || 0,
       icon: Archive,
-      color: 'text-gray-600',
+      color: 'text-soft',
     },
     {
       title: t('admin.systemHealth'),
@@ -291,20 +293,21 @@ export const AdminDashboard: React.FC = () => {
       {/* Update Notification */}
       <UpdateNotification />
 
-      {/* Page Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-heading">{t('navigation.dashboard')}</h1>
-          <p className="text-soft mt-1">{t('admin.dashboardSubtitle')}</p>
-        </div>
-        <Button
-          variant="primary"
-          leftIcon={<Plus className="w-5 h-5" />}
-          onClick={() => navigate('/admin/events/new')}
-        >
-          {t('events.createEvent')}
-        </Button>
-      </div>
+      <SectionPageHeader
+        icon={LayoutDashboard}
+        title={t('navigation.dashboard')}
+        description={t('admin.dashboardSubtitle')}
+        className="mb-8"
+        actions={(
+          <Button
+            variant="primary"
+            leftIcon={<Plus className="w-5 h-5" />}
+            onClick={() => navigate('/admin/events/new')}
+          >
+            {t('events.createEvent')}
+          </Button>
+        )}
+      />
 
       {/* Statistics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

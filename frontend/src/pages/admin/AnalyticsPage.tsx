@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-import { Button, Card, Loading } from '../../components/common';
+import { Button, Card, ErrorState, Loading, Notice } from '../../components/common';
+import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
 import { useQuery } from '@tanstack/react-query';
 import { adminService } from '../../services/admin.service';
 import { settingsService } from '../../services/settings.service';
@@ -58,7 +59,7 @@ export const AnalyticsPage: React.FC = () => {
   const [umamiConfig, setUmamiConfig] = useState<{ url?: string; shareUrl?: string; enabled?: boolean }>({});
 
   // Fetch analytics data from backend
-  const { data: apiData, isLoading, refetch } = useQuery({
+  const { data: apiData, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ['admin-analytics', dateRange],
     queryFn: async () => {
       const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
@@ -237,19 +238,21 @@ export const AnalyticsPage: React.FC = () => {
   if (isEmbedMode && umamiConfig.shareUrl) {
     return (
       <div>
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-heading">{t('analytics.title')}</h1>
-            <p className="text-soft mt-1">{t('analytics.detailedSubtitle')}</p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => setIsEmbedMode(false)}
-            leftIcon={<BarChart3 className="w-4 h-4" />}
-          >
-            {t('analytics.showSummaryView')}
-          </Button>
-        </div>
+        <SectionPageHeader
+          icon={BarChart3}
+          title={t('analytics.title')}
+          description={t('analytics.detailedSubtitle')}
+          feature="analytics"
+          actions={(
+            <Button
+              variant="outline"
+              onClick={() => setIsEmbedMode(false)}
+              leftIcon={<BarChart3 className="w-4 h-4" />}
+            >
+              {t('analytics.showSummaryView')}
+            </Button>
+          )}
+        />
         
         <Card padding="none" className="overflow-hidden" style={{ height: '800px' }}>
           <iframe
@@ -268,15 +271,14 @@ export const AnalyticsPage: React.FC = () => {
     );
   }
 
-  return (
-    <div>
-      {/* Page Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-heading">{t('analytics.title')}</h1>
-          <p className="text-soft mt-1">{t('analytics.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-3">
+  const pageHeader = (
+    <SectionPageHeader
+      icon={BarChart3}
+      title={t('analytics.title')}
+      description={t('analytics.subtitle')}
+      feature="analytics"
+      actions={(
+        <>
           {umamiConfig.shareUrl && (
             <Button
               variant="outline"
@@ -302,8 +304,27 @@ export const AnalyticsPage: React.FC = () => {
             <option value="30d">{t('analytics.last30Days')}</option>
             <option value="90d">{t('analytics.last90Days')}</option>
           </select>
-        </div>
+        </>
+      )}
+    />
+  );
+
+  if (isError && !apiData) {
+    return (
+      <div>
+        {pageHeader}
+        <ErrorState
+          title={t('analytics.loadFailed', 'Could not load the analytics')}
+          onRetry={() => refetch()}
+          retrying={isRefetching}
+        />
       </div>
+    );
+  }
+
+  return (
+    <div>
+      {pageHeader}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -545,17 +566,9 @@ export const AnalyticsPage: React.FC = () => {
 
       {/* Configuration Notice */}
       {umamiConfig.enabled === false && (
-        <Card padding="md" className="mt-6 bg-warning-soft border-warning-line">
-          <div className="flex items-start gap-3">
-            <Activity className="w-5 h-5 text-warning-text flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-warning-text">{t('analytics.notConfigured')}</p>
-              <p className="text-sm text-warning-text mt-1">
-                {t('analytics.configureInstructions')}
-              </p>
-            </div>
-          </div>
-        </Card>
+        <Notice tone="warning" className="mt-6" icon={<Activity className="w-5 h-5" />} title={t('analytics.notConfigured')}>
+          {t('analytics.configureInstructions')}
+        </Notice>
       )}
     </div>
   );

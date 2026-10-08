@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Calculator, Download, FileDown, FileSpreadsheet, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Button, Card, Loading, LocalizedDateInput } from '../../../components/common';
+import { Button, Card, Loading, LocalizedDateInput, Badge } from '../../../components/common';
 
 // Lightweight native select styled to match Input — the common barrel
 // doesn't export a Select component, and the form pieces here are
@@ -607,23 +607,23 @@ export const TaxReportPage: React.FC = () => {
                       <td className="px-2 py-1.5 whitespace-nowrap">
                         <span className="font-medium">{row.reference}</span>
                         {row.isCancelled && (
-                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-fill text-body font-semibold not-italic">
+                          <Badge caps className="ml-2 not-italic">
                             {t('taxReport.statusCancelled', 'Cancelled')}
-                          </span>
+                          </Badge>
                         )}
                         {/* Storno + Reissue lineage markers — parity
                             with the admin invoices list so the same
                             colour scheme distinguishes the row kinds at
                             a glance across both surfaces. */}
                         {row.kind === 'storno' && (
-                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-storno-soft text-storno-text font-semibold not-italic">
+                          <Badge tone="storno" caps className="ml-2 not-italic">
                             {t('bills.kind.storno', 'Storno')}
-                          </span>
+                          </Badge>
                         )}
                         {row.isReissue && (
-                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-info-soft text-info-text font-semibold not-italic">
+                          <Badge tone="info" caps className="ml-2 not-italic">
                             {t('bills.kind.reissue', 'Reissue')}
-                          </span>
+                          </Badge>
                         )}
                       </td>
                       <td className="px-2 py-1.5 truncate max-w-[180px]" title={row.party}>{row.party}</td>

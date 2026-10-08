@@ -972,7 +972,7 @@
     "filesAdded": "Dateien hinzugefügt",
     "deleted": "Transfer gelöscht",
     "deleteConfirmTitle": "Transfer löschen?",
-    "deleteConfirmBody": "Damit wird der Link entfernt. Die Fotos im Event bleiben unberührt.",
+    "deleteConfirmBody": "Damit wird der Link entfernt. Die Fotos in ihren Galerien bleiben unberührt.",
     "addImages": "Bilder hinzufügen",
     "noUploads": "Der Kunde hat noch keine Dateien hochgeladen.",
     "createAndSend": "Erstellen & senden",
@@ -1102,20 +1102,25 @@
       "request": "Anfrage"
     },
     "emptyReadOnly": "Noch nichts vorhanden.",
-    "someDropped": "{{count}} angehängte Datei(en) wurden nicht übernommen – eine Dateianfrage sammelt nur Dateien: {{names}}"
+    "someDropped": "{{count}} angehängte Datei(en) wurden nicht übernommen – eine Dateianfrage sammelt nur Dateien: {{names}}",
+    "deleteRequestAction": "Anfrage löschen",
+    "deleteAction": "Transfer löschen",
+    "loadFailed": "Die Transfers konnten nicht geladen werden"
   },
   "workflows": {
     "title": "Workflows",
     "subtitle": "Visuelle Automatisierungen – Auslöser, Bedingungen, Freigaben und Aktionen.",
     "new": "Neuer Workflow",
-    "empty": "Noch keine Workflows. Erstellen Sie einen, um Rechnungsstellung und Buchungsschritte zu automatisieren.",
+    "empty": "Erstellen Sie einen, um Rechnungsstellung und Buchungsschritte zu automatisieren.",
     "builtin": "integriert",
     "triggerLabel": "Auslöser",
     "enabled": "Aktiv",
     "disabled": "Inaktiv",
     "confirmDelete": "Diesen Workflow löschen?",
     "toggle": {
-      "confirmDisableBuiltin": "Das Deaktivieren dieses eingebauten Ablaufs stellt das vorherige Standardverhalten wieder her – die Automatisierung wird dadurch nicht abgeschaltet. Fortfahren?"
+      "confirmDisableBuiltin": "Das Deaktivieren dieses eingebauten Ablaufs stellt das vorherige Standardverhalten wieder her – die Automatisierung wird dadurch nicht abgeschaltet. Fortfahren?",
+      "disableBuiltinTitle": "Diesen eingebauten Workflow deaktivieren?",
+      "disableBuiltin": "Workflow deaktivieren"
     },
     "test": {
       "title": "Testlauf",
@@ -1141,7 +1146,9 @@
       "pendingTitle": "Offene Freigaben",
       "viewAll": "Alle Freigaben ansehen",
       "openEntity": "{{type}} #{{id}} öffnen",
-      "acted": "Erledigt"
+      "acted": "Erledigt",
+      "loadFailed": "Die Freigaben konnten nicht geladen werden",
+      "emptyHint": "Ein Workflow mit einer Bestätigungsstufe listet seine angehaltenen Durchläufe hier auf."
     },
     "editor": {
       "namePlaceholder": "Workflow-Name",
@@ -1193,7 +1200,11 @@
       "groups": "Kundengruppen",
       "groupsNoPermission": "Zum Auflisten der Kundengruppen ist die Berechtigung customers.view nötig.",
       "groupsHint": "Wird geprüft, wenn dieser Schritt läuft. Braucht einen Kunden im Ablauf: Kunden-, Angebots-, Vertrags- und Rechnungs-Auslöser haben einen; bei Galerie- und Event-Auslösern ist das Ergebnis immer „nein“."
-    }
+    },
+    "confirmDeleteNamed": "„{{name}}“ löschen? Laufende Durchläufe werden beendet und der Ablauf kann nicht wiederhergestellt werden.",
+    "deleteAction": "Workflow löschen",
+    "loadFailed": "Die Workflows konnten nicht geladen werden",
+    "emptyTitle": "Noch keine Workflows"
   },
   "eventTypes": {
     "title": "Veranstaltungsarten",
@@ -1230,7 +1241,7 @@
       "themePreset": "Standard-Theme",
       "slideshowPreset": "Diashow-Voreinstellung",
       "slideshowPresetHint": "Standard-Diashow-Stil für neue Events dieses Typs.",
-      "isActive": "Aktiv (sichtbar bei Veranstaltungserstellung)"
+      "isActive": "Aktiv (beim Erstellen einer Galerie wählbar)"
     },
     "validation": {
       "slugFormat": "Nur Buchstaben, Zahlen und Bindestriche erlaubt"
@@ -1242,7 +1253,8 @@
     "deleteConfirm": {
       "title": "Veranstaltungsart löschen",
       "message": "Sind Sie sicher, dass Sie löschen möchten",
-      "warning": "Diese Aktion kann nicht rückgängig gemacht werden. Stellen Sie sicher, dass keine Veranstaltungen diesen Typ verwenden."
+      "warning": "Diese Aktion kann nicht rückgängig gemacht werden. Stellen Sie sicher, dass keine Galerien diesen Typ verwenden.",
+      "action": "Veranstaltungsart löschen"
     }
   },
   "backup": {
@@ -1752,7 +1764,7 @@
     "sortByName": "Nach Name sortieren",
     "sortBySize": "Nach Größe sortieren",
     "tableHeaders": {
-      "event": "Veranstaltung",
+      "event": "Galerie",
       "type": "Typ",
       "archivedDate": "Archivierungsdatum",
       "size": "Größe",
@@ -1772,7 +1784,16 @@
     "confirmRestore": "Sind Sie sicher, dass Sie dieses Archiv wiederherstellen möchten? Die Veranstaltung wird wieder aktiv.",
     "confirmDelete": "Sind Sie sicher, dass Sie dieses Archiv dauerhaft löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "restoreSuccess": "Archiv erfolgreich wiederhergestellt",
-    "deleteSuccess": "Archiv dauerhaft gelöscht"
+    "deleteSuccess": "Archiv dauerhaft gelöscht",
+    "restoreTitle": "Archiv wiederherstellen?",
+    "confirmRestoreNamed": "„{{name}}“ wiederherstellen? Die Galerie wird wieder aktiv.",
+    "restoreAction": "Galerie wiederherstellen",
+    "deleteTitle": "Archiv löschen?",
+    "confirmDeleteNamed": "Das Archiv von „{{name}}“ mit allen Fotos endgültig löschen? Das kann nicht rückgängig gemacht werden.",
+    "deleteAction": "Archiv löschen",
+    "loadFailed": "Die Archive konnten nicht geladen werden",
+    "noArchivesMatchHint": "Nichts passt zu dieser Suche oder diesem Filter.",
+    "noArchivesHint": "Archivieren Sie eine Galerie über ihr Menü in der Galerieliste; sie erscheint dann hier."
   },
   "auth": {
     "password": "Passwort",
@@ -2104,11 +2125,11 @@
     "useThemeOnly": "Nur Design-Vorlage verwenden",
     "customTemplate": "Benutzerdefinierte Vorlage",
     "createInvoice": "Rechnung erstellen",
-    "title": "Veranstaltungen",
-    "create": "Veranstaltung erstellen",
-    "createEvent": "Veranstaltung erstellen",
-    "eventDetails": "Veranstaltungsdetails",
-    "eventName": "Veranstaltungsname",
+    "title": "Galerien",
+    "create": "Galerie erstellen",
+    "createEvent": "Galerie erstellen",
+    "eventDetails": "Galeriedetails",
+    "eventName": "Galeriename",
     "eventType": "Veranstaltungstyp",
     "eventDate": "Veranstaltungsdatum",
     "fullDay": "Ganztägig",
@@ -2131,13 +2152,13 @@
     "linkCopied": "Link kopiert!",
     "viewGallery": "Galerie ansehen",
     "uploadPhotos": "Fotos hochladen",
-    "archiveEvent": "Veranstaltung archivieren",
-    "archiveConfirm": "Sind Sie sicher, dass Sie diese Veranstaltung archivieren möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "archiveEvent": "Galerie archivieren",
+    "archiveConfirm": "Sind Sie sicher, dass Sie diese Galerie archivieren möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "extendExpiration": "Um {{days}} Tage verlängern",
-    "backToEvents": "Zurück zu Veranstaltungen",
+    "backToEvents": "Alle Galerien",
     "loadingEventDetails": "Veranstaltungsdetails werden geladen...",
     "saveChanges": "Änderungen speichern",
-    "eventExpiresIn": "Diese Veranstaltung läuft in {{days}} Tagen ab",
+    "eventExpiresIn": "Diese Galerie läuft in {{days}} Tagen ab",
     "warningEmailsHaveBeenSent": "Warn-E-Mails wurden an den Kunden gesendet.",
     "extendSevenDays": "Um 7 Tage verlängern",
     "overview": "Übersicht",
@@ -2361,21 +2382,21 @@
       "successToast": "Galerie dupliziert."
     },
     "draftBanner": "Diese Galerie befindet sich im Entwurfsmodus. Laden Sie Ihre Fotos hoch und veröffentlichen Sie, wenn Sie bereit sind.",
-    "subtitle": "Verwalten Sie Ihre Fotogalerien und Veranstaltungen",
-    "failedToLoadEvents": "Veranstaltungen konnten nicht geladen werden",
+    "subtitle": "Verwalten Sie Ihre Fotogalerien",
+    "failedToLoadEvents": "Galerien konnten nicht geladen werden",
     "tryAgain": "Erneut versuchen",
-    "eventExpiredMessage": "Diese Veranstaltung ist abgelaufen",
-    "guestsCannotAccessGallery": "Gäste können nicht mehr auf die Galerie zugreifen. Erwägen Sie, diese Veranstaltung zu archivieren.",
-    "bulkArchivePartial": "{{success}} Veranstaltungen archiviert, {{failed}} fehlgeschlagen",
+    "eventExpiredMessage": "Diese Galerie ist abgelaufen",
+    "guestsCannotAccessGallery": "Gäste können nicht mehr auf die Galerie zugreifen. Erwägen Sie, sie zu archivieren.",
+    "bulkArchivePartial": "{{success}} Galerien archiviert, {{failed}} fehlgeschlagen",
     "deleteSelected": "Ausgewählte löschen",
     "bulkDelete": {
       "warning": "Die ausgewählten Veranstaltungen, alle ihre Fotos, Archive und Audit-Logs werden endgültig gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
       "confirmLabel": "Geben Sie {{literal}} ein, um zu bestätigen",
       "confirmHelp": "Eine getippte Bestätigung verhindert versehentliche Löschungen und ist nicht von Browser-Autofill oder Passkey-Verknüpfungen betroffen.",
-      "successPartial": "{{success}} Veranstaltungen gelöscht, {{failed}} fehlgeschlagen",
-      "errorGeneric": "Veranstaltungen konnten nicht gelöscht werden",
-      "successAll_one": "{{count}} Veranstaltung dauerhaft gelöscht",
-      "successAll_other": "{{count}} Veranstaltungen dauerhaft gelöscht",
+      "successPartial": "{{success}} Galerien gelöscht, {{failed}} fehlgeschlagen",
+      "errorGeneric": "Galerien konnten nicht gelöscht werden",
+      "successAll_one": "{{count}} Galerie dauerhaft gelöscht",
+      "successAll_other": "{{count}} Galerien dauerhaft gelöscht",
       "title_one": "{{count}} Veranstaltung dauerhaft löschen?",
       "title_other": "{{count}} Veranstaltungen dauerhaft löschen?",
       "processing_one": "{{count}} Veranstaltung wird gelöscht. Dies kann einige Minuten dauern — bitte schließen Sie dieses Fenster nicht.",
@@ -2383,10 +2404,10 @@
       "submit_one": "{{count}} Veranstaltung löschen",
       "submit_other": "{{count}} Veranstaltungen löschen"
     },
-    "searchEventsPlaceholder": "Veranstaltungen suchen...",
+    "searchEventsPlaceholder": "Galerien suchen...",
     "all": "Alle",
     "expiring": "Läuft ab",
-    "event": "Veranstaltung",
+    "event": "Galerie",
     "type": "Typ",
     "date": "Datum",
     "status": "Status",
@@ -2394,9 +2415,9 @@
     "passwordProtected": "Passwortgeschützt",
     "newPasswordRequired": "Bitte legen Sie vor dem Aktivieren des Passwortschutzes ein Passwort fest.",
     "viewDetails": "Details anzeigen",
-    "archiveEventAction": "Veranstaltung archivieren",
+    "archiveEventAction": "Galerie archivieren",
     "downloadArchiveAction": "Archiv herunterladen",
-    "deleteEvent": "Veranstaltung löschen",
+    "deleteEvent": "Galerie löschen",
     "deleteEventConfirm": "Sind Sie sicher, dass Sie diese Veranstaltung löschen möchten?",
     "copy": "Kopieren",
     "copied": "Kopiert!",
@@ -2425,30 +2446,30 @@
       "warning3": "Fotodateien können umbenannt werden"
     },
     "stats": {
-      "totalEvents": "Gesamtveranstaltungen",
-      "activeEvents": "Aktive Veranstaltungen",
+      "totalEvents": "Galerien gesamt",
+      "activeEvents": "Aktive Galerien",
       "totalPhotos": "Gesamtfotos",
       "expiringEvents": "Bald ablaufend"
     },
     "clear": "Zurücksetzen",
     "archiveSelected": "Auswahl archivieren",
-    "noEventsFound": "Keine Veranstaltungen gefunden",
+    "noEventsFound": "Keine Galerien gefunden",
     "downloadArchiveSoon": "Archiv-Download bald verfügbar",
     "welcomeMessageLabel": "Willkommensnachricht",
     "archiveStatusTitle": "Archivstatus",
     "downloadingArchive": "{{name}}-Archiv wird heruntergeladen...",
     "downloadStarted": "Download gestartet",
     "failedToDownloadArchive": "Archiv-Download fehlgeschlagen",
-    "bulkArchiveSuccess_one": "{{count}} Veranstaltung erfolgreich archiviert",
-    "bulkArchiveSuccess_other": "{{count}} Veranstaltungen erfolgreich archiviert",
+    "bulkArchiveSuccess_one": "{{count}} Galerie erfolgreich archiviert",
+    "bulkArchiveSuccess_other": "{{count}} Galerien erfolgreich archiviert",
     "daysLeft_one": "({{count}} Tag verbleibend)",
     "daysLeft_other": "({{count}} Tage verbleibend)",
-    "eventsSelected_one": "{{count}} Veranstaltung ausgewählt",
-    "eventsSelected_other": "{{count}} Veranstaltungen ausgewählt",
+    "eventsSelected_one": "{{count}} Galerie ausgewählt",
+    "eventsSelected_other": "{{count}} Galerien ausgewählt",
     "paginationLabel": "{{from}}–{{to}} von {{total}}",
     "filtered": "gefiltert",
     "pageOf": "Seite {{page}} von {{totalPages}}",
-    "notFound": "Veranstaltung nicht gefunden",
+    "notFound": "Galerie nicht gefunden",
     "customerPhone": "Kundentelefon",
     "customerPhonePlaceholder": "+49 555 555 1234",
     "allowPresignedDownload": "Direkten S3-Download erlauben (kein Wasserzeichen, nur S3-Modus)",
@@ -2783,7 +2804,13 @@
       "reviewUploadsHelp": "Betrifft Uploads von Teammitgliedern, deren Rolle die Berechtigung „Review Team Uploads“ nicht hat: Sie bleiben für Gäste und Kunden verborgen, bis Sie oder eine prüfende Person sie im Tab Fotos freigeben. Die Rollen Admin, Editor und Solo Photographer haben diese Berechtigung standardmäßig, ihre Uploads werden nie zurückgehalten.",
       "reviewUploadsHelpMember": "Ihre Uploads in diese Galerie bleiben für Gäste und Kunden verborgen, bis der Galerie-Inhaber oder eine prüfende Person sie freigibt.",
       "reviewUploadsHelpReviewer": "Uploads von Teammitgliedern ohne die Berechtigung „Review Team Uploads“ warten im Tab Fotos auf Freigabe. Ihre eigenen werden sofort veröffentlicht."
-    }
+    },
+    "deleteEventConfirmLoss": "„{{name}}“ mit allen Fotos löschen? Das kann nicht rückgängig gemacht werden.",
+    "noEventsMatchHint": "Nichts passt zu dieser Suche oder diesem Filter. Setzen Sie ihn zurück, um alle Galerien zu sehen.",
+    "noEventsYet": "Noch keine Galerien",
+    "noEventsYetHint": "Erstellen Sie eine Galerie, um Fotos mit einem Kunden zu teilen.",
+    "downloadLimitResetAction": "Downloads zurücksetzen",
+    "notFoundHint": "Sie wurde vielleicht gelöscht, oder der Link ist falsch."
   },
   "settings": {
     "title": "Systemeinstellungen",
@@ -3342,7 +3369,7 @@
         "eventType": "Ereignistyp",
         "total_one": "{{count}} gesamt",
         "total_other": "{{count}} gesamt",
-        "empty": "Noch keine Zustellungen. Erstellen Sie eine Veranstaltung oder senden Sie ein Testereignis, um hier etwas zu sehen.",
+        "empty": "Erstellen Sie eine Galerie oder senden Sie ein Testereignis, um hier Zustellungen zu sehen.",
         "colTime": "Zeit",
         "colEvent": "Ereignis",
         "colStatus": "Status",
@@ -3364,7 +3391,11 @@
           "pending": "ausstehend",
           "success": "erfolgreich",
           "failed": "fehlgeschlagen"
-        }
+        },
+        "emptyTitle": "Noch keine Zustellungen",
+        "loadFailed": "Dieser Webhook konnte nicht geladen werden",
+        "listLoadFailed": "Die Zustellungen konnten nicht geladen werden",
+        "notFoundHint": "Er wurde vielleicht gelöscht. Einstellungen › Webhooks listet die vorhandenen auf."
       },
       "deleteAction": "Webhook löschen",
       "loadFailed": "Die Webhooks konnten nicht geladen werden"
@@ -4538,7 +4569,7 @@
     "storageSoftLimitConfigured": "Konfiguriertes Limit: {{limit}}",
     "storageSoftLimitRecommended": "Empfohlenes Limit: {{limit}}",
     "version": "Version",
-    "archivedEvents": "Archivierte Veranstaltungen",
+    "archivedEvents": "Archivierte Galerien",
     "systemHealth": "Systemstatus",
     "health": {
       "checking": "Prüfe...",
@@ -4842,15 +4873,15 @@
     },
     "changePassword": "Passwort ändern",
     "loadingDashboard": "Dashboard wird geladen...",
-    "activeEvents": "Aktive Veranstaltungen",
+    "activeEvents": "Aktive Galerien",
     "expiringSoon": "Demnächst ablaufend",
     "next7Days": "Nächste 7 Tage",
     "totalViews": "Gesamtaufrufe",
     "downloads": "Downloads",
     "percentFromLastWeek": "{{percent}}% gegenüber letzter Woche",
     "dashboardSubtitle": "Willkommen zurück! Hier ist, was mit Ihren Galerien passiert.",
-    "eventsExpiringSoon": "Demnächst ablaufende Veranstaltungen",
-    "noEventsExpiring": "Keine Veranstaltungen laufen in den nächsten 7 Tagen ab",
+    "eventsExpiringSoon": "Demnächst ablaufende Galerien",
+    "noEventsExpiring": "Keine Galerien laufen in den nächsten 7 Tagen ab",
     "noRecentActivity": "Keine aktuellen Aktivitäten",
     "photos": {
       "hidden": "Versteckt",
@@ -4936,8 +4967,8 @@
     },
     "daysLeft_one": "{{count}} Tag verbleibend",
     "daysLeft_other": "{{count}} Tage verbleibend",
-    "viewAllExpiringEvents_one": "Alle {{count}} ablaufenden Veranstaltungen anzeigen",
-    "viewAllExpiringEvents_other": "Alle {{count}} ablaufenden Veranstaltungen anzeigen",
+    "viewAllExpiringEvents_one": "Alle {{count}} ablaufenden Galerien anzeigen",
+    "viewAllExpiringEvents_other": "Alle {{count}} ablaufenden Galerien anzeigen",
     "guests": {
       "loading": "Wird geladen...",
       "aggregate": {
@@ -5395,7 +5426,7 @@
     "errorDetails": "Fehlerdetails",
     "requiredFields": "Bitte füllen Sie alle Pflichtfelder aus",
     "enterTestEmail": "Bitte geben Sie eine Test-E-Mail-Adresse ein",
-    "eventCreationFailed": "Veranstaltung konnte nicht erstellt werden",
+    "eventCreationFailed": "Galerie konnte nicht erstellt werden",
     "noShareLink": "Kein Freigabe-Link verfügbar",
     "copyFailed": "Link konnte nicht kopiert werden"
   },
@@ -5411,9 +5442,9 @@
     "uploadSuccess": "Upload erfolgreich abgeschlossen",
     "uploadError": "Upload fehlgeschlagen",
     "linkCopied": "Link in Zwischenablage kopiert",
-    "eventCreated": "Veranstaltung erfolgreich erstellt",
+    "eventCreated": "Galerie erfolgreich erstellt",
     "eventUpdated": "Veranstaltung erfolgreich aktualisiert",
-    "eventArchived": "Veranstaltung erfolgreich archiviert",
+    "eventArchived": "Galerie erfolgreich archiviert",
     "settingsSaved": "Einstellungen erfolgreich gespeichert",
     "themeUpdated": "Theme erfolgreich aktualisiert",
     "brandingUpdated": "Branding erfolgreich aktualisiert",
@@ -5449,12 +5480,13 @@
     "used": "Verwendet",
     "of": "von",
     "totalPhotos": "Gesamte Fotos",
-    "activeEvents": "Aktive Veranstaltungen",
+    "activeEvents": "Aktive Galerien",
     "notConfigured": "Umami Analytics nicht konfiguriert",
     "configureInstructions": "Um echte Analysedaten zu sehen, konfigurieren Sie Umami in Ihren Umgebungsvariablen und Admin-Panel-Einstellungen.",
     "catalogedMedia": "Katalogisierte Medien",
     "storageUnavailable": "nicht verfügbar",
-    "storageNoMeasurement": "keine Messung verfügbar"
+    "storageNoMeasurement": "keine Messung verfügbar",
+    "loadFailed": "Die Analysedaten konnten nicht geladen werden"
   },
   "email": {
     "title": "E-Mail-Konfiguration",
@@ -5770,7 +5802,7 @@
     "discardAndSwitch": "Verwerfen und wechseln"
   },
   "validation": {
-    "eventNameRequired": "Veranstaltungsname ist erforderlich",
+    "eventNameRequired": "Galeriename ist erforderlich",
     "hostEmailRequired": "Die E-Mail des Kunden ist erforderlich",
     "hostNameRequired": "Der Name des Kunden ist erforderlich",
     "adminEmailRequired": "Admin-E-Mail ist erforderlich",
@@ -6198,7 +6230,7 @@
     "enableToggle": "Kundenzugang aktivieren",
     "enableDescription": "Ermöglichen Sie Kunden, Fotos zu überprüfen und auszublenden, bevor die Galerie mit den Gästen geteilt wird.",
     "pinHelperText": "Der Kunde verwendet diese PIN, um die Überprüfungsseite aufzurufen. Mindestens 6 Zeichen.",
-    "linkAfterCreate": "Der Link für den Kundenzugang erscheint auf der Event-Seite, sobald das Event angelegt ist.",
+    "linkAfterCreate": "Der Link für den Kundenzugang erscheint auf der Galerie-Seite, sobald die Galerie angelegt ist.",
     "pinUpdated": "Kunden-PIN aktualisiert",
     "setPin": "PIN festlegen",
     "linkLabel": "Kundenzugangs-Link",
@@ -7010,7 +7042,7 @@
       "name": "Name",
       "email": "E-Mail",
       "company": "Firma",
-      "eventCount": "Events",
+      "eventCount": "Galerien",
       "lastLogin": "Letzte Anmeldung",
       "status": "Status",
       "groups": "Gruppen"
@@ -7053,7 +7085,9 @@
       "title": "Einladung stornieren?",
       "body": "Der Einladungslink funktioniert sofort nicht mehr.",
       "success": "Einladung storniert",
-      "error": "Einladung konnte nicht storniert werden"
+      "error": "Einladung konnte nicht storniert werden",
+      "action": "Einladung stornieren",
+      "keep": "Einladung behalten"
     },
     "detail": {
       "loadError": "Kunde konnte nicht geladen werden",
@@ -7066,8 +7100,8 @@
       "personalSection": "Persönliche Daten",
       "billingSection": "Adresse & Rechnung",
       "notesSection": "Interne Notizen",
-      "eventsSection": "Zugewiesene Events",
-      "noEvents": "Noch keinem Event zugewiesen. Fügen Sie diesen Kunden über das Event-Formular hinzu.",
+      "eventsSection": "Zugewiesene Galerien",
+      "noEvents": "Noch keiner Galerie zugewiesen. Fügen Sie über „Galerien verwalten“ welche hinzu.",
       "email": "E-Mail",
       "preferredLanguage": "Bevorzugte Sprache",
       "preferredLanguageHint": "Steuert die Portal-Sprache, Angebots-/Rechnungs-PDFs sowie Rechnungs-E-Mails (Erinnerungen/Mahnungen). Neue Kunden erben standardmässig die Sprache aus dem Geschäftsprofil ({{lang}}); hier kann pro Kunde überschrieben werden.",
@@ -7474,11 +7508,12 @@
         "referenceHint": "QR-/ESR-Referenz oder Mitteilung",
         "note": "Notiz",
         "noteHint": "Interne Notiz zu dieser Rechnung (optional)",
-        "passthroughCustomerHint": "Optional — einen Kunden zuordnen, um diese durchlaufende Position weiterzuverrechnen; leer lassen, um sie nur auf das Event zu buchen.",
+        "passthroughCustomerHint": "Optional — einen Kunden zuordnen, um diese durchlaufende Position weiterzuverrechnen; leer lassen, um sie nur auf die Galerie zu buchen.",
         "supplierCountry": "Lieferantenland",
         "supplierCountryNone": "— unbekannt —",
         "supplierCountryHint": "Setzt die Steuerbehandlung automatisch: ausserhalb Ihrer Vorsteuer-Länder → ausländische MwSt (nicht abziehbar)."
-      }
+      },
+      "loadFailed": "Die eingehenden Rechnungen konnten nicht geladen werden"
     },
     "expenseStatus": {
       "open": "Offen",
@@ -7497,9 +7532,9 @@
     "booking": {
       "label": "Buchen auf",
       "company": "Firma",
-      "event": "Event",
+      "event": "Galerie",
       "eventId": "Event-ID",
-      "inboundHint": "Auf welches Event diese Kosten in Auswertungen & Steuerexport entfallen (Firma = allgemeiner Aufwand). Unabhängig davon, an wen Sie weiterverrechnen."
+      "inboundHint": "Auf welche Galerie diese Kosten in Auswertungen & Steuerexport entfallen (Firma = allgemeiner Aufwand). Unabhängig davon, an wen Sie weiterverrechnen."
     },
     "incoming": {
       "triageTitle": "Eingangsrechnung kategorisieren",
@@ -7556,7 +7591,7 @@
       "other": "Sonstiges"
     },
     "ledger": {
-      "subtitle": "Interne Aufwände wie Kilometer, Spesenpauschalen und Barbelege, gebucht auf ein Event oder die Firma.",
+      "subtitle": "Interne Aufwände wie Kilometer, Spesenpauschalen und Barbelege, gebucht auf eine Galerie oder die Firma.",
       "allStatuses": "Alle Status",
       "allDispositions": "Alle Zuordnungen",
       "allKinds": "Alle Arten",
@@ -7586,19 +7621,20 @@
       "lockedHint": "Gesperrt — dieser Aufwand ist auf einer Kundenrechnung.",
       "description": "Beschreibung",
       "descriptionHint": "z. B. Kilometer, Spesenpauschale, Barbeleg",
-      "createdToast": "Aufwand hinzugefügt."
+      "createdToast": "Aufwand hinzugefügt.",
+      "loadFailed": "Die Ausgaben konnten nicht geladen werden"
     }
   },
   "projects": {
     "title": "Projektübersicht",
-    "subtitle": "Fasse Events zu Projekten zusammen und sieh jede E-Mail, jedes Dokument, jede Galerie und jede Stunde in einem Cockpit.",
+    "subtitle": "Fasse Galerien zu Projekten zusammen und sieh jede E-Mail, jedes Dokument und jede Stunde in einem Cockpit.",
     "search": "Nach Name oder Kunde suchen…",
-    "empty": "Noch keine Projekte. Erstellen Sie oben eines, oder vorhandene Events wurden automatisch gruppiert.",
+    "empty": "Erstellen Sie oben eines, oder vorhandene Galerien wurden automatisch gruppiert.",
     "notFound": "Projekt nicht gefunden",
     "noCustomer": "Kein einzelner Kunde",
     "rename": "Umbenennen",
     "timeline": "Meilensteine",
-    "eventCount": "{{count}} Events",
+    "eventCount": "{{count}} Galerien",
     "totalHours": "{{hours}} erfasst",
     "create": {
       "label": "Name des neuen Projekts",
@@ -7608,7 +7644,7 @@
     "col": {
       "name": "Projekt",
       "customer": "Kunde",
-      "events": "Events",
+      "events": "Galerien",
       "value": "Wert",
       "status": "Status",
       "updated": "Aktualisiert"
@@ -7622,11 +7658,11 @@
       "paid": "bezahlt"
     },
     "events": {
-      "title": "Events",
-      "none": "Diesem Projekt sind noch keine Events zugeordnet.",
-      "searchPlaceholder": "Event zuordnen — nach Name suchen…",
-      "attached": "Event zugeordnet",
-      "attachFailed": "Event konnte nicht zugeordnet werden"
+      "title": "Galerien",
+      "none": "Diesem Projekt sind noch keine Galerien zugeordnet.",
+      "searchPlaceholder": "Galerie zuordnen — nach Name suchen…",
+      "attached": "Galerie zugeordnet",
+      "attachFailed": "Galerie konnte nicht zugeordnet werden"
     },
     "feed": {
       "title": "Aktivität",
@@ -7666,7 +7702,10 @@
       "archived": "Archiviert"
     },
     "eventCount_one": "{{count}} Event",
-    "eventCount_other": "{{count}} Events"
+    "eventCount_other": "{{count}} Events",
+    "loadFailed": "Die Projekte konnten nicht geladen werden",
+    "noMatches": "Keine Projekte passen zu dieser Suche",
+    "emptyTitle": "Noch keine Projekte"
   },
   "calendar": {
     "pageTitle": "Kalender",
@@ -7710,7 +7749,8 @@
       "lockedTooltip": "Bereits abgerechnet — Rechnung stornieren, um zu bearbeiten.",
       "noDescription": "Keine Beschreibung.",
       "untitledCustomer": "Stunden",
-      "customerLoggingDisabled": "Bei diesem Kunden ist die Stundenerfassung deaktiviert. Aktivieren Sie sie auf der Detailseite des Kunden, um Stunden zu erfassen."
+      "customerLoggingDisabled": "Bei diesem Kunden ist die Stundenerfassung deaktiviert. Aktivieren Sie sie auf der Detailseite des Kunden, um Stunden zu erfassen.",
+      "deleteAction": "Stunden löschen"
     }
   },
   "hoursLogging": {
@@ -8928,11 +8968,11 @@
     "title": "Erinnerungs-E-Mails vor dem Anlass",
     "scheduleMoved": {
       "title": "Der Versandzeitpunkt liegt jetzt in den Workflows",
-      "body": "Ob Erinnerungen vor dem Anlass verschickt werden und wie viele Tage vorher, wird im Workflow „Erinnerung vor dem Anlass“ festgelegt. Auf dieser Seite werden die E-Mail-Vorlagen bearbeitet; anlassspezifische Überschreibungen bleiben auf der jeweiligen Anlass-Detailseite.",
+      "body": "Ob Erinnerungen vor dem Anlass verschickt werden und wie viele Tage vorher, wird im Workflow „Erinnerung vor dem Anlass“ festgelegt. Auf dieser Seite werden die E-Mail-Vorlagen bearbeitet; galeriespezifische Überschreibungen bleiben auf der jeweiligen Galerie-Detailseite.",
       "link": "Workflows öffnen"
     },
     "globalSection": "Globales Verhalten",
-    "globalHelp": "Standardmässig aus — aktiviere, um Erinnerungen zu senden. Der unten gesetzte Offset ist der Standard; jeder Anlass kann ihn auf der Detailseite überschreiben.",
+    "globalHelp": "Standardmässig aus — aktiviere, um Erinnerungen zu senden. Der unten gesetzte Offset ist der Standard; jede Galerie kann ihn auf ihrer Detailseite überschreiben.",
     "enableLabel": "Erinnerungs-E-Mails vor dem Anlass senden",
     "daysBeforeLabel": "Tage vor dem Anlass",
     "saveSettings": "Globale Einstellungen speichern",
@@ -9806,7 +9846,7 @@
     "createNewDoc": "Neues {{label}} erstellen",
     "existingDocs": "Oder ein bestehendes referenzieren",
     "noExistingDocs": "Für diesen Kunden gibt es noch keine Dokumente.",
-    "galleryCreateOnly": "Galerien sind event-basiert — dies öffnet den Event-Editor, wo Sie den Kunden zuweisen können.",
+    "galleryCreateOnly": "Damit öffnet sich der Galerie-Editor, in dem Sie den Kunden zuordnen können.",
     "syncOk": "Postfächer geprüft — {{count}} neu.",
     "syncDisabled": "Eingehende E-Mails sind deaktiviert — unter Einstellungen → Funktionen aktivieren.",
     "syncUnconfigured": "Zuerst ein Postfach unter Einstellungen → E-Mail konfigurieren.",
@@ -9814,7 +9854,10 @@
     "syncFailed": "Synchronisierung fehlgeschlagen.",
     "actionFailed": "Aktion fehlgeschlagen.",
     "syncOk_one": "Postfächer geprüft — {{count}} neu.",
-    "syncOk_other": "Postfächer geprüft — {{count}} neu."
+    "syncOk_other": "Postfächer geprüft — {{count}} neu.",
+    "body": "Nachricht",
+    "deleteForeverTitle": "Diese Nachricht endgültig löschen?",
+    "deleteForeverConfirm": "Die Nachricht und ihre Anhänge werden endgültig entfernt. Das kann nicht rückgängig gemacht werden."
   },
   "rebills": {
     "createInvoice": "Rechnung aus Weiterverrechnungen erstellen",

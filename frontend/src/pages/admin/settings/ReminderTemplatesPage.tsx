@@ -32,8 +32,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Mail, AlertTriangle, Workflow as WorkflowIcon } from 'lucide-react';
-import { Card, Loading, Input } from '../../../components/common';
+import { Mail, Workflow as WorkflowIcon } from 'lucide-react';
+import { Card, Loading, Input, Badge, Notice } from '../../../components/common';
 import { SUPPORTED_LANGUAGES } from '../../../components/common/LanguageSelector';
 import { EmailTemplateEditor } from '../../../components/admin/EmailTemplateEditor';
 import { eventTypesService } from '../../../services/eventTypes.service';
@@ -296,7 +296,7 @@ export const ReminderTemplatesPage: React.FC = () => {
             <div>
               <p className="font-medium">{t('reminderTemplates.scheduleMoved.title', 'The reminder schedule is now in Workflows')}</p>
               <p className="mt-1 text-soft">
-                {t('reminderTemplates.scheduleMoved.body', 'Whether pre-event reminders are sent, and how many days before the event, is configured in the “Pre-event reminder” workflow. This page edits the email templates; per-event overrides stay on each event’s detail page.')}{' '}
+                {t('reminderTemplates.scheduleMoved.body', 'Whether pre-event reminders are sent, and how many days before the event, is configured in the “Pre-event reminder” workflow. This page edits the email templates; per-gallery overrides stay on each gallery’s detail page.')}{' '}
                 <Link to="/admin/automation/workflows" className="underline font-medium">{t('reminderTemplates.scheduleMoved.link', 'Open Workflows')}</Link>
               </p>
             </div>
@@ -308,7 +308,7 @@ export const ReminderTemplatesPage: React.FC = () => {
             </h3>
             <p className="text-xs text-muted mb-3">
               {t('reminderTemplates.globalHelp',
-                'Off by default — turn on to start sending pre-event reminders. The offset below is the default; each event can override on its detail page.')}
+                'Off by default — turn on to start sending pre-event reminders. The offset below is the default; each gallery can override it on its detail page.')}
             </p>
             <div className="flex items-center gap-6 flex-wrap">
               <label className="inline-flex items-center gap-2 text-sm text-body cursor-pointer">
@@ -368,18 +368,19 @@ export const ReminderTemplatesPage: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {!row.hasTemplate && !row.isDefault && (
-                            <span
-                              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-warning-soft text-warning-text"
+                            <Badge
+                              tone="warning"
+                              caps
                               title={t('reminderTemplates.usesDefaultTooltip',
                                 'No dedicated template yet — this event type falls back to the default. Edit + save here to create one.') as string}
                             >
                               {t('reminderTemplates.usesDefault', 'Default')}
-                            </span>
+                            </Badge>
                           )}
                           {row.hasTemplate && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-fill text-body">
+                            <Badge>
                               {count}/{totalLangs}
-                            </span>
+                            </Badge>
                           )}
                         </div>
                       </div>
@@ -434,13 +435,10 @@ export const ReminderTemplatesPage: React.FC = () => {
                 </div>
 
                 {isNewPerType && (
-                  <div className="rounded-md border border-warning-line bg-warning-soft p-3 mb-3 flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-warning-text mt-0.5 shrink-0" />
-                    <p className="text-sm text-warning-text">
-                      {t('reminderTemplates.willCreateOnSave',
-                        'This event type uses the default template. The fields below are pre-filled from the default; saving will create a dedicated template for this event type.')}
-                    </p>
-                  </div>
+                  <Notice tone="warning" className="mb-3">
+                    {t('reminderTemplates.willCreateOnSave',
+                      'This event type uses the default template. The fields below are pre-filled from the default; saving will create a dedicated template for this event type.')}
+                  </Notice>
                 )}
 
                 <div className="space-y-4">

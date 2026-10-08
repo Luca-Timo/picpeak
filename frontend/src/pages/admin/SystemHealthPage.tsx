@@ -122,7 +122,7 @@ export const SystemHealthPage: React.FC = () => {
                       <button type="button"
                         aria-label={t('systemHealth.dismiss', 'Dismiss') as string}
                         onClick={() => dismissMutation.mutate(m.id)}
-                        className="p-1.5 text-neutral-400 hover:text-danger-text">
+                        className="p-1.5 text-faint hover:text-danger-text">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>

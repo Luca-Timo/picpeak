@@ -170,7 +170,7 @@ export const HoursLoggingPage: React.FC = () => {
                   key={r.customerAccountId}
                   type="button"
                   onClick={() => selectFromSummary(r)}
-                  className="w-full flex items-center justify-between gap-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/60 rounded-md px-2 -mx-2 transition-colors"
+                  className="w-full flex items-center justify-between gap-4 py-3 text-left hover:bg-hover-soft rounded-md px-2 -mx-2 transition-colors"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">

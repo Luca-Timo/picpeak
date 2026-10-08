@@ -5,7 +5,6 @@ import {
   Mail,
   Lock,
   Clock,
-  ArrowLeft,
   Palette,
   Eye,
   EyeOff,
@@ -18,9 +17,10 @@ import {
 import { addDays } from 'date-fns';
 import { toast } from 'react-toastify';
 
-import { Button, Input, Card, PasswordGenerator, LocalizedDateInput, TimeField } from '../../components/common';
+import { Button, Input, Card, Notice, PasswordGenerator, LocalizedDateInput, TimeField } from '../../components/common';
 import { ThemeCustomizerEnhanced, GalleryPreview, WelcomeMessageEditor, FeedbackSettings } from '../../components/admin';
 import { CustomerAccountPicker } from '../../components/admin/CustomerAccountPicker';
+import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
 import { TeamMemberPicker } from '../../components/admin/TeamMemberPicker';
 import { GalleryRecipientsList } from '../../components/admin/GalleryRecipientsList';
 import { useFeatureEnabled } from '../../contexts/FeatureFlagsContext';
@@ -702,19 +702,19 @@ export const CreateEventPage: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <SectionPageHeader
+        icon={Calendar}
+        title={t('events.create')}
+        actions={(
           <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={<ArrowLeft className="w-4 h-4" />}
+            type="button"
+            variant="outline"
             onClick={() => navigate('/admin/events')}
           >
-            {t('common.back')}
+            {t('common.cancel')}
           </Button>
-          <h1 className="text-2xl font-bold text-heading">{t('events.create')}</h1>
-        </div>
-      </div>
+        )}
+      />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Event Details */}
@@ -1046,19 +1046,18 @@ export const CreateEventPage: React.FC = () => {
               </label>
 
               {!formData.require_password && (
-                <div className="rounded-md border border-warning-line bg-warning-soft p-3 text-xs text-warning-text">
-                  {t('events.publicGalleryWarning', 'Public galleries are accessible to anyone with the link. Consider enabling download watermarks and monitoring activity.')} 
-                </div>
+                <Notice tone="warning" size="sm">
+                  {t('events.publicGalleryWarning', 'Public galleries are accessible to anyone with the link. Consider enabling download watermarks and monitoring activity.')}
+                </Notice>
               )}
             </div>
 
             {formData.require_password && portalOnly && (
-              <div className="rounded-md border border-line bg-inset p-3 text-sm text-body flex items-start gap-2">
-                <Key className="w-4 h-4 mt-0.5 shrink-0 text-soft" />
+              <Notice tone="neutral" icon={<Key className="w-4 h-4" />}>
                 <span>
                   {t('events.recipients.generatedPasswordNote', 'Customers sign in through their customer portal, so no gallery password is needed. A strong one is generated to keep the gallery link locked. If you add a customer email later, you set a password then.')}
                 </span>
-              </div>
+              </Notice>
             )}
 
             {formData.require_password && !portalOnly && (
@@ -1198,15 +1197,9 @@ export const CreateEventPage: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="rounded-md border border-info-line bg-info-soft p-3">
-                <div className="flex items-center gap-2 text-info-text">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-sm font-medium">{t('events.noExpiration', 'No Expiration')}</span>
-                </div>
-                <p className="mt-1 text-xs text-info-text">
-                  {t('events.noExpirationHelp', 'This gallery will remain active until manually archived.')}
-                </p>
-              </div>
+              <Notice tone="info" icon={<Clock className="w-5 h-5" />} title={t('events.noExpiration', 'No Expiration')}>
+                {t('events.noExpirationHelp', 'This gallery will remain active until manually archived.')}
+              </Notice>
             )}
 
             {/* Photo Cap */}

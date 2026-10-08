@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, Lock, RefreshCw } from 'lucide-react';
 import type { Event } from '../../../../types';
-import { Button, Input, LocalizedDateInput, PasswordGenerator } from '../../../../components/common';
+import { Button, Input, LocalizedDateInput, PasswordGenerator, Notice } from '../../../../components/common';
 import { FeedbackSettings } from '../../../../components/admin';
 import { CustomerAccountPicker } from '../../../../components/admin/CustomerAccountPicker';
 import { TeamMemberPicker } from '../../../../components/admin/TeamMemberPicker';
@@ -249,9 +249,9 @@ export const AccessSection: React.FC<FieldsProps & { ownsEvent?: boolean }> = ({
           </div>
         </label>
         {!f.require_password && (
-          <div className="mt-2 rounded-md border border-warning-line bg-warning-soft p-3 text-xs text-warning-text">
+          <Notice tone="warning" size="sm" className="mt-2">
             {t('events.publicGalleryWarning', 'Public galleries are accessible to anyone with the link. Consider enabling download watermarks and monitoring activity.')}
-          </div>
+          </Notice>
         )}
       </div>
       {!ownsEvent && (

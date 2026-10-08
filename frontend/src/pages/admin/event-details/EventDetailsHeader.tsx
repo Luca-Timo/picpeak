@@ -6,7 +6,6 @@ import {
   Info,
   Calendar,
   Archive,
-  AlertTriangle,
   Copy,
   Mail,
   MoreHorizontal,
@@ -21,7 +20,7 @@ import { eventsService } from '../../../services/events.service';
 import { CompleteDeliveryDialog } from './CompleteDeliveryDialog';
 import { deliveryDue, isAwaitingFullGallery } from './deliveryStatus';
 import type { Event } from '../../../types';
-import { Button, Card } from '../../../components/common';
+import { Badge, Button, Notice } from '../../../components/common';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
@@ -268,15 +267,9 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 </span>
               )}
               <span className="capitalize">{event.event_type}</span>
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  isGalleryPublic(event.require_password)
-                    ? 'bg-success-soft text-success-text'
-                    : 'bg-inset text-body'
-                }`}
-              >
+              <Badge tone={isGalleryPublic(event.require_password) ? 'success' : 'neutral'}>
                 {isGalleryPublic(event.require_password) ? t('events.publicAccess', 'Public access') : t('events.passwordProtected', 'Password protected')}
-              </span>
+              </Badge>
               {/* The pill is the only draft marker: what a draft means is its
                   tooltip, and Publish is in the action row. The row is
                   `relative`: on a phone the tooltip anchors to it, so it
@@ -289,22 +282,16 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 </span>
               ) : null}
               {awaiting && (
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                    due?.tone === 'overdue'
-                      ? 'bg-danger-soft text-danger-text'
-                      : due?.tone === 'soon'
-                        ? 'bg-warning-soft text-warning-text'
-                        : 'bg-inset text-body'
-                  }`}
+                <Badge
+                  tone={due?.tone === 'overdue' ? 'danger' : due?.tone === 'soon' ? 'warning' : 'neutral'}
+                  icon={<Sparkles />}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
                   {!due
                     ? t('events.delivery.pill', 'First look')
                     : due.tone === 'overdue'
                       ? t('events.delivery.pillOverdue', 'First look · overdue')
                       : t('events.delivery.pillDue', 'First look · due in {{count}} d', { count: due.days })}
-                </span>
+                </Badge>
               )}
             </div>
           </div>
@@ -380,36 +367,26 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
 
       {/* Expiration Warning */}
       {!archived && (isExpired || isExpiring) && (
-        <Card className={`p-4 mb-6 border-2 ${isExpired ? 'border-danger bg-danger-soft' : 'border-warning bg-warning-soft'}`}>
-          <div className="flex items-start gap-3">
-            <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${isExpired ? 'text-danger-text' : 'text-warning-text'}`} />
-            {/* Text and action share a wrapping row beside the icon: on a
-                phone the button drops under the text, lined up with it. */}
-            <div className="flex-1 min-w-0 flex flex-wrap items-start justify-between gap-3">
-              <div className="flex-1 basis-64 min-w-0">
-                <p className={`font-medium ${isExpired ? 'text-danger-text' : 'text-warning-text'}`}>
-                  {isExpired
-                    ? t('events.eventExpiredMessage')
-                    : t('events.eventExpiresIn', { days: daysUntilExpiration })}
-                </p>
-                <p className={`text-sm mt-1 ${isExpired ? 'text-danger-text' : 'text-warning-text'}`}>
-                  {isExpired ? t('events.guestsCannotAccessGallery') : t('events.warningEmailsHaveBeenSent')}
-                </p>
-              </div>
-              {!isExpired && canHelpClient && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    if (await confirm({ message: `${t('events.extendExpiration', { days: 7 })}?` })) onExtendExpiration(7);
-                  }}
-                >
-                  {t('events.extendSevenDays')}
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
+        <Notice
+          tone={isExpired ? 'danger' : 'warning'}
+          className="mb-6"
+          title={isExpired
+            ? t('events.eventExpiredMessage')
+            : t('events.eventExpiresIn', { days: daysUntilExpiration })}
+          action={!isExpired && canHelpClient ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (await confirm({ message: `${t('events.extendExpiration', { days: 7 })}?` })) onExtendExpiration(7);
+              }}
+            >
+              {t('events.extendSevenDays')}
+            </Button>
+          ) : undefined}
+        >
+          {isExpired ? t('events.guestsCannotAccessGallery') : t('events.warningEmailsHaveBeenSent')}
+        </Notice>
       )}
     </>
   );
