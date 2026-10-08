@@ -166,10 +166,13 @@ export const QuoteDetailPage: React.FC = () => {
    * customer to click the public response link.
    */
   const handleAcceptOnBehalf = async () => {
+    // The customer agreed to what is on screen: unsaved edits are saved first.
+    const savedFirst = dirty ? `\n\n${t('quotes.unsavedSavedFirst', 'Your unsaved changes are saved first.')}` : '';
     if (!(await confirm({
-      message: t('quotes.confirmAcceptOnBehalf', 'Mark this quote as accepted on behalf of the customer? Use only when they have verbally agreed (e.g. on the phone).'),
+      message: t('quotes.confirmAcceptOnBehalf', 'Mark this quote as accepted on behalf of the customer? Use only when they have verbally agreed (e.g. on the phone).') + savedFirst,
       confirmLabel: t('quotes.acceptOnBehalf', 'Accept on behalf'),
     }))) return;
+    if (dirty && !(await formRef.current?.save())) return;
     try {
       await quotesService.acceptOnBehalf(q.id);
       toast.success(t('quotes.acceptedOnBehalfToast', 'Quote marked as accepted.'));
@@ -186,9 +189,10 @@ export const QuoteDetailPage: React.FC = () => {
    * why. The quote can still be duplicated to start a fresh round.
    */
   const handleDeclineOnBehalf = async () => {
+    const savedFirst = dirty ? `\n\n${t('quotes.unsavedSavedFirst', 'Your unsaved changes are saved first.')}` : '';
     const reason = await prompt({
       title: t('quotes.declineOnBehalf', 'Decline on behalf'),
-      message: t('quotes.declineReasonPrompt', 'Mark this quote as declined on behalf of the customer? Optionally note why (leave blank to skip).'),
+      message: t('quotes.declineReasonPrompt', 'Mark this quote as declined on behalf of the customer? Optionally note why (leave blank to skip).') + savedFirst,
       label: t('quotes.field.declineReason', 'Decline reason'),
       multiline: true,
       optional: true,
@@ -197,6 +201,7 @@ export const QuoteDetailPage: React.FC = () => {
     });
     // null on Cancel; '' (empty) means "decline, no reason".
     if (reason === null) return;
+    if (dirty && !(await formRef.current?.save())) return;
     try {
       await quotesService.declineOnBehalf(q.id, reason.trim() || undefined);
       toast.success(t('quotes.declinedOnBehalfToast', 'Quote marked as declined.'));
@@ -476,7 +481,7 @@ export const QuoteDetailPage: React.FC = () => {
           canSave={formState.valid}
           onSave={() => {
             void formRef.current?.save().then((savedId) => {
-              if (savedId) toast.success(t('quotes.savedToast', 'Quote saved as draft.'));
+              if (savedId) toast.success(q.status === 'draft' ? t('quotes.savedToast', 'Quote saved as draft.') : t('quotes.savedToastSent', 'Quote saved.'));
             });
           }}
           onDiscard={() => formRef.current?.discard()}

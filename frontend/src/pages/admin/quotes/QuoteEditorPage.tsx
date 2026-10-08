@@ -152,8 +152,9 @@ export function buildPayload(f: FormState): QuoteCreatePayload {
     paymentNetDaysTemplateId: f.paymentNetDaysTemplateId || undefined,
     paymentTimingTemplateId: f.paymentTimingTemplateId || undefined,
     // Ad-hoc installments (commit #6) — overrides the template's
-    // installments on the snapshot. Sent only when populated.
-    installments: f.installments && f.installments.length > 0 ? f.installments : undefined,
+    // installments on the snapshot. An empty list clears the override
+    // (the server stores null), so a plan removed in the editor goes away.
+    installments: f.installments && f.installments.length > 0 ? f.installments : [],
     vatRate: f.vatRate,
     vatCode: f.vatCode,
     shippingAmountMinor: toMinor(f.shippingAmount),
@@ -194,6 +195,7 @@ function formFromExisting(existing: Awaited<ReturnType<typeof quotesService.get>
     paymentTermTemplateId: q.paymentTermTemplateId,
     paymentNetDaysTemplateId: q.paymentNetDaysTemplateId,
     paymentTimingTemplateId: q.paymentTimingTemplateId,
+    installments: q.installmentsOverride ?? null,
     vatRate: Number(q.vatRate || 0),
     vatCode: (q as { vatCode?: string | null }).vatCode ?? null,
     shippingAmount: Number(q.shippingAmountMinor || 0) / 100,
