@@ -46,7 +46,7 @@ const watermarkService = require('../services/watermarkService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
 
 const { getStoragePath } = require('../config/storage');
-const { normalizeStatusColors } = require('../utils/statusColors');
+const { normalizeStatusColors, STATUS_KEYS } = require('../utils/statusColors');
 
 // Reserved first-run bootstrap keys — never writable through the generic
 // settings upserts in this file: setup_wizard_completed is a one-way marker
@@ -1245,6 +1245,15 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       // Info banner (#932). Markdown only, same sanitiser path as promo.
       info_markdown
     } = req.body;
+
+    // Status colours: refuse a malformed set rather than store a cleaned one,
+    // which would wipe the saved hues and still report success.
+    if (status_colors !== undefined) {
+      const bad = !status_colors || typeof status_colors !== 'object' || Array.isArray(status_colors)
+        || Object.entries(status_colors).some(([key, value]) => !STATUS_KEYS.includes(key)
+          || (value != null && value !== '' && !normalizeStatusColors({ [key]: value })[key]));
+      if (bad) return res.status(400).json({ error: 'Status colours must be #rrggbb values for success, warning, danger, info or storno' });
+    }
 
     // Normalize force_color_mode: only 'dark' | 'light' | null are valid.
     const normalizedForceColorMode = force_color_mode === 'dark'

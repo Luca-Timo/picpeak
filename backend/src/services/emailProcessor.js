@@ -407,7 +407,7 @@ function renderEmailSignatureText(signature, { brandingCompanyName, language } =
 // scheme other than http(s), and each colour has to match a colour grammar
 // before it is interpolated into <style>, style="" and bgcolor="".
 const { sanitizeCssColor } = require('../utils/cssSanitizer');
-const { readableTextOn, dividerOn } = require('../utils/colorContrast');
+const { readableTextOn, dividerOn, contrastRatio } = require('../utils/colorContrast');
 const { loadBrandingTheme } = require('./galleryTheme');
 
 // The green every seeded template and the old defaults used. A template that
@@ -424,7 +424,11 @@ async function resolveEmailAccent(configuredPrimary, configuredButtonText) {
   if (!primary) {
     try {
       const brand = await loadBrandingTheme();
-      primary = sanitizeCssColor((brand && (brand.accentDarkColor || brand.primaryColor)) || '') || null;
+      const brandAccent = sanitizeCssColor((brand && (brand.accentDarkColor || brand.primaryColor)) || '') || null;
+      // Same floor as the PDF accent (services/pdf/theme.js brandColors): a
+      // brand colour too pale for a white email card keeps the legacy green.
+      const ratio = brandAccent ? contrastRatio(brandAccent, '#ffffff') : null;
+      primary = brandAccent && (ratio === null || ratio >= 3) ? brandAccent : null;
     } catch (error) {
       // The mail still goes out, in the legacy green.
       logger.warn('Could not read the Branding accent for emails', { error: error.message });

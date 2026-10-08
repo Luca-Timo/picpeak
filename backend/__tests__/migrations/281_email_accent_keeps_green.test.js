@@ -51,3 +51,19 @@ describe('migration 281 on SQLite', () => {
     expect(await primary()).toBe('#123456');
   });
 });
+
+describe('migration 281, a stored value the mailer ignores', () => {
+  it('pins the green over an invalid colour, which already rendered green', async () => {
+    const db = knex({ client: 'sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+    await db.schema.createTable('app_settings', (t) => {
+      t.increments('id').primary(); t.string('setting_key').unique(); t.text('setting_value'); t.string('setting_type'); t.timestamp('updated_at');
+    });
+    await db.schema.createTable('email_queue', (t) => { t.increments('id').primary(); });
+    await db('email_queue').insert({});
+    await db('app_settings').insert({ setting_key: 'email_primary_color', setting_value: JSON.stringify('url(x)'), setting_type: 'general' });
+    await migration.up(db);
+    const row = await db('app_settings').where({ setting_key: 'email_primary_color' }).first();
+    expect(decodeSettingValue(db, row.setting_value)).toBe('#5C8762');
+    await db.destroy();
+  });
+});

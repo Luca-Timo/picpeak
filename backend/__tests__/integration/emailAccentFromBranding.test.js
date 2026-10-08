@@ -52,9 +52,16 @@ describe('wrapEmailHtml — email accent', () => {
     expect(await wrapEmailHtml(body, 'Subject', 'en')).toContain('border-left: 4px solid #123456');
   });
 
-  it('picks a readable button label for a pale brand colour', async () => {
+  it('picks a readable button label for a light brand colour', async () => {
+    await setSetting('theme_config', { accentDarkColor: '#4a90d9' });
+    const html = await wrapEmailHtml(body, 'Subject', 'en');
+    expect(html).toContain('background-color:#4a90d9');
+    expect(html).not.toContain('color:#ffffff;display:inline-block');
+  });
+
+  it('keeps the legacy green for a brand colour too pale for the white card, as PDFs keep black', async () => {
     await setSetting('theme_config', { accentDarkColor: '#ffe066' });
     const html = await wrapEmailHtml(body, 'Subject', 'en');
-    expect(html).not.toContain('color:#ffffff;display:inline-block');
+    expect(html).toContain('background-color:#5C8762');
   });
 });

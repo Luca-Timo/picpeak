@@ -10,6 +10,8 @@
  * fresh install follows the brand from its first mail.
  */
 
+const { sanitizeCssColor } = require('../../src/utils/cssSanitizer');
+
 const LEGACY_EMAIL_GREEN = '#5C8762';
 
 function stored(value) {
@@ -29,7 +31,9 @@ exports.up = async function (knex) {
   if (!(await knex('email_queue').first('id'))) return;
 
   const row = await knex('app_settings').where({ setting_key: 'email_primary_color' }).first('setting_value');
-  if (row && stored(row.setting_value).trim()) return;
+  // Only a value the mailer would use counts as set (emailProcessor
+  // readColor): an invalid one fell back to the green, so it is pinned too.
+  if (row && sanitizeCssColor(stored(row.setting_value))) return;
 
   const value = JSON.stringify(LEGACY_EMAIL_GREEN);
   if (row) {

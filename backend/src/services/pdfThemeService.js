@@ -7,6 +7,7 @@
  */
 
 const { db, logActivity } = require('../database/db');
+const logger = require('../utils/logger');
 const { AppError } = require('../utils/errors');
 const { isUniqueViolation } = require('../utils/dbErrors');
 const businessProfileService = require('./businessProfileService');
@@ -21,8 +22,9 @@ const { loadBrandingTheme } = require('./galleryTheme');
  */
 async function brandingTheme() {
   try {
-    return await brandingTheme();
-  } catch (_) {
+    return await loadBrandingTheme();
+  } catch (error) {
+    logger.warn('Could not read the Branding theme for PDF colours', { error: error.message });
     return null;
   }
 }
