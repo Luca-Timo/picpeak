@@ -13,7 +13,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, BellRing, CheckCircle2, Eye, EyeOff, Send, ShieldCheck, Users, XCircle } from 'lucide-react';
-import { Button, Card } from '../../../components/common';
+import { Button, Card, useConfirm } from '../../../components/common';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../../hooks';
@@ -40,6 +40,7 @@ interface SigningOverviewCardProps {
 
 export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contractId, contractStatus, overview }) => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const { formatDateTime } = useLocalizedDate();
 
   // The failed step in words. Only the step and a safe code come from the
@@ -226,10 +227,11 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
                       variant="outline"
                       size="sm"
                       disabled={resendMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(t('contracts.signers.resendConfirm', 'Send {{name}} a new signing link? The previous link stops working.', { name: s.name || s.email || '' }) as string)) {
-                          resendMutation.mutate(s);
-                        }
+                      onClick={async () => {
+                        if (await confirm({
+                          message: t('contracts.signers.resendConfirm', 'Send {{name}} a new signing link? The previous link stops working.', { name: s.name || s.email || '' }),
+                          confirmLabel: t('contracts.signers.resend', 'Send the link again'),
+                        })) resendMutation.mutate(s);
                       }}
                     >
                       <Send className="w-4 h-4 mr-1" />
@@ -239,10 +241,11 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
                       variant="outline"
                       size="sm"
                       disabled={remindMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(t('contracts.signers.remindConfirm', 'Send {{name}} a reminder? It carries a new link; the previous one stops working.', { name: s.name || s.email || '' }) as string)) {
-                          remindMutation.mutate(s);
-                        }
+                      onClick={async () => {
+                        if (await confirm({
+                          message: t('contracts.signers.remindConfirm', 'Send {{name}} a reminder? It carries a new link; the previous one stops working.', { name: s.name || s.email || '' }),
+                          confirmLabel: t('contracts.signers.remind', 'Send reminder'),
+                        })) remindMutation.mutate(s);
                       }}
                     >
                       <BellRing className="w-4 h-4 mr-1" />

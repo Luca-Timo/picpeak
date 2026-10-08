@@ -22,7 +22,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Redo2, Undo2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Button, Card, Input, Loading } from '../../../components/common';
+import { Button, Card, Input, Loading, useConfirm } from '../../../components/common';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { AttachmentListEditor, type AttachmentRow } from '../../../components/admin/AttachmentListEditor';
 import type { IncludedAttachment } from '../../../services/documentAttachments.service';
@@ -173,6 +173,7 @@ const isNetworkError = (err: unknown) => {
 
 export const ContractTemplateEditorPage: React.FC = () => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const templateId = Number(id);
@@ -461,8 +462,11 @@ export const ContractTemplateEditorPage: React.FC = () => {
   };
 
   const onDraftFromVersion = async (version: number) => {
-    if (!window.confirm(t('contracts.templates.draftFromVersionConfirm',
-      'Replace the current draft with a copy of version {{version}}?', { version }) as string)) return;
+    if (!(await confirm({
+      message: t('contracts.templates.draftFromVersionConfirm', 'Replace the current draft with a copy of version {{version}}?', { version }),
+      variant: 'danger',
+      confirmLabel: t('contracts.templates.draftFromVersion', 'Replace the draft'),
+    }))) return;
     setBusy(true);
     try {
       const next = await contractTemplatesService.draftFromVersion(templateId, version, lockRef.current);

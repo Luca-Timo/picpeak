@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { ScrollText, Plus, Trash2, Save } from 'lucide-react';
-import { Button, Card, Loading } from '../../../components/common';
+import { Button, Card, Loading, useConfirm } from '../../../components/common';
 import { SUPPORTED_LANGUAGES } from '../../../components/common/LanguageSelector';
 import { useMutationWithToast } from '../../../hooks';
 import {
@@ -69,6 +69,7 @@ type Selection =
 
 export const BlockLibraryPage: React.FC = () => {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const [selection, setSelection] = useState<Selection>(null);
   const [editingLang, setEditingLang] = useState<string>('en');
@@ -408,10 +409,12 @@ export const BlockLibraryPage: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          if (window.confirm(t('contracts.blocks.deleteConfirm', 'Delete this block?') as string)) {
-                            deleteMutation.mutate(selection.block.id);
-                          }
+                        onClick={async () => {
+                          if (await confirm({
+                            message: t('contracts.blocks.deleteConfirm', 'Delete this block?'),
+                            variant: 'danger',
+                            confirmLabel: t('contracts.blocks.delete', 'Delete'),
+                          })) deleteMutation.mutate(selection.block.id);
                         }}
                         leftIcon={<Trash2 className="w-4 h-4" />}
                       >

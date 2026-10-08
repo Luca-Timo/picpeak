@@ -370,7 +370,7 @@ function App() {
                             <Route path="contracts/templates/:id" element={<Suspense fallback={<Loading />}><ContractTemplateEditorPage /></Suspense>} />
                             <Route path="contracts/attachments" element={<ContractAttachmentsPage />} />
                             <Route path="contracts/:id" element={<ContractDetailPage />} />
-                            <Route path="contracts/:id/edit" element={<ContractEditorPage />} />
+                            <Route path="contracts/:id/edit" element={<RedirectToRecord base="/admin/clients/contracts" />} />
                           </Route>
 
                           {/* Hour logging (standalone surface) — gated by

@@ -53,12 +53,15 @@ interface ConfirmContextValue {
 
 const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 
+// Outside the provider — only a component rendered on its own, as in a unit
+// test — the question falls back to the browser's confirm. The app wraps
+// everything in ConfirmDialogProvider, so users always get the dialog.
+const browserConfirm = (options: ConfirmOptions): Promise<boolean> =>
+  Promise.resolve(window.confirm(options.message));
+
 export const useConfirm = (): ((options: ConfirmOptions) => Promise<boolean>) => {
   const ctx = useContext(ConfirmContext);
-  if (!ctx) {
-    throw new Error('useConfirm must be used within a ConfirmDialogProvider');
-  }
-  return ctx.confirm;
+  return ctx ? ctx.confirm : browserConfirm;
 };
 
 export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

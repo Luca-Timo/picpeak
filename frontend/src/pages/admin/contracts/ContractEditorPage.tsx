@@ -1,23 +1,25 @@
 /**
- * Admin → Contract editor.
+ * Admin → the contract form.
  *
- * Two modes:
- *   - /admin/clients/contracts/new       — create a fresh draft after
- *     picking a customer (server seeds inclusions from active system
- *     blocks).
- *   - /admin/clients/contracts/:id/edit  — edit an existing draft
- *     (scalars + block on/off + within-section ordering).
+ * One page per contract: `ContractForm` is the body of
+ *   - a draft's own page (ContractDetailPage, which owns the header, the
+ *     save bar and Send) — scalars, block on/off, within-section order,
+ *     attachments and signers;
+ *   - /admin/clients/contracts/new (ContractEditorPage below) — a fresh
+ *     draft after picking a customer (the server seeds inclusions from
+ *     active system blocks or the chosen template).
  *
- * Sent contracts can't be edited (locked at the service layer); admin
- * cancels + creates a fresh one for amendments.
+ * Sent contracts can't be edited (locked at the service layer); their page
+ * is read-only, and the admin cancels + creates a fresh one for amendments.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { Eye, Save } from 'lucide-react';
 import { Button, Card, Input, Loading, LocalizedDateInput, TimeField } from '../../../components/common';
+import { DocumentHeader } from '../../../components/admin/DocumentHeader';
+import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import {
   contractsService,
   type ContractBlockSection,
@@ -43,13 +45,35 @@ interface BlockRow {
   position: number;
 }
 
-export const ContractEditorPage: React.FC = () => {
+/** What the page can ask of the form. */
+export interface ContractFormHandle {
+  /** Writes the draft; resolves to its id, or null when it did not save (the form shows why). */
+  save: () => Promise<number | null>;
+  /** Puts the fields back to the saved draft. */
+  discard: () => void;
+}
+
+export interface ContractFormState {
+  dirty: boolean;
+  busy: boolean;
+  /** A new contract needs a customer before it can be created. */
+  valid: boolean;
+}
+
+interface ContractFormProps {
+  /** The draft to edit; omitted on /contracts/new. */
+  contractId?: number;
+  onStateChange?: (state: ContractFormState) => void;
+  /** A new draft was created (the page opens it). */
+  onCreated?: (id: number) => void;
+}
+
+export const ContractForm = forwardRef<ContractFormHandle, ContractFormProps>(({ contractId, onStateChange, onCreated }, ref) => {
   const { t } = useTranslation();
-  const { id } = useParams<{ id?: string }>();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const isEdit = Boolean(id);
-  const numericId = id ? parseInt(id, 10) : null;
+  const queryClient = useQueryClient();
+  const isEdit = Boolean(contractId);
+  const numericId = contractId ?? null;
 
   const [customerAccountId, setCustomerAccountId] = useState<number | null>(null);
   // Customer label + passive flag mirror the QuoteEditorPage chip so
@@ -402,7 +426,7 @@ export const ContractEditorPage: React.FC = () => {
     },
     onSuccess: (createdId) => {
       toast.success(t('contracts.editor.createdToast', 'Contract created.') as string);
-      navigate(`/admin/clients/contracts/${createdId}`);
+      onCreated?.(createdId);
     },
     onError: (err: unknown, attempt) => {
       const view = describeSaveError(err);
@@ -440,9 +464,13 @@ export const ContractEditorPage: React.FC = () => {
         attachments: attachments.map((a) => ({ attachmentId: a.attachmentId, delivery: a.delivery })),
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('contracts.editor.savedToast', 'Contract saved.') as string);
-      navigate(`/admin/clients/contracts/${numericId}`);
+      // Take the saved copy (its new lock version) back into the form, so the
+      // page reads clean and the next save is not a conflict of its own making.
+      const fresh = await contractsService.get(numericId as number);
+      queryClient.setQueryData(['contract', numericId], fresh);
+      hydrate(fresh.contract);
     },
     onError: (err: unknown) => {
       const view = describeSaveError(err);
@@ -458,12 +486,20 @@ export const ContractEditorPage: React.FC = () => {
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  function handleSave() {
-    if (submittingRef.current) return;
+  async function saveAsync(): Promise<number | null> {
+    if (submittingRef.current) return null;
     submittingRef.current = true;
     setSaveError(null);
-    if (isEdit) updateMutation.mutate(undefined);
-    else createMutation.mutate(attemptRef.current);
+    try {
+      if (isEdit) {
+        await updateMutation.mutateAsync(undefined);
+        return numericId;
+      }
+      return await createMutation.mutateAsync(attemptRef.current);
+    } catch {
+      // onError has put the reason (or the conflict) on the form.
+      return null;
+    }
   }
 
   /** The contract as it is saved now, bypassing the cache. */
@@ -596,45 +632,20 @@ export const ContractEditorPage: React.FC = () => {
     }
   }
 
-  async function handlePreview() {
-    // For new contracts, we'd need to create first to preview; keep it
-    // simple — disable preview before save.
-    if (!isEdit || !numericId) {
-      toast.info(t('contracts.editor.previewAfterSave', 'Save the draft first, then preview.') as string);
-      return;
-    }
-    // Sync-open the placeholder window BEFORE any await so the popup
-    // blocker treats this as a user gesture, then redirect once the
-    // blob URL is ready. Same pattern bills/quotes use.
-    const previewWindow = window.open('about:blank', '_blank');
-    if (!previewWindow) {
-      toast.error(t('contracts.editor.popupBlocked', 'Allow pop-ups for this site to preview the PDF.') as string);
-      return;
-    }
-    try {
-      const url = await contractsService.previewPdfUrl(numericId);
-      previewWindow.location.href = url;
-    } catch (err: any) {
-      previewWindow.close();
-      toast.error(err?.response?.data?.error || t('contracts.editor.previewError', 'Preview failed') as string);
-    }
-  }
+  // Unsaved: the form differs from what the last load put in it. A new
+  // contract is unsaved until it is created.
+  const dirty = !isEdit || (baseline.current !== null && formSnapshot !== baseline.current);
+  const valid = isEdit || !!customerAccountId;
+  useEffect(() => {
+    onStateChange?.({ dirty, busy: isSaving || resolving, valid });
+  }, [dirty, isSaving, resolving, valid, onStateChange]);
+
+  useImperativeHandle(ref, () => ({
+    save: saveAsync,
+    discard: () => { if (existing) hydrate(existing.contract); },
+  }));
 
   if (isEdit && existingLoading) return <Loading />;
-  if (isEdit && existing && existing.contract.status !== 'draft') {
-    return (
-      <Card padding="lg">
-        <p className="text-sm text-warning-text">
-          {t('contracts.editor.locked', 'Sent contracts cannot be edited. Cancel and create a fresh one for amendments.')}
-        </p>
-        <div className="mt-3">
-          <Link to={`/admin/clients/contracts/${numericId}`} className="text-accent-dark hover:underline">
-            ← {t('contracts.editor.backToDetail', 'Back to contract')}
-          </Link>
-        </div>
-      </Card>
-    );
-  }
 
   const fieldErrorClass = 'mt-1 text-sm text-danger-text';
   const textareaClass = (invalid: boolean) =>
@@ -642,43 +653,6 @@ export const ContractEditorPage: React.FC = () => {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold flex-1">
-          {isEdit
-            ? t('contracts.editor.titleEdit', 'Edit contract')
-            : t('contracts.editor.titleNew', 'New contract')}
-        </h1>
-        {/* The only exit that does not write. This editor has no other
-            cancel, and the sidebar is an off-canvas drawer below lg, so a
-            named control beats relying on browser-back. An edit returns to
-            the contract it came from; a new one has no detail page yet. */}
-        <Button
-          variant="outline"
-          onClick={() => navigate(isEdit ? `/admin/clients/contracts/${numericId}` : '/admin/clients/contracts')}
-          disabled={isSaving}
-        >
-          {t('common.cancel', 'Cancel')}
-        </Button>
-        {isEdit && (
-          <Button variant="outline" onClick={handlePreview}>
-            <Eye className="w-4 h-4 mr-1" />
-            {t('contracts.editor.preview', 'Preview PDF')}
-          </Button>
-        )}
-        <Button
-          onClick={handleSave}
-          disabled={isSaving || (!isEdit && !customerAccountId)}
-          aria-busy={isSaving}
-        >
-          <Save className="w-4 h-4 mr-1" />
-          {isSaving
-            ? t('contracts.editor.saving', 'Saving…')
-            : isEdit
-              ? t('contracts.editor.save', 'Save')
-              : t('contracts.editor.create', 'Create draft')}
-        </Button>
-      </div>
-
       {conflict && (
         <div role="alert" className="mb-4 p-3 rounded-md border border-warning-line bg-warning-soft text-sm text-warning-text flex flex-wrap items-center gap-3">
           <p className="flex-1">
@@ -1033,6 +1007,45 @@ export const ContractEditorPage: React.FC = () => {
           </ul>
         </Card>
       )}
+    </div>
+  );
+});
+ContractForm.displayName = 'ContractForm';
+
+/**
+ * /contracts/new: the contract form before the draft exists. Cancel leaves
+ * without saving; "Create draft" in the save bar creates it and opens its
+ * page, where preview, signers and attachments follow.
+ */
+export const ContractEditorPage: React.FC = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const formRef = useRef<ContractFormHandle>(null);
+  const [state, setState] = useState<ContractFormState>({ dirty: true, busy: false, valid: false });
+  const [createdId, setCreatedId] = useState<number | null>(null);
+  useEffect(() => {
+    if (createdId) navigate(`/admin/clients/contracts/${createdId}`, { replace: true });
+  }, [createdId, navigate]);
+
+  return (
+    <div>
+      <DocumentHeader
+        title={t('contracts.editor.titleNew', 'New contract')}
+        actions={(
+          <Button variant="ghost" onClick={() => navigate('/admin/clients/contracts')} disabled={state.busy}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+        )}
+      />
+      <ContractForm ref={formRef} onStateChange={setState} onCreated={setCreatedId} />
+      <SettingsSaveBar
+        isDirty={!createdId}
+        isSaving={state.busy}
+        canSave={state.valid}
+        saveLabel={t('contracts.editor.create', 'Create draft')}
+        onSave={() => { void formRef.current?.save(); }}
+        onDiscard={() => navigate('/admin/clients/contracts')}
+      />
     </div>
   );
 };
