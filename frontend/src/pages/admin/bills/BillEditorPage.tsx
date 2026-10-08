@@ -158,46 +158,49 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
     enabled: !!isEdit,
   });
 
-  // Dirty tracking: once a saved invoice is in the fields, the payload they
-  // build is the snapshot to compare against (taken a render later, when
-  // the state setters below have landed).
-  const snapshotPending = useRef(false);
+  // Dirty tracking: the payload the fields build right after a saved
+  // invoice is loaded into them is the snapshot to compare against.
+  // `hydrations` is bumped with the other setters, so the render that sees
+  // it also sees the loaded values.
+  const [hydrations, setHydrations] = useState(0);
   const [snapshot, setSnapshot] = useState<string | null>(null);
+  const hydrate = (loaded: NonNullable<typeof existing>) => {
+    setHydrations((n) => n + 1);
+    const inv = loaded.invoice;
+    setCustomerId(inv.customerAccountId);
+    setCustomerLabel(inv.customer.companyName || inv.customer.displayName || inv.customer.email || '');
+    setCustomerIsPassive(Boolean(inv.customer.isPassive));
+    setCurrency(inv.currency);
+    setIssueDate(inv.issueDate);
+    setDueDate(inv.dueDate);
+    // The invoice already carries a due date — preserve it rather than
+    // letting the auto effect recompute and surprise the admin. They
+    // can untick "Override" to re-enable auto-tracking.
+    setDueDateOverridden(true);
+    setScheduledSendAt(inv.scheduledSendAt ? inv.scheduledSendAt.slice(0, 16) : '');
+    // Preserve null when the saved invoice has no explicit format —
+    // it inherits the profile default at render time.
+    setQrFormat((inv.qrFormat as InvoiceQrFormat | null) || null);
+    setVatRate(Number(inv.vatRate || 0));
+    setVatCode(((inv as { vatCode?: string | null }).vatCode
+      ?? (inv as { totals?: { vatCode?: string | null } }).totals?.vatCode) ?? null);
+    setShipping(Number(inv.shippingAmountMinor || 0) / 100);
+    setCcPdfEmail(inv.ccPdfEmail || '');
+    setPaymentTermTemplateId(inv.paymentTermTemplateId ?? null);
+    setPaymentNetDaysTemplateId(inv.paymentNetDaysTemplateId ?? null);
+    setPaymentTimingTemplateId(inv.paymentTimingTemplateId ?? null);
+    setBusinessBankAccountId(inv.businessBankAccountId ?? null);
+    setSkontoDisabled(Boolean(inv.skontoDisabled));
+    setEventId(inv.eventId ?? null);
+    setEventName(inv.eventName || '');
+    setEventDate(inv.eventDate || '');
+    setEventTimeStart(inv.eventTimeStart || '');
+    setEventTimeEnd(inv.eventTimeEnd || '');
+    setLineItems(loaded.lineItems.map(toEditableLineItem));
+  };
   useEffect(() => {
-    if (existing) {
-      snapshotPending.current = true;
-      const inv = existing.invoice;
-      setCustomerId(inv.customerAccountId);
-      setCustomerLabel(inv.customer.companyName || inv.customer.displayName || inv.customer.email || '');
-      setCustomerIsPassive(Boolean(inv.customer.isPassive));
-      setCurrency(inv.currency);
-      setIssueDate(inv.issueDate);
-      setDueDate(inv.dueDate);
-      // The invoice already carries a due date — preserve it rather than
-      // letting the auto effect recompute and surprise the admin. They
-      // can untick "Override" to re-enable auto-tracking.
-      setDueDateOverridden(true);
-      setScheduledSendAt(inv.scheduledSendAt ? inv.scheduledSendAt.slice(0, 16) : '');
-      // Preserve null when the saved invoice has no explicit format —
-      // it inherits the profile default at render time.
-      setQrFormat((inv.qrFormat as InvoiceQrFormat | null) || null);
-      setVatRate(Number(inv.vatRate || 0));
-      setVatCode(((inv as { vatCode?: string | null }).vatCode
-        ?? (inv as { totals?: { vatCode?: string | null } }).totals?.vatCode) ?? null);
-      setShipping(Number(inv.shippingAmountMinor || 0) / 100);
-      setCcPdfEmail(inv.ccPdfEmail || '');
-      setPaymentTermTemplateId(inv.paymentTermTemplateId ?? null);
-      setPaymentNetDaysTemplateId(inv.paymentNetDaysTemplateId ?? null);
-      setPaymentTimingTemplateId(inv.paymentTimingTemplateId ?? null);
-      setBusinessBankAccountId(inv.businessBankAccountId ?? null);
-      setSkontoDisabled(Boolean(inv.skontoDisabled));
-      setEventId(inv.eventId ?? null);
-      setEventName(inv.eventName || '');
-      setEventDate(inv.eventDate || '');
-      setEventTimeStart(inv.eventTimeStart || '');
-      setEventTimeEnd(inv.eventTimeEnd || '');
-      setLineItems(existing.lineItems.map(toEditableLineItem));
-    }
+    if (existing) hydrate(existing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing]);
 
   // Admin auth + list — used to pre-fill + offer a dropdown for the
@@ -508,14 +511,12 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
     }
   };
 
-  // Take the snapshot on the render after a load, then compare every render.
   const current = JSON.stringify(buildPayload());
   useEffect(() => {
-    if (snapshotPending.current) {
-      snapshotPending.current = false;
-      setSnapshot(current);
-    }
-  });
+    if (hydrations) setSnapshot(current);
+    // Only on a fresh load; every other change is compared against it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrations]);
   const dirty = !isEdit || (snapshot !== null && current !== snapshot);
   const spawnCount = !isEdit && installments && installments.length > 1 ? installments.length : 0;
   useEffect(() => {
@@ -525,7 +526,7 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
   useImperativeHandle(ref, () => ({
     save: handleSave,
     // Re-running the load effect puts the saved invoice back.
-    discard: () => { if (existing) qc.setQueryData(['invoice', id], { ...existing }); },
+    discard: () => { if (existing) hydrate(existing); },
     previewUnsaved: handlePreviewUnsaved,
   }));
 
