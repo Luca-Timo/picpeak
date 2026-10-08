@@ -19,7 +19,7 @@ import { EmailPreviewModal } from '../../components/admin/EmailPreviewModal';
 import { EmailTemplateEditor } from '../../components/admin/EmailTemplateEditor';
 import { SentEmailsPanel } from '../../components/admin/SentEmailsPanel';
 import { ReceivedEmailsPanel } from '../../components/admin/ReceivedEmailsPanel';
-import { IncomingMailConfigCard } from '../../components/admin/IncomingMailConfigCard';
+import { IncomingMailConfigCard, type IncomingMailConfigHandle } from '../../components/admin/IncomingMailConfigCard';
 import { CustomerMailboxCard } from '../../components/admin/CustomerMailboxCard';
 import { Palette, RefreshCw, Info, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -440,11 +440,14 @@ export const EmailConfigPage: React.FC = () => {
   const smtpDirty = !!loadedSmtp && JSON.stringify(smtpConfig) !== JSON.stringify(loadedSmtp);
   const colorsDirty = !!loadedColors && JSON.stringify(colorsDraft) !== JSON.stringify(loadedColors);
   const templateDirty = JSON.stringify(editedTemplate.translations ?? null) !== JSON.stringify(loadedTemplate.translations ?? null);
-  const isDirty = activeTab === 'smtp' ? (smtpDirty || colorsDirty) : activeTab === 'templates' ? templateDirty : false;
+  const incomingRef = useRef<IncomingMailConfigHandle>(null);
+  const [incoming, setIncoming] = useState({ dirty: false, saving: false });
+  const isDirty = activeTab === 'smtp' ? (smtpDirty || colorsDirty || incoming.dirty) : activeTab === 'templates' ? templateDirty : false;
   const discardActive = () => {
     if (activeTab === 'smtp') {
       if (loadedSmtp) setSmtpConfig(loadedSmtp);
       if (loadedColors) applyColors(loadedColors);
+      incomingRef.current?.discard();
     } else if (activeTab === 'templates') {
       setEditedTemplate(loadedTemplate);
     }
@@ -940,7 +943,7 @@ export const EmailConfigPage: React.FC = () => {
 
       {/* Email Templates Tab */}
       {/* Incoming mail (IMAP) — a second block under SMTP, flag-gated. */}
-      {activeTab === 'smtp' && featureFlags.incomingMail && <IncomingMailConfigCard />}
+      {activeTab === 'smtp' && featureFlags.incomingMail && <IncomingMailConfigCard ref={incomingRef} onStateChange={setIncoming} />}
       {activeTab === 'smtp' && featureFlags.messaging && <CustomerMailboxCard />}
 
       {activeTab === 'templates' && (
@@ -1169,11 +1172,12 @@ export const EmailConfigPage: React.FC = () => {
       {(activeTab === 'smtp' || activeTab === 'templates') && (
         <SettingsSaveBar
           isDirty={isDirty}
-          isSaving={saveConfigMutation.isPending || saveEmailColorsMutation.isPending || saveTemplateMutation.isPending}
+          isSaving={saveConfigMutation.isPending || saveEmailColorsMutation.isPending || saveTemplateMutation.isPending || incoming.saving}
           onSave={() => {
             if (activeTab === 'smtp') {
               if (smtpDirty) handleSaveSmtp();
               if (colorsDirty) handleSaveEmailColors();
+              if (incoming.dirty) void incomingRef.current?.save();
             } else {
               handleSaveTemplate();
             }

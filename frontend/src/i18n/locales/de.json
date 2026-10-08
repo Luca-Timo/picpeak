@@ -5539,7 +5539,6 @@
       "user": "Benutzername",
       "pass": "Passwort",
       "folder": "Ordner",
-      "save": "Eingangs-E-Mail-Einstellungen speichern",
       "detectFolders": "Erkennen",
       "folderHint": "Host, Benutzername und Passwort eingeben, dann „Erkennen“, um die Postfach-Ordner aufzulisten.",
       "foldersDetected": "{{count}} Ordner gefunden.",

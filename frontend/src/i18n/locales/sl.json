@@ -4433,7 +4433,6 @@
       "user": "Uporabniško ime",
       "pass": "Geslo",
       "folder": "Mapa",
-      "save": "Shrani nastavitve prejete pošte",
       "detectFolders": "Zaznaj",
       "folderHint": "Vnesite gostitelja, uporabniško ime in geslo, nato kliknite Zaznaj za prikaz map nabiralnika.",
       "foldersDetected": "Najdenih map: {{count}}.",
