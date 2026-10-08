@@ -111,17 +111,10 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
   const Icon = variant === 'danger' ? AlertCircle : variant === 'warning' ? AlertTriangle : null;
   const iconClass =
     variant === 'danger'
-      ? 'text-red-600 dark:text-red-400'
+      ? 'text-danger-text'
       : variant === 'warning'
-        ? 'text-amber-600 dark:text-amber-400'
+        ? 'text-warning-text'
         : '';
-
-  // Danger uses the outline button + an inline red override so the visual
-  // weight matches the action without redefining a Button variant for one case.
-  const confirmButtonVariant: 'primary' | 'outline' = variant === 'danger' ? 'outline' : 'primary';
-  const confirmButtonClass = variant === 'danger'
-    ? 'bg-red-600 hover:bg-red-700 text-white border-red-600'
-    : '';
 
   return (
     <ConfirmContext.Provider value={{ confirm }}>
@@ -151,7 +144,7 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
               </div>
               <button
                 onClick={() => settle(false)}
-                className="text-neutral-400 hover:text-body"
+                className="text-faint hover:text-body"
                 aria-label={t('common.close', 'Close')}
               >
                 <X className="w-5 h-5" />
@@ -167,9 +160,8 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                 {options.cancelLabel ?? t('common.cancel', 'Cancel')}
               </Button>
               <Button
-                variant={confirmButtonVariant}
+                variant={variant === 'danger' ? 'danger' : 'primary'}
                 onClick={() => settle(true)}
-                className={confirmButtonClass}
               >
                 {options.confirmLabel ?? t('common.confirm', 'Confirm')}
               </Button>

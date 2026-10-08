@@ -820,7 +820,8 @@
     "searching": "Wird gesucht…",
     "language": "Sprache",
     "hidePassword": "Passwort verbergen",
-    "showPassword": "Passwort anzeigen"
+    "showPassword": "Passwort anzeigen",
+    "loadFailed": "Konnte nicht geladen werden"
   },
   "upload": {
     "photoCategory": "Fotokategorie",

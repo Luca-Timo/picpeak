@@ -97,13 +97,23 @@
   }
 
   .btn-primary {
-    background-color: var(--color-accent-dark);
-    color: white;
-    @apply hover:opacity-90;
+    background-color: var(--ui-accent-strong);
+    color: var(--ui-accent-fg);
   }
 
   .btn-primary:hover {
-    background-color: var(--color-primary-dark);
+    background-color: color-mix(in srgb, var(--ui-accent-strong) 88%, #000);
+  }
+
+  /* Destructive: delete, revoke, cancel for good. Never the page's only
+     primary action; confirm first (UX.md § 5). */
+  .btn-danger {
+    background-color: var(--ui-danger);
+    color: #ffffff;
+  }
+
+  .btn-danger:hover {
+    background-color: color-mix(in srgb, var(--ui-danger) 85%, #000);
   }
 
   .btn-alt {
@@ -140,6 +150,15 @@
 
   .btn-lg {
     @apply h-11 px-8 text-lg;
+  }
+
+  /* Icon-only: square, same heights as the text sizes. Needs aria-label. */
+  .btn-icon-sm {
+    @apply h-9 w-9 p-0;
+  }
+
+  .btn-icon-md {
+    @apply h-10 w-10 p-0;
   }
 
   /*
@@ -279,7 +298,7 @@
   /*
    * Foreground for content sitting on .bg-accent-soft. Not the accent
    * itself: accent on accent-soft is what made the Sidebar Preview pills
-   * read as "barely visible". Values in tokens.css § 5.
+   * read as "barely visible". Values in tokens.css § 4.
    */
   .text-on-accent-soft {
     color: var(--ui-accent-on-soft);
@@ -486,7 +505,7 @@
     color: color-mix(in srgb, var(--chip-hue) 72%, var(--color-text, #171717));
   }
 
-  /* Same hues as the admin (tokens.css § 4, Branding › Colours). */
+  /* Same hues as the admin (tokens.css § 3, Branding › Colours). */
   .hue-success { --chip-hue: var(--status-success); }
   .hue-warning { --chip-hue: var(--status-warning); }
   .hue-danger { --chip-hue: var(--status-danger); }
@@ -539,18 +558,28 @@
     @apply bg-red-900/40 text-red-300;
   }
 
-  /* Secondary and outline buttons for admin dark mode — restore explicit
-   * neutral overrides so existing admin pages render exactly as before. */
-  .dark .btn-secondary {
-    @apply bg-neutral-700 border-neutral-600 text-neutral-100;
+  /* Secondary and outline buttons in the admin read the UI tokens, not the
+   * operator's gallery theme. `.admin-ui` sits on <html> while the admin is
+   * mounted (AdminDarkModeProvider), so dialogs portalled to <body> get it
+   * too. The customer portal, gallery and public pages keep the themed
+   * rules above. */
+  .admin-ui .btn {
+    --tw-ring-offset-color: var(--ui-canvas);
   }
 
-  .dark .btn-outline {
-    @apply border-neutral-600 text-neutral-300;
+  .admin-ui .btn-secondary {
+    background-color: var(--ui-fill);
+    color: var(--ui-text-heading);
   }
 
-  .dark .btn-outline:hover {
-    @apply bg-neutral-800;
+  .admin-ui .btn-outline {
+    border-color: var(--ui-line-strong);
+    color: var(--ui-text-body);
+    opacity: 1;
+  }
+
+  .admin-ui .btn-outline:hover {
+    background-color: var(--ui-hover-soft);
   }
 
   /* Table and select defaults for admin dark mode. `:where()` keeps them at

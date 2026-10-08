@@ -820,7 +820,8 @@
     "searching": "Searching…",
     "language": "Language",
     "hidePassword": "Hide password",
-    "showPassword": "Show password"
+    "showPassword": "Show password",
+    "loadFailed": "Could not load this"
   },
   "upload": {
     "photoCategory": "Photo Category",

@@ -28,7 +28,7 @@ export default {
         soft: 'var(--ui-text-soft)',
         muted: 'var(--ui-text-muted)',
         faint: 'var(--ui-text-faint)',
-        // Status (tokens.css § 4): bg-success for a dot, text-success-text
+        // Status (tokens.css § 3): bg-success for a dot, text-success-text
         // on a panel, bg-success-soft + border-success-line for a box. The
         // Badge and Notice components use these; prefer the components.
         success: { DEFAULT: 'var(--ui-success)', text: 'var(--ui-success-text)', soft: 'var(--ui-success-soft)', line: 'var(--ui-success-line)' },
@@ -36,9 +36,9 @@ export default {
         danger: { DEFAULT: 'var(--ui-danger)', text: 'var(--ui-danger-text)', soft: 'var(--ui-danger-soft)', line: 'var(--ui-danger-line)' },
         info: { DEFAULT: 'var(--ui-info)', text: 'var(--ui-info-text)', soft: 'var(--ui-info-soft)', line: 'var(--ui-info-line)' },
         storno: { DEFAULT: 'var(--ui-storno)', text: 'var(--ui-storno-text)', soft: 'var(--ui-storno-soft)', line: 'var(--ui-storno-line)' },
-        // Data colours (tokens.css § 6): chart-1 … chart-8, in order.
+        // Data colours (tokens.css § 5): chart-1 … chart-8, in order.
         chart: { 1: 'var(--chart-1)', 2: 'var(--chart-2)', 3: 'var(--chart-3)', 4: 'var(--chart-4)', 5: 'var(--chart-5)', 6: 'var(--chart-6)', 7: 'var(--chart-7)', 8: 'var(--chart-8)' },
-        // Admin accent (tokens.css § 5).
+        // Admin accent (tokens.css § 4).
         'accent-strong': 'var(--ui-accent-strong)',
         'accent-fg': 'var(--ui-accent-fg)',
         line: { DEFAULT: 'var(--ui-line)', strong: 'var(--ui-line-strong)', faint: 'var(--ui-line-faint)' },
