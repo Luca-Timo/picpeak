@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Monitor, Image, AlertCircle } from 'lucide-react';
-import { Card, Loading } from '../../../components/common';
+import { Shield, Monitor, Image } from 'lucide-react';
+import { Card, ErrorState, Loading, Notice } from '../../../components/common';
 import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -46,7 +46,7 @@ export const ImageSecurityTab: React.FC = () => {
   const isDirty = JSON.stringify(settings) !== JSON.stringify(loaded);
 
   // Fetch current settings
-  const { data: fetchedSettings, isLoading, error } = useQuery({
+  const { data: fetchedSettings, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['image-security-settings'],
     queryFn: async () => {
       const response = await api.get('/admin/image-security/settings');
@@ -102,13 +102,15 @@ export const ImageSecurityTab: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !fetchedSettings) {
     return (
       <Card padding="md">
-        <div className="flex items-center gap-3 text-danger-text">
-          <AlertCircle className="w-5 h-5" />
-          <p>{t('settings.imageSecurity.loadError', 'Failed to load image security settings')}</p>
-        </div>
+        <ErrorState
+          size="inline"
+          title={t('settings.imageSecurity.loadError', 'Failed to load image security settings')}
+          onRetry={() => refetch()}
+          retrying={isFetching}
+        />
       </Card>
     );
   }
@@ -323,17 +325,9 @@ export const ImageSecurityTab: React.FC = () => {
       </Card>
 
       {/* Info Box */}
-      <Card padding="md" className="bg-info-soft border-info-line">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-info-text">
-            <p className="font-medium mb-1">{t('settings.imageSecurity.infoTitle', 'About Image Protection')}</p>
-            <p>
-              {t('settings.imageSecurity.infoText', 'These protection features help prevent casual downloading and copying but cannot block all methods. Determined users may still find ways to capture images. Consider using watermarks and legal agreements for comprehensive protection.')}
-            </p>
-          </div>
-        </div>
-      </Card>
+      <Notice tone="info" title={t('settings.imageSecurity.infoTitle', 'About Image Protection')}>
+        {t('settings.imageSecurity.infoText', 'These protection features help prevent casual downloading and copying but cannot block all methods. Determined users may still find ways to capture images. Consider using watermarks and legal agreements for comprehensive protection.')}
+      </Notice>
 
       <SettingsSaveBar
         isDirty={isDirty}

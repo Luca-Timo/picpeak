@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowRight, EyeOff, Folder, Image as ImageIcon, Info, Layers, Loader2, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { Switch } from '../common';
+import { Badge, Notice, Switch, type BadgeTone } from '../common';
 import type { FolderNodeStatus } from '../../services/folders.service';
 import type { PreviewFolderNode, UploadPreview } from '../../utils/uploadStructure';
 
@@ -23,12 +23,12 @@ interface UploadStructurePreviewProps {
   looseTargetLabel: string;
 }
 
-const pillClass: Record<FolderNodeStatus, string> = {
-  exists: 'bg-fill text-muted',
-  created: 'bg-fill text-muted',
-  new: 'bg-success-soft text-success-text',
-  needs_admin: 'bg-warning-soft text-warning-text',
-  requested: 'bg-warning-soft text-warning-text',
+const pillTone: Record<FolderNodeStatus, BadgeTone> = {
+  exists: 'neutral',
+  created: 'neutral',
+  new: 'success',
+  needs_admin: 'warning',
+  requested: 'warning',
 };
 
 /**
@@ -70,9 +70,9 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
         <Folder className="w-4 h-4 flex-shrink-0 text-muted" />
         <span className="text-heading truncate">{node.name}</span>
         {node.status && (
-          <span className={clsx('flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide', pillClass[node.status])}>
+          <Badge caps tone={pillTone[node.status]} className="flex-shrink-0">
             {pillLabel(node.status)}
-          </span>
+          </Badge>
         )}
         {node.waitsIn !== undefined && (
           <span className="flex items-center gap-1 text-xs text-muted truncate">
@@ -172,8 +172,7 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
       )}
 
       {preview && !canManage && preview.requestedFolders > 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-line bg-panel p-3 text-sm text-body" role="note">
-          <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-muted" />
+        <Notice tone="neutral" icon={<Info className="w-4 h-4" />}>
           <p>
             {t(
               'upload.structure.needsAdminNotice',
@@ -181,13 +180,11 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
               { count: preview.requestedFolders, files: preview.waitingFiles }
             )}
           </p>
-        </div>
+        </Notice>
       )}
 
       {preview?.firstLook && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning-line bg-warning-soft p-3 text-sm" role="note">
-          <Zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-warning-text" />
-          <div className="text-warning-text">
+        <Notice tone="warning" icon={<Zap className="w-4 h-4" />}>
             <p>
               {t(
                 'upload.structure.firstLookCallout',
@@ -195,11 +192,10 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
                 { name: preview.firstLook.name, count: preview.firstLook.count }
               )}
             </p>
-            <p className="mt-1 text-xs text-warning-text">
+            <p className="mt-1 text-xs text-muted">
               {t('upload.structure.firstLookSettings', 'Due date and badge: this gallery’s Settings → Folders & delivery. Keywords: Settings → Events.')}
             </p>
-          </div>
-        </div>
+        </Notice>
       )}
     </div>
   );

@@ -12,7 +12,7 @@ import {
   RotateCw,
   AlertTriangle,
 } from 'lucide-react';
-import { Button, Card } from '../../../components/common';
+import { Button, Card, Notice } from '../../../components/common';
 import { DecimalInput } from '../../../components/common/DecimalInput';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -629,12 +629,10 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 </div>
               </div>
               {systemStatus.emailQueue.stuck > 0 && (
-                <div className="mt-3 p-3 bg-warning-soft rounded-md">
-                  <p className="text-xs text-warning-text">
-                    <span className="font-semibold">Warning: {systemStatus.emailQueue.stuck} email(s) stuck:</span> These emails have exceeded retry limits and won&apos;t be processed automatically.
-                    Only {systemStatus.emailQueue.processable} of {systemStatus.emailQueue.pending} pending emails will be processed.
-                  </p>
-                </div>
+                <Notice tone="warning" size="sm" className="mt-3">
+                  <span className="font-semibold">Warning: {systemStatus.emailQueue.stuck} email(s) stuck:</span> These emails have exceeded retry limits and won&apos;t be processed automatically.
+                  Only {systemStatus.emailQueue.processable} of {systemStatus.emailQueue.pending} pending emails will be processed.
+                </Notice>
               )}
             </div>
           </Card>

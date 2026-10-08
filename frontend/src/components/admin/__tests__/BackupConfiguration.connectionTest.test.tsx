@@ -36,6 +36,9 @@ const s3Config = {
   backup_s3_region: 'us-east-1',
 };
 
+// The approval request is a warning Notice titled privateEndpoint.title.
+const approvalBox = () => screen.queryByText('backup.configuration.privateEndpoint.title')?.closest('[role="status"]') ?? null;
+
 const renderForm = (config: Record<string, unknown> = s3Config, privateEndpointOrigin: string | null = null) => {
   const onSave = vi.fn();
   render(
@@ -99,7 +102,8 @@ describe('BackupConfiguration connection test', () => {
     const onSave = renderForm();
 
     await userEvent.click(testButton());
-    expect(await screen.findByRole('alert')).toHaveTextContent('http://rustfs.lan:9000');
+    await screen.findByText('backup.configuration.privateEndpoint.title');
+    expect(approvalBox()).toHaveTextContent('http://rustfs.lan:9000');
     expect(toastApi.warning).toHaveBeenCalledWith('backup.errors.S3_PRIVATE_ENDPOINT');
 
     await userEvent.click(screen.getByRole('checkbox', { name: /privateEndpoint.approve/ }));
@@ -117,10 +121,10 @@ describe('BackupConfiguration connection test', () => {
 
   it('shows the approval for a save the backend refused, and drops it when the endpoint changes', async () => {
     renderForm(s3Config, 'http://rustfs.lan:9000');
-    expect(screen.getByRole('alert')).toHaveTextContent('http://rustfs.lan:9000');
+    expect(approvalBox()).toHaveTextContent('http://rustfs.lan:9000');
 
     await userEvent.type(screen.getByDisplayValue('http://rustfs.lan:9000'), '1');
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(approvalBox()).toBeNull();
   });
 
   it('does not echo a stored approval back unless it is approved again', async () => {
