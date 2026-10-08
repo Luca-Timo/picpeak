@@ -181,7 +181,7 @@ export const ChartOfAccountsManager: React.FC = () => {
           <Table>
             <TableHead>
               <tr>
-                <TableHeaderCell>{t('ledger.account.number', 'No.')}</TableHeaderCell>
+                <TableHeaderCell>{t('ledger.account.number', 'Account number')}</TableHeaderCell>
                 <TableHeaderCell>{t('ledger.account.name', 'Name')}</TableHeaderCell>
                 <TableHeaderCell>{t('ledger.account.type', 'Type')}</TableHeaderCell>
                 <TableHeaderCell align="right">{t('common.actions', 'Actions')}</TableHeaderCell>

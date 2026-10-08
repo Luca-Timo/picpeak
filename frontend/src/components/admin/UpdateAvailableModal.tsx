@@ -176,7 +176,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
             <SelfUpdatePanel />
           </div>
           {instructionsLoading && (
-            <p className="text-sm text-muted">{t('common.loading', 'Loading…')}</p>
+            <p className="text-sm text-muted">{t('common.loading', 'Loading...')}</p>
           )}
           {!instructionsLoading && instructions?.instructions && (
             <ManualUpdateSteps active={selfUpdateActive}>
@@ -232,7 +232,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
             {t('admin.updates.releaseNotes', 'Release notes')}
           </h3>
           {changelogLoading && (
-            <p className="text-sm text-muted">{t('common.loading', 'Loading…')}</p>
+            <p className="text-sm text-muted">{t('common.loading', 'Loading...')}</p>
           )}
           {changelogError && (
             <p className="text-sm text-danger-text">

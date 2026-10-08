@@ -48,7 +48,7 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
       open
       onClose={() => { if (!isLoading) handleClose(); }}
       closeOnBackdrop={false}
-      title={t('photos.moveToCategory', 'Move {{count}} photos to category', { count: photoCount })}
+      title={t('photos.moveToCategory', 'Move to Category', { count: photoCount })}
       size="sm"
       footer={
         <>

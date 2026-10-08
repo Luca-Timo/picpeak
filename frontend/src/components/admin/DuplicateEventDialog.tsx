@@ -106,7 +106,7 @@ export const DuplicateEventDialog: React.FC<DuplicateEventDialogProps> = ({
           onChange={setEventDate}
           helperText={t(
             'events.duplicateDialog.eventDateHelp',
-            'Leave blank to use a random suffix in the gallery URL. Expiration is recomputed from this date plus the source gallery’s expiration window.',
+            'Leave blank to use a random suffix in the gallery URL. Expiration is recomputed from this date plus the source gallery\'s expiration window.',
           )}
         />
 

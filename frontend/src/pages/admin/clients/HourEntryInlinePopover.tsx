@@ -156,7 +156,7 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
             <Button type="submit" form="hour-entry-edit-form" disabled={busy}>
               {updateMutation.isPending
                 ? t('calendar.hourEntry.saving', 'Saving…')
-                : t('calendar.hourEntry.submit', 'Save')}
+                : t('calendar.hourEntry.submit', 'Save hours')}
             </Button>
           )}
         </>

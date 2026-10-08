@@ -348,7 +348,7 @@ export const CrmSettingsPage: React.FC = () => {
             icon={<WorkflowIcon className="w-5 h-5" />}
             title={t('crmSettings.dunningMoved.title', 'Reminder schedule is now in Workflows')}
           >
-            {t('crmSettings.dunningMoved.body', 'When and how often overdue reminders go out is configured in the “Invoice dunning” workflow. Late-fee amounts below still apply.')}{' '}
+            {t('crmSettings.dunningMoved.body', 'When and how often overdue reminders go out is configured in the “Invoice dunning” workflow. The late-fee amounts below still apply.')}{' '}
             <Link to="/admin/automation/workflows" className="underline font-medium text-accent">{t('crmSettings.dunningMoved.link', 'Open Workflows')}</Link>
           </Notice>
         ) : (
@@ -357,7 +357,7 @@ export const CrmSettingsPage: React.FC = () => {
 
         {checkbox('crm_invoices_late_fee_enabled', 'Add a late fee (Mahngebühr) on every reminder after the first')}
         <Notice tone="warning" className="mt-2" title={t('crmSettings.lateFeeAgb.title', 'Late fees must be itemised in your terms (AGB)')}>
-          {t('crmSettings.lateFeeAgb.body', 'Vertragliche Pflicht: Sätze wie „Es werden Mahnspesen erhoben“ reichen nicht aus. In den AGB muss die konkrete Gebühr klar beziffert sein (z.B. „CHF 20 ab der 2. Mahnung“). Mit dem Treuhänder prüfen.')}
+          {t('crmSettings.lateFeeAgb.body', 'A contractual duty: phrases like “late fees apply” aren\'t enough. Your terms must state the concrete fee (e.g. “CHF 20 from the 2nd reminder”). Verify with your Treuhänder.')}
         </Notice>
         {checkbox('crm_invoices_late_fee_vat_enabled', 'Charge VAT on late fees (Switzerland — leave off for DE/AT; no effect if your organisation has no VAT rate)')}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">

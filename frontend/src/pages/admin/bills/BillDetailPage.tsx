@@ -645,7 +645,7 @@ export const BillDetailPage: React.FC = () => {
               an out-of-band method by typing into the Notes field. */}
           <div>
             <label htmlFor="pay-method" className="block text-sm font-medium mb-1">
-              {t('bills.payment.method', 'Payment method')}
+              {t('bills.payment.method', 'Method')}
             </label>
             <select
               id="pay-method"
