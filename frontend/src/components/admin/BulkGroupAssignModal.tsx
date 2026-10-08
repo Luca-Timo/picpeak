@@ -161,7 +161,7 @@ export const BulkGroupAssignModal: React.FC<BulkGroupAssignModalProps> = ({
                 {t('customers.groups.bulk.previewing', 'Working out the change…')}
               </span>
             ) : preview.isError ? (
-              <span className="text-red-600 dark:text-red-400">
+              <span className="text-danger-text">
                 {overLimit
                   ? t('customers.groups.bulk.overGroupLimit', {
                     count: overLimit.customers,

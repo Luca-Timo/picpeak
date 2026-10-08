@@ -179,7 +179,7 @@ export const ThemeEditorModal: React.FC<ThemeEditorModalProps> = ({
                           <span className="text-xs capitalize">
                             {layout}
                             {(layout === 'gallery-premium' || layout === 'gallery-story') && (
-                              <span className="ml-0.5 text-amber-600">(Beta)</span>
+                              <span className="ml-0.5 text-warning-text">(Beta)</span>
                             )}
                           </span>
                         </div>

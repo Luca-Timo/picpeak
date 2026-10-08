@@ -293,7 +293,7 @@ export const CustomerDetailPage: React.FC = () => {
   if (error || !customer) {
     return (
       <div>
-        <div className="text-sm text-red-600 flex items-center gap-2">
+        <div className="text-sm text-danger-text flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           {t('customers.detail.loadError', 'Could not load customer')}
         </div>
@@ -317,7 +317,7 @@ export const CustomerDetailPage: React.FC = () => {
               {t('customers.status.active', 'Active')}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-xs text-red-600">
+            <span className="inline-flex items-center gap-1 text-xs text-danger-text">
               <X className="w-3.5 h-3.5" />
               {t('customers.status.inactive', 'Deactivated')}
             </span>
@@ -1078,10 +1078,10 @@ export const CustomerDetailPage: React.FC = () => {
                   the deactivate button on a live account. */}
               <Button
                 variant="outline"
-                leftIcon={<Trash2 className="w-4 h-4 text-red-600" />}
+                leftIcon={<Trash2 className="w-4 h-4 text-danger-text" />}
                 onClick={() => eraseModal.open()}
               >
-                <span className="text-red-600">
+                <span className="text-danger-text">
                   {t('customers.erase.button', 'Erase customer data')}
                 </span>
               </Button>
@@ -1103,7 +1103,7 @@ export const CustomerDetailPage: React.FC = () => {
           <div className="w-full max-w-md rounded-xl shadow-lg bg-shell">
             <div className="p-6">
               <div className="flex items-start gap-3 mb-4">
-                <AlertTriangle className="w-5 h-5 mt-0.5 text-amber-500" />
+                <AlertTriangle className="w-5 h-5 mt-0.5 text-warning" />
                 <div>
                   <h2 className="text-lg font-semibold text-heading">
                     {t('customers.deactivate.title', 'Deactivate customer?')}
@@ -1140,7 +1140,7 @@ export const CustomerDetailPage: React.FC = () => {
           <div className="w-full max-w-md rounded-xl shadow-lg bg-shell">
             <div className="p-6">
               <div className="flex items-start gap-3 mb-4">
-                <AlertTriangle className="w-5 h-5 mt-0.5 text-red-600" />
+                <AlertTriangle className="w-5 h-5 mt-0.5 text-danger-text" />
                 <div>
                   <h2 className="text-lg font-semibold text-heading">
                     {t('customers.erase.title', 'Erase customer data?')}
@@ -1157,7 +1157,7 @@ export const CustomerDetailPage: React.FC = () => {
                 </Button>
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white bg-danger hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
                   disabled={eraseMutation.isPending}
                   onClick={() => { eraseMutation.mutate(); eraseModal.close(); }}
                 >

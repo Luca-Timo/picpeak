@@ -65,7 +65,7 @@ export const VersionInfo: React.FC = () => {
   });
 
   const channelBadge = versionInfo?.channel === 'beta' ? (
-    <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded">
+    <span className="ml-1 px-1.5 py-0.5 text-xs bg-warning-soft text-warning-text rounded">
       {t('admin.updates.beta', 'BETA')}
     </span>
   ) : null;
@@ -126,7 +126,7 @@ export const VersionInfo: React.FC = () => {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+            className="mt-2 flex items-center gap-1 text-xs text-accent hover:underline cursor-pointer"
             title={t('admin.updates.viewDetails', 'View release notes and upgrade instructions')}
           >
             <ArrowUpCircle className="w-3 h-3" />

@@ -99,9 +99,9 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
               </div>
               <span className="text-sm tabular-nums">{formatMoney(Number(q.totalAmountMinor) / 100, q.currency)}</span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                q.status === 'accepted' || q.status === 'converted' ? 'bg-green-100 text-green-800'
-                  : q.status === 'declined' ? 'bg-red-100 text-red-800'
-                  : q.status === 'sent' ? 'bg-blue-100 text-blue-800'
+                q.status === 'accepted' || q.status === 'converted' ? 'bg-success-soft text-success-text'
+                  : q.status === 'declined' ? 'bg-danger-soft text-danger-text'
+                  : q.status === 'sent' ? 'bg-info-soft text-info-text'
                   : 'bg-neutral-100 text-neutral-700'
               }`}>{t(`quotes.status.${q.status}`, q.status)}</span>
             </li>
@@ -152,10 +152,10 @@ const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
                 <span className="text-xs text-muted ml-2 truncate">{c.title || fmtDate(c.issueDate)}</span>
               </div>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                c.status === 'fully_signed' ? 'bg-green-100 text-green-800'
-                  : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-blue-100 text-blue-800'
-                  : c.status === 'sent' ? 'bg-amber-100 text-amber-800'
-                  : c.status === 'declined' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
+                c.status === 'fully_signed' ? 'bg-success-soft text-success-text'
+                  : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-info-soft text-info-text'
+                  : c.status === 'sent' ? 'bg-warning-soft text-warning-text'
+                  : c.status === 'declined' ? 'bg-danger-soft text-danger-text'
                   : c.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
                   : 'bg-neutral-100 text-neutral-700'
               }`}>{t(`contracts.status.${c.status}`, c.status)}</span>
@@ -217,12 +217,12 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
                 </span>
               ) : (
                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  inv.status === 'paid' ? 'bg-green-100 text-green-800'
-                    : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
-                    : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
+                  inv.status === 'paid' ? 'bg-success-soft text-success-text'
+                    : inv.status === 'overdue' ? 'bg-danger-soft text-danger-text'
+                    : inv.status === 'sent' ? 'bg-info-soft text-info-text'
                     : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
                     : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
-                    : 'bg-amber-100 text-amber-800'
+                    : 'bg-warning-soft text-warning-text'
                 }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
               )}
             </li>
@@ -367,7 +367,7 @@ const RebillsPanel: React.FC<Props> = ({ customerAccountId }) => {
                           ) : ''}
                         </div>
                         {r.proofAttachError && (
-                          <div className="mt-0.5 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                          <div className="mt-0.5 flex items-center gap-1 text-xs text-warning-text">
                             <AlertTriangle className="w-3 h-3 shrink-0" />
                             {t('rebills.proofError', 'Proof not attached: {{err}}', { err: r.proofAttachError })}
                           </div>

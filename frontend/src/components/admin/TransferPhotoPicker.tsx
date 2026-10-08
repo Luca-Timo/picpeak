@@ -140,7 +140,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
                     key={ev.id}
                     onClick={() => { setSelectedEventId(ev.id); setSelectedEventName(ev.event_name); }}
                     className={`block w-full truncate px-4 py-2 text-left text-sm hover:bg-hover-soft ${
-                      selectedEventId === ev.id ? 'bg-primary-50 font-medium text-primary-700 dark:bg-neutral-800' : 'text-body'
+                      selectedEventId === ev.id ? 'bg-accent-soft font-medium text-accent dark:bg-neutral-800' : 'text-body'
                     }`}
                   >
                     {ev.event_name}
@@ -174,7 +174,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
                     <div
                       key={photo.id}
                       className={`group relative aspect-square cursor-pointer overflow-hidden rounded-md border-2 ${
-                        isSelected ? 'border-primary-500' : 'border-transparent'
+                        isSelected ? 'border-accent' : 'border-transparent'
                       } ${isExcluded ? 'opacity-40' : ''}`}
                       onClick={() => handlePhotoClick(photo)}
                     >
@@ -191,7 +191,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
                         </span>
                       )}
                       {isSelected && (
-                        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-500 text-white">
+                        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent-strong text-white">
                           <Check className="h-3 w-3" />
                         </span>
                       )}

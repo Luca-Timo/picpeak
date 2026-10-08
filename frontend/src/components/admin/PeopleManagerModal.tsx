@@ -155,7 +155,7 @@ const FaceInContext: React.FC<{
         {canBox && (
           <span
             aria-hidden
-            className="absolute border-2 border-primary-400 rounded-sm"
+            className="absolute border-2 border-accent rounded-sm"
             style={{
               left: `${(bx / face.photo_width!) * 100}%`,
               top: `${(by / face.photo_height!) * 100}%`,
@@ -522,7 +522,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                           title={t('admin.people.coverPick', { defaultValue: 'Use as cover' })}
                           onClick={() => chooseCover(face.id)}
                           className={`block rounded-lg overflow-hidden border-2 transition-colors ${
-                            current ? 'border-primary-600' : 'border-transparent hover:border-line-strong'
+                            current ? 'border-accent' : 'border-transparent hover:border-line-strong'
                           }`}
                         >
                           <FaceThumb
@@ -535,7 +535,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                           />
                         </button>
                         {current && (
-                          <span className="absolute top-1 right-1 bg-primary-600 text-white rounded-full p-0.5 pointer-events-none">
+                          <span className="absolute top-1 right-1 bg-accent-strong text-white rounded-full p-0.5 pointer-events-none">
                             <Check size={12} />
                           </span>
                         )}
@@ -566,7 +566,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
           </>
         ) : splitting ? (
           <>
-            <div className="px-5 py-3 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-100 dark:border-amber-800 text-sm text-amber-900 dark:text-amber-200">
+            <div className="px-5 py-3 bg-warning-soft border-b border-warning-line text-sm text-warning-text">
               {t('admin.people.splitHelp', {
                 defaultValue: 'Pick the photos that are NOT this person. They become a new entry, and everything else stays.',
               })}
@@ -583,7 +583,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                         onClick={() => setSplitFaceIds((p) =>
                           p.includes(face.id) ? p.filter((x) => x !== face.id) : [...p, face.id])}
                         className={`relative rounded-lg overflow-hidden border-2 transition-colors ${
-                          picked ? 'border-primary-600' : 'border-transparent hover:border-line-strong'
+                          picked ? 'border-accent' : 'border-transparent hover:border-line-strong'
                         }`}
                       >
                         <FaceThumb
@@ -595,7 +595,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                           size={88}
                         />
                         {picked && (
-                          <span className="absolute top-1 right-1 bg-primary-600 text-white rounded-full p-0.5">
+                          <span className="absolute top-1 right-1 bg-accent-strong text-white rounded-full p-0.5">
                             <Check size={12} />
                           </span>
                         )}
@@ -640,14 +640,14 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                       Dismissal is sticky — a pair told "not the same" does not
                       come back after the next scan. */}
                   {suggestionPairs.length > 0 && (
-                    <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 overflow-hidden">
-                      <p className="px-3 py-2 text-xs text-amber-900 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800">
+                    <div className="mb-4 rounded-lg border border-warning-line bg-warning-soft overflow-hidden">
+                      <p className="px-3 py-2 text-xs text-warning-text border-b border-warning-line">
                         {t('admin.people.suggestionsHeading', {
                           count: suggestionPairs.length,
                           defaultValue: 'These might be the same person. Grouping was not confident enough to merge them on its own.',
                         })}
                       </p>
-                      <div className="divide-y divide-amber-200 dark:divide-amber-800">
+                      <div className="divide-y divide-warning-line">
                         {suggestionPairs.map(({ a, b, score }) => (
                           <div key={`${a.id}-${b.id}`} className="flex items-center gap-3 p-3 flex-wrap">
                             <div className="flex items-center gap-2">
@@ -703,7 +703,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                       <div
                         key={person.id}
                         className={`flex items-center gap-3 p-2 rounded-lg border transition-colors ${
-                          isSelected ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/30' : 'border-transparent hover:bg-hover-soft'
+                          isSelected ? 'border-accent bg-accent-soft' : 'border-transparent hover:bg-hover-soft'
                         }`}
                       >
                         <button
@@ -736,7 +736,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                               }}
                               placeholder={t('admin.people.namePlaceholder', { defaultValue: 'Add a name' })}
                               list={knownNames.length ? 'picpeak-people-names' : undefined}
-                              className="w-full max-w-xs px-2 py-1 text-sm border border-line-strong bg-panel text-heading rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                              className="w-full max-w-xs px-2 py-1 text-sm border border-line-strong bg-panel text-heading rounded focus:outline-none focus:ring-2 focus:ring-accent"
                             />
                           ) : (
                             <button
@@ -800,7 +800,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                             disabled={busy}
                             title={t('admin.people.hideAction', { defaultValue: 'Hide from guests' })}
                             onClick={() => setFlag(person, 'is_hidden', !person.is_hidden)}
-                            className={`p-2 rounded ${person.is_hidden ? 'text-primary-600' : 'text-neutral-400 hover:text-body'}`}
+                            className={`p-2 rounded ${person.is_hidden ? 'text-accent' : 'text-neutral-400 hover:text-body'}`}
                           >
                             <EyeOff size={16} />
                           </button>
@@ -809,7 +809,7 @@ export const PeopleManagerModal: React.FC<PeopleManagerModalProps> = ({
                             disabled={busy}
                             title={t('admin.people.ignoreAction', { defaultValue: 'Not a real person — ignore' })}
                             onClick={() => setFlag(person, 'is_ignored', !person.is_ignored)}
-                            className={`p-2 rounded ${person.is_ignored ? 'text-red-600' : 'text-neutral-400 hover:text-body'}`}
+                            className={`p-2 rounded ${person.is_ignored ? 'text-danger-text' : 'text-neutral-400 hover:text-body'}`}
                           >
                             <Ban size={16} />
                           </button>

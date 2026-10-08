@@ -95,7 +95,7 @@ export const ClientAccessPage: React.FC = () => {
           <div className="flex-1 flex items-center justify-center">
             <Card className="max-w-md w-full mx-4">
               <CardContent className="text-center py-12">
-                <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                <AlertCircle className="w-16 h-16 text-danger mx-auto mb-4" />
                 <h2 className="text-xl font-semibold mb-2">{t('errors.galleryNotFound')}</h2>
                 <p className="text-neutral-600">{t('errors.galleryNotFoundMessage')}</p>
               </CardContent>
@@ -124,8 +124,8 @@ export const ClientAccessPage: React.FC = () => {
           <Card className="max-w-md w-full">
             <CardContent className="p-8">
               <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Lock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+                <div className="w-16 h-16 bg-warning-soft rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Lock className="w-8 h-8 text-warning-text" />
                 </div>
                 <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
                   {t('clientAccess.title')}
@@ -169,7 +169,7 @@ export const ClientAccessPage: React.FC = () => {
                   {t('clientAccess.guestHint')}{' '}
                   <Link
                     to={`/gallery/${slug}`}
-                    className="text-primary-600 dark:text-primary-400 hover:underline"
+                    className="text-accent hover:underline"
                   >
                     {t('clientAccess.guestLink')}
                   </Link>

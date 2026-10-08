@@ -408,7 +408,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
     showFeedbackActions && feedbackOptions?.allowLikes ? (
       <button
         className={`p-2 rounded-full transition-colors ${
-          liked ? 'bg-red-500/90 hover:bg-red-500' : 'bg-white/90 hover:bg-white'
+          liked ? 'bg-danger hover:opacity-90' : 'bg-white/90 hover:bg-white'
         }`}
         onClick={handleLike}
         aria-label={likeToggleLabels && liked ? 'Unlike photo' : 'Like photo'}

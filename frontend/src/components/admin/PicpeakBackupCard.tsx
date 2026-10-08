@@ -75,9 +75,9 @@ export const PicpeakExportCard: React.FC = () => {
           />
           {t('backup.picpeak.includePhotos', 'Include original gallery photos (larger file)')}
         </label>
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-900/20">
-          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="text-xs text-amber-800 dark:text-amber-200">
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-line bg-warning-soft p-3">
+          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning-text" />
+          <p className="text-xs text-warning-text">
             {t('backup.picpeak.secretsWarning', 'This file contains secrets in plain text (email password, admin credentials, API keys). Store it securely and only transfer it over trusted channels.')}
           </p>
         </div>
@@ -161,26 +161,26 @@ export const PicpeakRestoreCard: React.FC = () => {
       </Button>
 
       {result && (
-        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900/50 dark:bg-green-900/20">
+        <div className="mt-4 rounded-lg border border-success-line bg-success-soft p-4">
           <div className="flex items-start gap-2">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-400" />
+            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-success-text" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-green-800 dark:text-green-200">
+              <p className="text-sm font-medium text-success-text">
                 {t('backup.picpeak.restoreDone', 'Backup restored.')}
               </p>
-              <p className="mt-0.5 text-xs text-green-700 dark:text-green-300">
+              <p className="mt-0.5 text-xs text-success-text">
                 {t('backup.picpeak.restoreSummary', '{{tables}} tables and {{files}} files restored.', {
                   tables: result.tables,
                   files: result.filesRestored,
                 })}
               </p>
               {result.crossEngine && (
-                <p className="mt-0.5 text-xs text-green-700 dark:text-green-300">
+                <p className="mt-0.5 text-xs text-success-text">
                   {t('backup.picpeak.crossEngineNote', 'Cross-engine restore: a SQLite backup was converted onto this PostgreSQL instance.')}
                 </p>
               )}
               {result.externalPathsConverted === false && (
-                <p className="mt-2 flex items-start gap-1 text-xs text-red-800 dark:text-red-300">
+                <p className="mt-2 flex items-start gap-1 text-xs text-danger-text">
                   <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                   <span>
                     {t('backup.picpeak.externalPathsFailedDetail',
@@ -190,7 +190,7 @@ export const PicpeakRestoreCard: React.FC = () => {
                 </p>
               )}
               {result.usesExternalMedia && (
-                <p className="mt-2 flex items-start gap-1 text-xs text-amber-800 dark:text-amber-300">
+                <p className="mt-2 flex items-start gap-1 text-xs text-warning-text">
                   <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                   <span>
                     {t('backup.picpeak.externalMediaNote', 'This backup references an external-media library. Make sure external-media routing is configured on this instance.')}{' '}
@@ -219,7 +219,7 @@ export const PicpeakRestoreCard: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl bg-panel p-6 shadow-xl">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-6 w-6 flex-shrink-0 text-red-600 dark:text-red-400" />
+              <AlertTriangle className="mt-0.5 h-6 w-6 flex-shrink-0 text-danger-text" />
               <div>
                 <h3 className="text-lg font-semibold text-heading">
                   {t('backup.picpeak.confirmTitle', 'Restore will delete all current data')}

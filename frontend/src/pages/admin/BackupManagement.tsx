@@ -133,20 +133,20 @@ export const BackupManagement: React.FC = () => {
             <div className="flex items-center space-x-2">
               {backupStatus?.isRunning ? (
                 <>
-                  <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
-                  <span className="text-blue-600 dark:text-blue-400 font-medium">{t('backup.status.inProgress')}</span>
+                  <Loader2 className="h-5 w-5 text-info animate-spin" />
+                  <span className="text-info-text font-medium">{t('backup.status.inProgress')}</span>
                 </>
               ) : latestAttempt?.status === 'running' ? (
                 <>
-                  <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
-                  <span className="text-blue-600 dark:text-blue-400 font-medium">
+                  <Loader2 className="h-5 w-5 text-info animate-spin" />
+                  <span className="text-info-text font-medium">
                     {t('backup.status.latestAttemptRunning')}: {fmtDateTime(latestAttempt.created_at)}
                   </span>
                 </>
               ) : latestAttempt?.status === 'failed' ? (
                 <>
-                  <XCircle className="h-5 w-5 text-red-500" />
-                  <span className="text-red-700 dark:text-red-400 font-medium">
+                  <XCircle className="h-5 w-5 text-danger" />
+                  <span className="text-danger-text font-medium">
                     {t('backup.status.latestAttemptFailed')}: {fmtDateTime(latestAttempt.created_at)}
                   </span>
                   {lastSuccessful && (
@@ -157,14 +157,14 @@ export const BackupManagement: React.FC = () => {
                 </>
               ) : latestAttempt?.status === 'completed' ? (
                 <>
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <CheckCircle className="h-5 w-5 text-success" />
                   <span className="text-body">
                     {t('backup.status.lastBackup')}: {fmtDateTime(latestAttempt.created_at)}
                   </span>
                 </>
               ) : latestAttempt ? (
                 <>
-                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                  <AlertCircle className="h-5 w-5 text-warning" />
                   <span className="text-body">
                     {t('backup.status.latestAttempt')}: {fmtDateTime(latestAttempt.created_at)}
                     {' · '}
@@ -173,7 +173,7 @@ export const BackupManagement: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                  <AlertCircle className="h-5 w-5 text-warning" />
                   <span className="text-body">{t('backup.status.noBackups')}</span>
                 </>
               )}
@@ -211,7 +211,7 @@ export const BackupManagement: React.FC = () => {
 
             <div className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium ${
               backupConfig?.backup_enabled
-                ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                ? 'bg-success-soft text-success-text'
                 : 'bg-inset text-body'
             }`}>
               <Shield className="h-4 w-4" />

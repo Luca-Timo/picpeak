@@ -167,7 +167,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                   type="checkbox"
                   checked={sendEmail}
                   onChange={(e) => setSendEmail(e.target.checked)}
-                  className="w-4 h-4 text-accent bg-inset border-line-strong rounded focus:ring-primary-500 focus:ring-2"
+                  className="w-4 h-4 text-accent bg-inset border-line-strong rounded focus:ring-accent focus:ring-2"
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
@@ -183,8 +183,8 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
               </label>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
-              <p className="text-sm text-amber-800">
+            <div className="bg-warning-soft border border-warning-line rounded-lg p-3 mb-6">
+              <p className="text-sm text-warning-text">
                 {t('events.passwordReset.warning')}
               </p>
             </div>
@@ -212,18 +212,18 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
           </>
         ) : (
           <>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="bg-success-soft border border-success-line rounded-lg p-4 mb-6">
               <div className="flex items-center gap-3 mb-2">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <p className="font-medium text-green-900">{t('events.passwordReset.successHeading')}</p>
+                <CheckCircle className="w-5 h-5 text-success-text" />
+                <p className="font-medium text-success-text">{t('events.passwordReset.successHeading')}</p>
               </div>
               {sendEmail && resultEmailSent && (
-                <p className="text-sm text-green-700">
+                <p className="text-sm text-success-text">
                   {t('events.passwordReset.emailSentNote')}
                 </p>
               )}
               {sendEmail && !resultEmailSent && (
-                <p className="text-sm text-amber-700" role="status">
+                <p className="text-sm text-warning-text" role="status">
                   {t('events.passwordReset.emailNotSentNote')}
                 </p>
               )}
@@ -252,8 +252,8 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                   </div>
                 </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
-                  <p className="text-sm text-blue-800">
+                <div className="bg-info-soft border border-info-line rounded-lg p-3 mb-6">
+                  <p className="text-sm text-info-text">
                     {t('events.passwordReset.saveSecurelyNote')}
                   </p>
                 </div>

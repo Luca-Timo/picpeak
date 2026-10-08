@@ -192,7 +192,7 @@ export const ChartOfAccountsManager: React.FC = () => {
                     <td className="py-1.5 pr-3">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => setAccountModal({ account: a })} className="p-1 text-neutral-500 hover:text-body"><Pencil className="w-4 h-4" /></button>
-                        <button onClick={() => { if (window.confirm(t('ledger.account.confirmDelete', 'Delete this account?') as string)) delAccount.mutate(a.id); }} className="p-1 text-neutral-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => { if (window.confirm(t('ledger.account.confirmDelete', 'Delete this account?') as string)) delAccount.mutate(a.id); }} className="p-1 text-neutral-400 hover:text-danger-text"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>

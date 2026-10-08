@@ -100,7 +100,7 @@ export const CopyFilenamesDialog: React.FC<CopyFilenamesDialogProps> = ({ photos
           onFocus={selectText}
           rows={5}
           aria-label={title}
-          className="w-full p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-mono text-xs break-all resize-y focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-mono text-xs break-all resize-y focus:outline-none focus:ring-2 focus:ring-accent"
         />
 
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -134,7 +134,7 @@ export const CopyFilenamesDialog: React.FC<CopyFilenamesDialogProps> = ({ photos
           </Button>
         </div>
         {copyState === 'failed' && (
-          <p className="mt-3 text-xs text-red-600 dark:text-red-400" role="alert">
+          <p className="mt-3 text-xs text-danger-text" role="alert">
             {t('gallery.copyFilenames.copyFailed', 'Copying was blocked. The text is selected, press Ctrl+C or Cmd+C to copy it.')}
           </p>
         )}

@@ -97,18 +97,18 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
 
         {/* Locked-reason hint */}
         {lockedReason && (
-          <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-            <Lock className="w-3.5 h-3.5 mt-0.5 text-amber-700 dark:text-amber-400 flex-shrink-0" />
-            <span className="text-xs text-amber-800 dark:text-amber-300">{lockedReason}</span>
+          <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-md bg-warning-soft border border-warning-line">
+            <Lock className="w-3.5 h-3.5 mt-0.5 text-warning-text flex-shrink-0" />
+            <span className="text-xs text-warning-text">{lockedReason}</span>
           </div>
         )}
 
         {/* Warning shown only when the user is about to disable (i.e. enabled=true).
             Wording assumes "you're disabling X — here's the consequence". */}
         {warning && enabled && (
-          <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-amber-700 dark:text-amber-400 flex-shrink-0" />
-            <span className="text-xs text-amber-800 dark:text-amber-300">{warning}</span>
+          <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-md bg-warning-soft border border-warning-line">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-warning-text flex-shrink-0" />
+            <span className="text-xs text-warning-text">{warning}</span>
           </div>
         )}
 

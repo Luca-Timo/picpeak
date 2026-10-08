@@ -167,7 +167,6 @@ describe('automatic-backup switch', () => {
   it('colours the track with a defined token when on', () => {
     renderForm();
     const track = screen.getByRole('checkbox', { name: '' }).nextElementSibling as HTMLElement;
-    expect(track.className).toContain('peer-checked:bg-primary-600');
-    expect(track.className).not.toMatch(/peer-checked:bg-primary(\s|$)/);
+    expect(track.className).toContain('peer-checked:bg-accent-strong');
   });
 });

@@ -339,7 +339,7 @@ export const WorkflowEditorPage: React.FC = () => {
             className="w-full font-mono text-xs p-2 rounded border border-line-strong bg-subtle text-heading"
             style={{ height: '62vh' }}
           />
-          {textErr && <p className="text-xs text-red-600 dark:text-red-400">{textErr}</p>}
+          {textErr && <p className="text-xs text-danger-text">{textErr}</p>}
           <div className="flex gap-2">
             <Button variant="outline" onClick={copyText}>{t('common.copy', 'Copy')}</Button>
             <Button variant="primary" onClick={applyText}>{t('workflows.editor.loadText', 'Load into editor')}</Button>
@@ -367,7 +367,7 @@ export const WorkflowEditorPage: React.FC = () => {
                 {(selectedNode.data as any).nodeType} · {selectedNode.id}
               </div>
               <Button variant="ghost" size="sm" onClick={deleteSelected} aria-label={t('common.delete', 'Delete') as string}>
-                <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                <Trash2 className="w-4 h-4 text-danger-text" />
               </Button>
             </div>
             <NodeConfigPanel

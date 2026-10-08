@@ -136,9 +136,9 @@ export const WebhooksTab: React.FC = () => {
            fields (name / email / phone) plus the share token. Make sure
            admins know what flows to a webhook receiver before they wire
            one up to a third-party automation tool. */}
-        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700/50 dark:bg-amber-900/20 p-3 mb-4 flex items-start gap-2.5">
-          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+        <div className="rounded-lg border border-warning-line bg-warning-soft p-3 mb-4 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-warning-text flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-warning-text leading-relaxed">
             {t(
               'settings.webhooks.piiNotice',
               'event.* payloads include customer contact info (name, email, phone) and the gallery share token if you have stored them. Only point webhooks at receivers you trust — they have everything needed to message the customer or open the gallery.'
@@ -147,15 +147,15 @@ export const WebhooksTab: React.FC = () => {
         </div>
 
         {justCreatedSecret && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-4 mb-4">
+          <div className="rounded-lg border border-warning-line bg-warning-soft p-4 mb-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-warning-text flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">
+                <p className="text-sm font-medium text-warning-text mb-1">
                   {t('settings.webhooks.copyNow', 'Copy this signing secret now — it will not be shown again.')}
                 </p>
                 <div className="flex items-center gap-2">
-                  <code className="block flex-1 min-w-0 px-3 py-2 bg-shell border border-amber-300 dark:border-amber-700 rounded text-xs font-mono break-all">
+                  <code className="block flex-1 min-w-0 px-3 py-2 bg-shell border border-warning-line rounded text-xs font-mono break-all">
                     {justCreatedSecret}
                   </code>
                   <Button
@@ -209,7 +209,7 @@ export const WebhooksTab: React.FC = () => {
                     type="checkbox"
                     checked={events.includes(e)}
                     onChange={() => toggleEvent(e)}
-                    className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                    className="w-4 h-4 text-accent rounded focus:ring-accent"
                   />
                   <code className="text-xs">{e}</code>
                 </label>
@@ -220,7 +220,7 @@ export const WebhooksTab: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowAdvanced((prev) => !prev)}
-            className="text-sm text-primary-600 dark:text-primary-400 hover:underline self-start"
+            className="text-sm text-accent hover:underline self-start"
           >
             {showAdvanced ? t('settings.webhooks.hideAdvanced', '− Hide advanced (filter, template)') : t('settings.webhooks.showAdvanced', '+ Advanced (filter, template)')}
           </button>
@@ -241,7 +241,7 @@ export const WebhooksTab: React.FC = () => {
                 <p className="text-xs text-neutral-500 mt-1">
                   {t('settings.webhooks.filterHelp', 'Dot-path → expected value. All keys must match (AND). Use an array for "any of".')} <code>{'{"type": ["event.published", "event.archived"]}'}</code>
                 </p>
-                {filterError && <p className="text-xs text-red-600 mt-1">{filterError}</p>}
+                {filterError && <p className="text-xs text-danger-text mt-1">{filterError}</p>}
               </div>
 
               <div>
@@ -304,13 +304,13 @@ export const WebhooksTab: React.FC = () => {
                       </td>
                       <td className="py-3 pr-3 text-xs text-neutral-500">
                         {lastEither === 'success' && lastSuccess && (
-                          <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                          <span className="flex items-center gap-1 text-success-text">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             {fmtDateTime(lastSuccess)}
                           </span>
                         )}
                         {lastEither === 'failure' && lastFailure && (
-                          <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                          <span className="flex items-center gap-1 text-danger-text">
                             <XCircle className="w-3.5 h-3.5" />
                             {fmtDateTime(lastFailure)}
                           </span>
@@ -322,7 +322,7 @@ export const WebhooksTab: React.FC = () => {
                           onClick={() => toggleActiveMutation.mutate({ id: wh.id, active: !wh.active })}
                           className={`text-xs px-2 py-0.5 rounded ${
                             wh.active
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                              ? 'bg-success-soft text-success-text'
                               : 'bg-fill text-soft'
                           }`}
                           title={wh.active ? t('settings.webhooks.toggleToDisable', 'Click to disable') : t('settings.webhooks.toggleToEnable', 'Click to enable')}

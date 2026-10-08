@@ -624,7 +624,7 @@ export const ContractEditorPage: React.FC = () => {
   if (isEdit && existing && existing.contract.status !== 'draft') {
     return (
       <Card padding="lg">
-        <p className="text-sm text-amber-700 dark:text-amber-300">
+        <p className="text-sm text-warning-text">
           {t('contracts.editor.locked', 'Sent contracts cannot be edited. Cancel and create a fresh one for amendments.')}
         </p>
         <div className="mt-3">
@@ -636,9 +636,9 @@ export const ContractEditorPage: React.FC = () => {
     );
   }
 
-  const fieldErrorClass = 'mt-1 text-sm text-red-600 dark:text-red-400';
+  const fieldErrorClass = 'mt-1 text-sm text-danger-text';
   const textareaClass = (invalid: boolean) =>
-    `w-full px-3 py-2 rounded-md border ${invalid ? 'border-red-500' : 'border-line-strong'} bg-panel text-sm`;
+    `w-full px-3 py-2 rounded-md border ${invalid ? 'border-danger' : 'border-line-strong'} bg-panel text-sm`;
 
   return (
     <div>
@@ -680,7 +680,7 @@ export const ContractEditorPage: React.FC = () => {
       </div>
 
       {conflict && (
-        <div role="alert" className="mb-4 p-3 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200 flex flex-wrap items-center gap-3">
+        <div role="alert" className="mb-4 p-3 rounded-md border border-warning-line bg-warning-soft text-sm text-warning-text flex flex-wrap items-center gap-3">
           <p className="flex-1">
             <strong>{t('contracts.editor.conflictTitle', 'Changed by someone else.')}</strong>{' '}
             {t('contracts.editor.conflictBody', 'This contract was saved elsewhere while you were editing. Your changes are still here and were not saved.')}
@@ -698,7 +698,7 @@ export const ContractEditorPage: React.FC = () => {
           ref={summaryRef}
           role="alert"
           tabIndex={-1}
-          className="mb-4 p-3 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-sm text-red-900 dark:text-red-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          className="mb-4 p-3 rounded-md border border-danger-line bg-danger-soft text-sm text-danger-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <p className="font-medium">{savedStateSentence(saveError)}</p>
           {saveErrorDetail(saveError)}
@@ -924,7 +924,7 @@ export const ContractEditorPage: React.FC = () => {
       </Card>
 
       {/* Disclaimer banner */}
-      <div className="mb-4 p-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200">
+      <div className="mb-4 p-3 rounded-md border border-warning-line bg-warning-soft text-sm text-warning-text">
         <p className="font-medium mb-1">
           {t('contracts.editor.disclaimerTitle', 'Legal review recommended')}
         </p>
@@ -940,7 +940,7 @@ export const ContractEditorPage: React.FC = () => {
             {t('contracts.editor.disclaimerLink', 'Read the CRM disclaimer')}
           </a>
         </p>
-        <p className="text-xs mt-2 pt-2 border-t border-amber-200/60 dark:border-amber-800/60">
+        <p className="text-xs mt-2 pt-2 border-t border-warning-line">
           {t('contracts.editor.schriftformWarning',
             'Signature type: simple electronic signature (SES). Sufficient for routine photography contracts in CH / DE / AT / FL. NOT sufficient for documents that legally require Schriftform / form qualifiée: Bürgschaft (DE § 766 BGB), Verbraucherdarlehensvertrag (DE § 492 BGB), befristete Arbeitsverträge (DE § 14 Abs. 4 TzBfG), and similar. For those, a qualified electronic signature (QES) from a Trust Service Provider is required — picpeak does not provide QES.')}
         </p>

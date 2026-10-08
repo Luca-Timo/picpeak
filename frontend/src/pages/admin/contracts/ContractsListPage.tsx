@@ -164,10 +164,10 @@ export const ContractsListPage: React.FC = () => {
                               signed, amber for sent (awaiting customer),
                               grey for cancelled, neutral for draft. */}
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            c.status === 'fully_signed' ? 'bg-green-100 text-green-800'
-                              : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-blue-100 text-blue-800'
-                              : c.status === 'sent' || c.status === 'awaiting_data' ? 'bg-amber-100 text-amber-800'
-                              : c.status === 'declined' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
+                            c.status === 'fully_signed' ? 'bg-success-soft text-success-text'
+                              : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-info-soft text-info-text'
+                              : c.status === 'sent' || c.status === 'awaiting_data' ? 'bg-warning-soft text-warning-text'
+                              : c.status === 'declined' ? 'bg-danger-soft text-danger-text'
                               : c.status === 'cancelled' || c.status === 'expired' ? 'bg-neutral-200 text-neutral-600'
                               : 'bg-neutral-100 text-neutral-700'
                           }`}>{contractStatusLabel(t, c.status, c.signerProgress)}</span>

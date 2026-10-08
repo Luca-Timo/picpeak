@@ -112,7 +112,7 @@ export const TeamMemberPicker: React.FC<Props> = ({ value, onChange, ownerId, di
           {isLoading ? (
             <div className="px-3 py-3 text-sm text-muted">{t('events.team.loading', 'Loading…')}</div>
           ) : isError ? (
-            <div className="px-3 py-3 text-sm text-red-600 dark:text-red-400">
+            <div className="px-3 py-3 text-sm text-danger-text">
               {t('events.team.loadFailed', 'The admin accounts could not be loaded.')}
             </div>
           ) : results.length === 0 ? (

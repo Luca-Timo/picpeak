@@ -164,7 +164,7 @@ export const InstallmentsPanel: React.FC<InstallmentsPanelProps> = ({
         {enabled && (
           <button
             type="button"
-            className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+            className="text-xs text-accent hover:underline"
             onClick={() => setAdvanced((v) => !v)}
             disabled={disabled}
           >
@@ -280,7 +280,7 @@ export const InstallmentsPanel: React.FC<InstallmentsPanelProps> = ({
                     type="button"
                     onClick={() => remove(idx)}
                     disabled={disabled}
-                    className="p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 text-red-600"
+                    className="p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 text-danger-text"
                     aria-label={t('installments.removeRow', 'Remove row') as string}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -301,7 +301,7 @@ export const InstallmentsPanel: React.FC<InstallmentsPanelProps> = ({
             >
               {t('installments.addRow', 'Add installment')}
             </Button>
-            <div className={`text-sm font-medium ${isValid ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+            <div className={`text-sm font-medium ${isValid ? 'text-success-text' : 'text-danger-text'}`}>
               {t('installments.total', 'Total')}: {totalPercent.toFixed(2)}%
               {!isValid && ` — ${t('installments.mustSumTo100', 'must sum to 100%')}`}
             </div>

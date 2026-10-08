@@ -122,12 +122,12 @@ export const GuestRecoveryModal: React.FC = () => {
         </p>
 
         {info && step === 'code' && (
-          <div className="text-sm text-green-700 bg-green-50 dark:bg-green-900/20 rounded px-3 py-2 mb-3">
+          <div className="text-sm text-success-text bg-success-soft rounded px-3 py-2 mb-3">
             {info}
           </div>
         )}
         {error && (
-          <div className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded px-3 py-2 mb-3">
+          <div className="text-sm text-danger-text bg-danger-soft rounded px-3 py-2 mb-3">
             {error}
           </div>
         )}

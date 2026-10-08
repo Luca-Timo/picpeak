@@ -340,7 +340,7 @@ export const BillDetailPage: React.FC = () => {
             <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{inv.status === 'scheduled' ? t('bills.sendNow', 'Send now') : t('bills.resend', 'Resend')}</Button>
           )}
           {inv.isMonthlyDraft && (
-            <span className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+            <span className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-info-soft text-info-text">
               {t('bills.monthlyDraftBadge',
                 'Monthly draft — ships via the customer\'s cadence day or "Trigger invoice now"')}
             </span>
@@ -410,8 +410,8 @@ export const BillDetailPage: React.FC = () => {
         </Card>
       )}
       {inv.kind !== 'storno' && inv.status === 'cancelled' && inv.cancellationStornoId && (
-        <Card padding="md" className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
-          <p className="text-sm text-amber-900 dark:text-amber-200">
+        <Card padding="md" className="bg-warning-soft border-warning-line">
+          <p className="text-sm text-warning-text">
             {t('bills.cancelledByStornoLabel', 'This invoice was cancelled by Stornorechnung')}{' '}
             <Link to={`/admin/clients/bills/${inv.cancellationStornoId}`} className="font-medium underline">
               {inv.cancellationStornoNumber || `#${inv.cancellationStornoId}`}
@@ -450,8 +450,8 @@ export const BillDetailPage: React.FC = () => {
           <div><div className="text-body">{t('bills.field.total', 'Total')}</div><div>{formatMoney(Number(inv.totalAmountMinor || 0) / 100, inv.currency)}</div></div>
           <div><div className="text-body">{t('bills.field.paid', 'Paid')}</div><div>{formatMoney(Number(inv.paidAmountMinor || 0) / 100, inv.currency)}</div></div>
           <div><div className="text-body">{t('bills.field.outstanding', 'Outstanding')}</div>
-            <div className={outstanding > 0 ? 'text-red-700 font-medium' : ''}>{formatMoney(outstanding, inv.currency)}</div></div>
-          {inv.lateFeeAmountMinor > 0 && <div><div className="text-body">{t('bills.field.lateFee', 'Late fee')}</div><div className="text-amber-700">{formatMoney(Number(inv.lateFeeAmountMinor) / 100, inv.currency)}</div></div>}
+            <div className={outstanding > 0 ? 'text-danger-text font-medium' : ''}>{formatMoney(outstanding, inv.currency)}</div></div>
+          {inv.lateFeeAmountMinor > 0 && <div><div className="text-body">{t('bills.field.lateFee', 'Late fee')}</div><div className="text-warning-text">{formatMoney(Number(inv.lateFeeAmountMinor) / 100, inv.currency)}</div></div>}
           {/* Source-quote / source-contract cross-links moved out of
               the top stats grid into the unified Linked-documents card
               above, mirroring the quote + contract detail pages. The
@@ -519,7 +519,7 @@ export const BillDetailPage: React.FC = () => {
                 {t('bills.send.proofsLabel', 'Supplier proofs')}
               </span>
               <div className="flex gap-3 text-xs">
-                <button type="button" className="text-primary-600 hover:underline"
+                <button type="button" className="text-accent hover:underline"
                   onClick={() => setSelectedProofIds(new Set(sendProofs.filter((p) => p.hasProof).map((p) => p.id)))}>
                   {t('bills.send.selectAll', 'Select all')}
                 </button>
@@ -553,7 +553,7 @@ export const BillDetailPage: React.FC = () => {
                     {p.hasProof ? (
                       <div className="text-xs text-muted truncate">{p.filename || 'proof.pdf'}</div>
                     ) : (
-                      <div className="text-xs text-amber-600 dark:text-amber-400">{t('bills.send.noProofFile', 'No stored proof file')}</div>
+                      <div className="text-xs text-warning-text">{t('bills.send.noProofFile', 'No stored proof file')}</div>
                     )}
                   </div>
                   <span className="text-sm tabular-nums text-body">{formatMoneyMinor(p.amountMinor, p.currency || inv.currency)}</span>
@@ -630,7 +630,7 @@ export const BillDetailPage: React.FC = () => {
                   id="pay-method"
                   value={payMethod}
                   onChange={(e) => setPayMethod(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md border border-line-strong bg-panel text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                  className="w-full px-3 py-2 rounded-md border border-line-strong bg-panel text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark"
                 >
                   <option value="">{t('bills.payment.methodPlaceholder', 'Select method…')}</option>
                   <option value="bank_transfer">{t('bills.payment.methods.bankTransfer', 'Bank transfer')}</option>

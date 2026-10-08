@@ -56,7 +56,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               'input',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
-              error && 'border-red-500 focus-visible:ring-red-500',
+              error && 'border-danger focus-visible:ring-accent',
               className
             )}
             aria-invalid={error ? 'true' : 'false'}
@@ -72,7 +72,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
         {error && (
-          <p id={`${inputId}-error`} className="mt-1.5 text-sm text-red-600 dark:text-red-400">
+          <p id={`${inputId}-error`} className="mt-1.5 text-sm text-danger-text">
             {error}
           </p>
         )}

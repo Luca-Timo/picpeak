@@ -36,7 +36,7 @@ const FeedbackCountIndicators: React.FC<{ photo: Photo; withTitles?: boolean }> 
       )}
       {(photo.like_count ?? 0) > 0 && (
         <div className="bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1" title={withTitles ? `${photo.like_count ?? 0} likes` : undefined}>
-          <Heart className="w-3.5 h-3.5 text-red-500" fill="currentColor" />
+          <Heart className="w-3.5 h-3.5 text-danger" fill="currentColor" />
           <span className="text-xs font-medium text-neutral-700">{photo.like_count ?? 0}</span>
         </div>
       )}

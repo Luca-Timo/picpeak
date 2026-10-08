@@ -55,7 +55,7 @@ export const DownloadLimitUsage: React.FC<DownloadLimitUsageProps> = ({ eventId,
       <span
         className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded ${
           exhausted
-            ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+            ? 'bg-danger-soft text-danger-text'
             : 'bg-inset text-body'
         }`}
       >

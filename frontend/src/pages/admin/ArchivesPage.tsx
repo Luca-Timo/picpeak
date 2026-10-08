@@ -150,7 +150,7 @@ export const ArchivesPage: React.FC = () => {
               <p className="text-sm text-soft">{t('archives.storageUsed')}</p>
               <p className="text-2xl font-bold text-heading">{archiveService.formatBytes(totals.archiveSize)}</p>
             </div>
-            <HardDrive className="w-8 h-8 text-blue-600" />
+            <HardDrive className="w-8 h-8 text-info-text" />
           </div>
         </Card>
 
@@ -162,7 +162,7 @@ export const ArchivesPage: React.FC = () => {
                 {totals.photos === 0 ? '0' : totals.photos.toLocaleString()}
               </p>
             </div>
-            <FileArchive className="w-8 h-8 text-green-600" />
+            <FileArchive className="w-8 h-8 text-success-text" />
           </div>
         </Card>
 
@@ -199,7 +199,7 @@ export const ArchivesPage: React.FC = () => {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="px-4 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+              className="px-4 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark"
             >
               <option value="all">{t('archives.allTypes')}</option>
               <option value="wedding">{t('archives.wedding')}</option>
@@ -212,7 +212,7 @@ export const ArchivesPage: React.FC = () => {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-4 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+              className="px-4 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark"
             >
               <option value="date">{t('archives.sortByDate')}</option>
               <option value="name">{t('archives.sortByName')}</option>
@@ -323,7 +323,7 @@ export const ArchivesPage: React.FC = () => {
                             size="sm"
                             onClick={() => handleDelete(archive)}
                             leftIcon={<Trash2 className="w-4 h-4" />}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-danger-text"
                             disabled={deleteMutation.isPending}
                           >
                             {t('archives.delete')}
@@ -382,12 +382,12 @@ export const ArchivesPage: React.FC = () => {
       )}
 
       {/* Storage Warning */}
-      <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+      <div className="mt-6 p-4 bg-warning-soft border border-warning-line rounded-lg">
         <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <AlertCircle className="w-5 h-5 text-warning-text flex-shrink-0" />
           <div>
-            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t('archives.storageManagement')}</p>
-            <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+            <p className="text-sm font-medium text-warning-text">{t('archives.storageManagement')}</p>
+            <p className="text-sm text-warning-text mt-1">
               {t('archives.storageInfo')}
             </p>
           </div>

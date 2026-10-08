@@ -187,7 +187,7 @@ export const TransferUploadPage: React.FC = () => {
   if (done) {
     return wrap(
       <div className="p-8 text-center">
-        <CheckCircle className="mx-auto mb-3 h-12 w-12 text-green-500" />
+        <CheckCircle className="mx-auto mb-3 h-12 w-12 text-success" />
         <h1 className="text-xl font-semibold">{t('transfers.upload.doneTitle', 'Thank you!')}</h1>
         <p className="mt-2" style={muted}>{t('transfers.upload.doneBody', 'Your files were uploaded successfully.')}</p>
         <Button className="mt-5" variant="outline" onClick={() => { setDone(false); setFiles([]); setProgress(0); }}>

@@ -273,7 +273,7 @@ export const CustomerManagementPage: React.FC = () => {
           {t('customers.status.active', 'Active')}
         </span>
       ) : (
-        <span className="inline-flex items-center gap-1 text-xs text-red-600">
+        <span className="inline-flex items-center gap-1 text-xs text-danger-text">
           <X className="w-3.5 h-3.5" />
           {t('customers.status.inactive', 'Deactivated')}
         </span>
@@ -286,7 +286,7 @@ export const CustomerManagementPage: React.FC = () => {
         const invite = pendingInviteByEmail.get(c.email.trim().toLowerCase());
         return invite ? (
           <span
-            className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300"
+            className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-info-soft text-info-text"
             // Deliberately describes the invitation ROW, not a
             // delivery. createInvitation inserts the row and then
             // queues the email without a transaction, so an open
@@ -425,7 +425,7 @@ export const CustomerManagementPage: React.FC = () => {
           customersLoading ? (
             <div className="flex justify-center py-8"><Loading /></div>
           ) : customersError ? (
-            <div className="text-sm text-red-600 flex items-center gap-2">
+            <div className="text-sm text-danger-text flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
               {(customersError as { response?: { data?: { code?: string } } })?.response?.data?.code === 'GROUP_FILTER_TOO_MANY'
                 ? t('customers.groups.filterLimit', 'Filter by at most {{max}} groups at once.', { max: MAX_GROUPS_PER_CUSTOMER })
@@ -471,7 +471,7 @@ export const CustomerManagementPage: React.FC = () => {
                     {t('customers.groups.bulk.clearSelection', 'Clear selection')}
                   </Button>
                   {overBulkCap && (
-                    <span className="w-full text-xs text-amber-700 dark:text-amber-400" role="status">
+                    <span className="w-full text-xs text-warning-text" role="status">
                       {t('customers.groups.bulk.overCap',
                         'At most {{max}} customers can be changed at once. Narrow the filter or clear some of the selection.',
                         { max: BULK_GROUP_MAX_CUSTOMERS })}
@@ -590,7 +590,7 @@ export const CustomerManagementPage: React.FC = () => {
           invitationsLoading ? (
             <div className="flex justify-center py-8"><Loading /></div>
           ) : invitationsError ? (
-            <div className="text-sm text-red-600 flex items-center gap-2">
+            <div className="text-sm text-danger-text flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
               {t('customers.loadInvitationsError', 'Could not load invitations')}
             </div>
@@ -688,7 +688,7 @@ export const CustomerManagementPage: React.FC = () => {
           <div className="w-full max-w-md rounded-xl shadow-lg bg-shell">
             <div className="p-6">
               <div className="flex items-start gap-3 mb-4">
-                <AlertTriangle className="w-5 h-5 mt-0.5 text-amber-500" />
+                <AlertTriangle className="w-5 h-5 mt-0.5 text-warning" />
                 <div>
                   <h2 className="text-lg font-semibold text-heading">
                     {confirm.kind === 'deactivate'

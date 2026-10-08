@@ -99,7 +99,7 @@ export const EventTypesPage: React.FC = () => {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600">{t('eventTypes.loadError', 'Failed to load event types')}</p>
+        <p className="text-danger-text">{t('eventTypes.loadError', 'Failed to load event types')}</p>
         <Button onClick={() => refetch()} className="mt-4">
           {t('common.tryAgain', 'Try Again')}
         </Button>
@@ -142,7 +142,7 @@ export const EventTypesPage: React.FC = () => {
               type="checkbox"
               checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded border-line-strong text-accent focus:ring-primary-500"
+              className="rounded border-line-strong text-accent focus:ring-accent"
             />
             <span className="text-sm text-body">
               {t('eventTypes.showInactive', 'Show inactive')}
@@ -215,7 +215,7 @@ export const EventTypesPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-4">
                       {type.is_active ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full text-xs">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-success-soft text-success-text rounded-full text-xs">
                           <Eye className="w-3 h-3" />
                           {t('common.active', 'Active')}
                         </span>
@@ -238,7 +238,7 @@ export const EventTypesPage: React.FC = () => {
                         {!type.is_system && (
                           <button
                             onClick={() => setDeleteConfirm(type)}
-                            className="p-2 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-soft hover:text-red-600"
+                            className="p-2 hover:bg-danger-soft rounded-lg text-soft hover:text-danger-text"
                             title={t('common.delete', 'Delete')}
                           >
                             <Trash2 className="w-4 h-4" />
@@ -255,8 +255,8 @@ export const EventTypesPage: React.FC = () => {
       </Card>
 
       {/* Slug Preview Info */}
-      <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-        <p className="text-sm text-blue-800 dark:text-blue-200">
+      <div className="mt-4 p-4 bg-info-soft rounded-lg border border-info-line">
+        <p className="text-sm text-info-text">
           <strong>{t('eventTypes.slugInfo.title', 'URL Prefix Info:')}</strong>{' '}
           {t('eventTypes.slugInfo.description', 'The URL prefix is used to generate gallery URLs. For example, an event type with prefix "family" will create URLs like: family-smith-family-2025-01-22')}
         </p>
@@ -439,7 +439,7 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({
                 <select
                   value={form.theme_preset}
                   onChange={(e) => setForm({ ...form, theme_preset: e.target.value })}
-                  className="w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                  className="w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark"
                 >
                   {Object.entries(GALLERY_THEME_PRESETS).map(([key, preset]) => (
                     <option key={key} value={key}>
@@ -456,7 +456,7 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({
                     type="checkbox"
                     checked={eventType?.is_active}
                     onChange={(e) => onSubmit({ is_active: e.target.checked })}
-                    className="rounded border-line-strong text-accent focus:ring-primary-500"
+                    className="rounded border-line-strong text-accent focus:ring-accent"
                   />
                   <span className="text-sm text-body">
                     {t('eventTypes.form.isActive', 'Active (visible in event creation)')}
@@ -501,8 +501,8 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
       <Card className="w-full max-w-md">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-red-100 dark:bg-red-900/40 rounded-full">
-              <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+            <div className="p-2 bg-danger-soft rounded-full">
+              <AlertTriangle className="w-6 h-6 text-danger-text" />
             </div>
             <h2 className="text-xl font-semibold text-heading">
               {t('eventTypes.deleteConfirm.title', 'Delete Event Type')}
@@ -525,7 +525,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
               variant="primary"
               onClick={onConfirm}
               isLoading={isLoading}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-danger hover:opacity-90"
             >
               {t('common.delete', 'Delete')}
             </Button>

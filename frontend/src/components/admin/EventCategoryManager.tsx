@@ -226,7 +226,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
             onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
             placeholder={t('categories.categoryName')}
             maxLength={100}
-            className="flex-1 px-3 py-1.5 text-sm border border-line-strong rounded-md bg-panel text-heading focus:ring-2 focus:ring-primary-500"
+            className="flex-1 px-3 py-1.5 text-sm border border-line-strong rounded-md bg-panel text-heading focus:ring-2 focus:ring-accent"
             autoFocus
           />
           <Button
@@ -327,8 +327,8 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                         })}
                         className={`p-1 transition-colors ${
                           category.is_folder
-                            ? 'text-primary-600 dark:text-primary-400 hover:text-neutral-400'
-                            : 'text-faint hover:text-primary-600 dark:hover:text-primary-400'
+                            ? 'text-accent hover:text-neutral-400'
+                            : 'text-faint hover:text-accent'
                         }`}
                         title={
                           category.is_folder
@@ -352,8 +352,8 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                         })}
                         className={`p-1 transition-colors ${
                           category.allow_downloads === false
-                            ? 'text-faint hover:text-green-600 dark:hover:text-green-400'
-                            : 'text-green-600 dark:text-green-400 hover:text-neutral-400'
+                            ? 'text-faint hover:text-success-text'
+                            : 'text-success-text hover:text-neutral-400'
                         }`}
                         title={
                           category.allow_downloads === false
@@ -372,7 +372,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                       </button>
                       <button
                         onClick={() => handleDelete(category)}
-                        className="p-1 text-faint hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        className="p-1 text-faint hover:text-danger-text transition-colors"
                         title={t('categories.deleteCategoryTitle')}
                         disabled={deleteMutation.isPending}
                       >
@@ -434,7 +434,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                         onClick={() => handleSelectHeroPhoto(heroPickerCategoryId, photo.id)}
                         className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                           isSelected
-                            ? 'border-accent-dark ring-2 ring-primary-500 ring-offset-2'
+                            ? 'border-accent-dark ring-2 ring-accent ring-offset-2'
                             : 'border-transparent hover:border-neutral-300'
                         }`}
                       >

@@ -486,7 +486,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
             id="upload-target-folder"
             value={looseFolderId ?? ''}
             onChange={(e) => setLooseFolderId(e.target.value ? Number(e.target.value) : null)}
-            className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent"
           >
             <option value="">{t('photos.folders.galleryRoot', 'Gallery root')}</option>
             {folderOptions.map((option) => (
@@ -506,7 +506,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
         <select
           value={selectedCategoryId || ''}
           onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
-          className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500"
+          className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent"
         >
           <option value="">{t('upload.noCategory')}</option>
           {filterCategories.map((category) => (
@@ -524,7 +524,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
           id="replace-by-name"
           checked={replaceByName}
           onChange={(e) => setReplaceByName(e.target.checked)}
-          className="rounded border-neutral-300 text-accent focus:ring-primary-500"
+          className="rounded border-neutral-300 text-accent focus:ring-accent"
         />
         <label htmlFor="replace-by-name" className="text-sm text-body">
           {t('upload.replaceByName', 'Replace existing photos with same name')}
@@ -563,7 +563,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
         <p
           className={clsx(
             "text-xs mt-2",
-            remainingSlots === 0 ? "text-red-600" : "text-muted"
+            remainingSlots === 0 ? "text-danger-text" : "text-muted"
           )}
         >
           {remainingSlots === 0

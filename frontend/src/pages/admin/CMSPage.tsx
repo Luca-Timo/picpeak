@@ -442,7 +442,7 @@ export const CMSPage: React.FC = () => {
                     {t('settings.publicSite.htmlLabel')}
                   </label>
                   <textarea
-                    className="w-full h-64 font-mono text-sm rounded-lg border border-line-strong bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark disabled:bg-inset disabled:text-neutral-500 dark:disabled:text-neutral-400"
+                    className="w-full h-64 font-mono text-sm rounded-lg border border-line-strong bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark disabled:bg-inset disabled:text-neutral-500 dark:disabled:text-neutral-400"
                     value={publicSiteHtml}
                     onChange={(event) => setPublicSiteHtml(event.target.value)}
                     disabled={!publicSiteEnabled}
@@ -459,7 +459,7 @@ export const CMSPage: React.FC = () => {
                     {t('settings.publicSite.cssLabel')}
                   </label>
                   <textarea
-                    className="w-full h-48 font-mono text-sm rounded-lg border border-line-strong bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark disabled:bg-inset disabled:text-neutral-500 dark:disabled:text-neutral-400"
+                    className="w-full h-48 font-mono text-sm rounded-lg border border-line-strong bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark disabled:bg-inset disabled:text-neutral-500 dark:disabled:text-neutral-400"
                     value={publicSiteCss}
                     onChange={(event) => setPublicSiteCss(event.target.value)}
                     disabled={!publicSiteEnabled}
@@ -586,7 +586,7 @@ export const CMSPage: React.FC = () => {
               <div className="text-sm">
                 {isAutoSaving && (
                   <div className="flex items-center gap-2 text-body">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
                     Auto-saving...
                   </div>
                 )}
@@ -597,7 +597,7 @@ export const CMSPage: React.FC = () => {
                   </div>
                 )}
                 {!hasUnsavedChanges && lastSaved && (
-                  <div className="flex items-center gap-2 text-green-600">
+                  <div className="flex items-center gap-2 text-success-text">
                     <Clock className="w-4 h-4" />
                     Saved {fmtTime(new Date(lastSaved))}
                   </div>
@@ -646,7 +646,7 @@ export const CMSPage: React.FC = () => {
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
-                    className="mt-1 h-4 w-4 rounded border-line-strong text-accent focus:ring-primary-500"
+                    className="mt-1 h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
                     checked={!!editForm.use_external_url}
                     onChange={(e) => handleUseExternalUrlChange(e.target.checked)}
                   />
@@ -683,7 +683,7 @@ export const CMSPage: React.FC = () => {
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
-                    className="mt-1 h-4 w-4 rounded border-line-strong text-accent focus:ring-primary-500"
+                    className="mt-1 h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
                     checked={editForm.show_in_footer !== false}
                     onChange={(e) => setEditForm(prev => ({ ...prev, show_in_footer: e.target.checked }))}
                   />

@@ -24,8 +24,8 @@ import { calendarDay } from '../../utils/calendarDay';
 const inputClass = 'h-9 w-full rounded-lg border border-line-strong bg-panel px-2 text-sm text-heading';
 
 const STATUS_STYLE: Record<AdminDocumentRequest['status'], string> = {
-  open: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  fulfilled: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  open: 'bg-warning-soft text-warning-text',
+  fulfilled: 'bg-success-soft text-success-text',
   cancelled: 'bg-subtle text-body',
 };
 

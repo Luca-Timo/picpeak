@@ -150,9 +150,9 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
           </div>
 
           {readOnly && (
-            <div className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
-              <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-              <p className="text-sm text-amber-700 dark:text-amber-300">
+            <div className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-warning-soft border border-warning-line">
+              <Lock className="w-4 h-4 text-warning-text mt-0.5 shrink-0" />
+              <p className="text-sm text-warning-text">
                 {t('roleEditor.superAdminLocked', 'Super Admin always holds every permission and cannot be edited. It automatically gains new permissions as features are added.')}
               </p>
             </div>
@@ -181,7 +181,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
                 placeholder="photographer"
                 disabled={isLoading || mode === 'edit'}
               />
-              {nameError && <p className="mt-1 text-sm text-red-600">{nameError}</p>}
+              {nameError && <p className="mt-1 text-sm text-danger-text">{nameError}</p>}
               {mode === 'edit' && (
                 <p className="mt-1 text-xs text-faint">
                   {t('roleEditor.keyLocked', 'The key is fixed once a role is created.')}

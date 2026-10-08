@@ -214,7 +214,7 @@ export const CustomerPicker: React.FC<CustomerPickerProps> = ({
                     </span>
                   )}
                   {hourLoggingOff && (
-                    <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                    <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-warning-soft text-warning-text">
                       {t('customers.hoursLoggingDisabled.badge', 'Hour logging disabled')}
                     </span>
                   )}
@@ -227,7 +227,7 @@ export const CustomerPicker: React.FC<CustomerPickerProps> = ({
       <button
         type="button"
         onClick={() => setCreating(true)}
-        className="mt-3 inline-flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+        className="mt-3 inline-flex items-center gap-1 text-sm text-accent hover:underline"
       >
         {t('customers.create.openLink', '+ Create new customer')}
       </button>

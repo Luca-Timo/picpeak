@@ -396,9 +396,9 @@ export const EventsListPage: React.FC = () => {
     if (!isAwaitingFullGallery(event) || event.is_archived) return null;
     const due = deliveryDue(event.delivery_due_at);
     const color = due?.tone === 'overdue'
-      ? 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40'
+      ? 'text-danger-text bg-danger-soft'
       : due?.tone === 'soon'
-        ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40'
+        ? 'text-warning-text bg-warning-soft'
         : 'text-body bg-inset';
     return (
       <span className={`mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${color}`}>
@@ -415,21 +415,21 @@ export const EventsListPage: React.FC = () => {
   const getEventStatus = (event: Event) => {
     if (event.is_draft) return { label: t('events.draft'), color: 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/40' };
     if (event.is_archived) return { label: t('events.archived'), color: 'text-muted bg-inset' };
-    if (!event.is_active) return { label: t('events.inactive'), color: 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40' };
+    if (!event.is_active) return { label: t('events.inactive'), color: 'text-danger-text bg-danger-soft' };
 
-    if (!event.expires_at) return { label: t('events.active'), color: 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40' };
+    if (!event.expires_at) return { label: t('events.active'), color: 'text-success-text bg-success-soft' };
 
     // Expired means the timestamp has actually passed (#909):
     // differenceInDays truncates to whole days, so an event expiring in a
     // few hours returned 0 and showed "Expired" while the public gallery
     // (which compares real timestamps) correctly showed it active.
     const expiresAt = parseISO(event.expires_at);
-    if (expiresAt.getTime() <= Date.now()) return { label: t('events.expired'), color: 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40' };
+    if (expiresAt.getTime() <= Date.now()) return { label: t('events.expired'), color: 'text-danger-text bg-danger-soft' };
     // Ceiling so the last day reads "1 day left", never "0 days".
     const days = Math.ceil((expiresAt.getTime() - Date.now()) / 86400000);
     if (days <= 7) return { label: t('events.daysLeft', { count: days }), color: 'text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/40' };
 
-    return { label: t('events.active'), color: 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40' };
+    return { label: t('events.active'), color: 'text-success-text bg-success-soft' };
   };
 
   if (isLoading) {
@@ -449,7 +449,7 @@ export const EventsListPage: React.FC = () => {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600">{t('events.failedToLoadEvents')}</p>
+        <p className="text-danger-text">{t('events.failedToLoadEvents')}</p>
         <Button onClick={() => window.location.reload()} className="mt-4">
           {t('events.tryAgain')}
         </Button>
@@ -498,7 +498,7 @@ export const EventsListPage: React.FC = () => {
                 {dashboardStats?.activeEvents ?? 0}
               </p>
             </div>
-            <Activity className="w-8 h-8 text-green-600" />
+            <Activity className="w-8 h-8 text-success-text" />
           </div>
         </Card>
 
@@ -515,7 +515,7 @@ export const EventsListPage: React.FC = () => {
                 <p className="text-xs text-muted">{mediaSplitLabel(t, installMedia)}</p>
               )}
             </div>
-            <Image className="w-8 h-8 text-blue-600" />
+            <Image className="w-8 h-8 text-info-text" />
           </div>
         </Card>
 
@@ -620,7 +620,7 @@ export const EventsListPage: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => bulkDeleteModal.open()}
-                  className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
+                  className="border-danger-line text-danger-text hover:bg-danger-soft"
                 >
                   {t('events.deleteSelected', 'Delete Selected')}
                 </Button>
@@ -641,7 +641,7 @@ export const EventsListPage: React.FC = () => {
                     type="checkbox"
                     checked={selectedEvents.length === events.length && events.length > 0}
                     onChange={handleSelectAll}
-                    className="w-4 h-4 text-accent border-line-strong rounded focus:ring-primary-500 dark:bg-neutral-700"
+                    className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent dark:bg-neutral-700"
                   />
                 </th>
                 <ColumnMenuHeader
@@ -725,7 +725,7 @@ export const EventsListPage: React.FC = () => {
                           type="checkbox"
                           checked={selectedEvents.includes(event.id)}
                           onChange={() => handleSelectEvent(event.id)}
-                          className="w-4 h-4 text-accent border-line-strong rounded focus:ring-primary-500 dark:bg-neutral-700"
+                          className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent dark:bg-neutral-700"
                         />
                       </td>
                       <td className="px-6 py-4">
@@ -736,7 +736,7 @@ export const EventsListPage: React.FC = () => {
                             <span
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
                                 isGalleryPublic(event.require_password)
-                                  ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                                  ? 'bg-success-soft text-success-text'
                                   : 'bg-inset text-body'
                               }`}
                             >
@@ -798,7 +798,7 @@ export const EventsListPage: React.FC = () => {
                                 title={t('events.copyLink', 'Copy Link')}
                               >
                                 {copiedEventId === event.id ? (
-                                  <CheckCircle className="w-4 h-4 text-green-600" />
+                                  <CheckCircle className="w-4 h-4 text-success-text" />
                                 ) : (
                                   <Copy className="w-4 h-4" />
                                 )}
@@ -913,7 +913,7 @@ export const EventsListPage: React.FC = () => {
                                           setDropdownPosition(null);
                                         }
                                       }}
-                                      className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
+                                      className="w-full text-left px-4 py-2 text-sm text-danger-text hover:bg-danger-soft flex items-center gap-2"
                                     >
                                       <Trash2 className="w-4 h-4" />
                                       {t('events.deleteEvent')}

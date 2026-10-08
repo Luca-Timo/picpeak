@@ -196,10 +196,10 @@ export const PasswordChangeModal: React.FC<PasswordChangeModalProps> = ({ isOpen
             </div>
 
             {/* Password Requirements */}
-            <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+            <div className="bg-info-soft border border-info-line rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-800 dark:text-blue-200">
+                <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-info-text">
                   <p className="font-medium">{t('passwordChange.requirements')}</p>
                   <ul className="list-disc list-inside mt-1 space-y-1">
                     <li>{t('passwordChange.minLength')}</li>

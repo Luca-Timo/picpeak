@@ -260,8 +260,8 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
   // final counts once a scan has ended with failures it can explain.
   const sidecarNotice = sidecarWarning && health ? (
     <div className={`flex items-start gap-2 ${BURNS_PHOTOS.has(sidecarWarning)
-      ? 'text-red-700 dark:text-red-300'
-      : 'text-amber-700 dark:text-amber-300'}`}>
+      ? 'text-danger-text'
+      : 'text-warning-text'}`}>
       <AlertTriangle size={14} className="mt-0.5 shrink-0" />
       <p>
         {sidecarWarning === 'unauthorized' && t('admin.faces.sidecarUnauthorized', {
@@ -279,8 +279,8 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
         })}
         {health.error && (
           <span className={`block mt-1 text-xs font-mono ${BURNS_PHOTOS.has(sidecarWarning)
-            ? 'text-red-600 dark:text-red-400'
-            : 'text-amber-600 dark:text-amber-400'}`}>
+            ? 'text-danger-text'
+            : 'text-warning-text'}`}>
             {health.error}
           </span>
         )}
@@ -306,7 +306,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
 
       {/* Consent obligation. Stated plainly and up front, because by the time
           someone has switched this on they have already processed the data. */}
-      <div className="flex gap-2 p-3 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800 text-sm text-amber-900 dark:text-amber-200">
+      <div className="flex gap-2 p-3 mb-4 rounded-lg bg-warning-soft border border-warning-line text-sm text-warning-text">
         <ShieldCheck size={16} className="flex-shrink-0 mt-0.5" />
         <p>
           {t('admin.faces.consentNotice', {
@@ -336,7 +336,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
           checked={data.enabled}
           disabled={saving || isArchived}
           onChange={(e) => patch({ enabled: e.target.checked })}
-          className="mt-1 rounded border-line-strong bg-inset text-primary-600 focus:ring-primary-500"
+          className="mt-1 rounded border-line-strong bg-inset text-accent focus:ring-accent"
         />
         <span>
           <span className="block text-sm font-medium text-body">
@@ -357,7 +357,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
             checked={data.visible_to_guests}
             disabled={saving || isArchived}
             onChange={(e) => patch({ visible_to_guests: e.target.checked })}
-            className="mt-1 rounded border-line-strong bg-inset text-primary-600 focus:ring-primary-500"
+            className="mt-1 rounded border-line-strong bg-inset text-accent focus:ring-accent"
           />
           <span>
             <span className="block text-sm font-medium text-body">
@@ -409,7 +409,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
                 setSaving(false);
               }
             }}
-            className="mt-1 rounded border-line-strong bg-inset text-primary-600 focus:ring-primary-500"
+            className="mt-1 rounded border-line-strong bg-inset text-accent focus:ring-accent"
           />
           <span>
             <span className="block text-sm font-medium text-body">
@@ -435,7 +435,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
               sidecarNotice
             ) : status.in_progress ? (
               <p className="flex items-center gap-2">
-                <RefreshCw size={14} className="animate-spin text-primary-500" />
+                <RefreshCw size={14} className="animate-spin text-accent" />
                 {t('admin.faces.scanning', {
                   scanned: status.scanned,
                   total: status.total,
@@ -464,7 +464,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
                   </span>
                 )}
                 {status.failed > 0 && (
-                  <span className="text-amber-600 dark:text-amber-400">
+                  <span className="text-warning-text">
                     {' · '}
                     {t('admin.faces.failed', {
                       count: status.failed,
@@ -554,7 +554,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
               disabled={saving}
               onClick={purge}
               leftIcon={<Trash2 size={14} />}
-              className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/30"
+              className="text-danger-text border-danger-line hover:bg-danger-soft"
             >
               {t('admin.faces.delete', { defaultValue: 'Delete all face data' })}
             </Button>

@@ -43,7 +43,7 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
       <Card className="w-full max-w-md">
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-red-700 dark:text-red-400">
+            <h2 className="text-xl font-semibold text-danger-text">
               {t('events.bulkDelete.title', 'Permanently delete {{count}} events?', { count })}
             </h2>
             <button
@@ -58,16 +58,16 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
 
           {isLoading ? (
             <div className="py-8 text-center">
-              <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-red-600 dark:text-red-400" />
+              <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-danger-text" />
               <p className="text-sm text-body">
                 {t('events.bulkDelete.processing', 'Deleting {{count}} events. This may take a few minutes — please don\'t close this window.', { count })}
               </p>
             </div>
           ) : (
             <>
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-800 dark:text-red-200">
+              <div className="mb-4 p-3 bg-danger-soft border border-danger-line rounded-lg flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-danger-text flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-danger-text">
                   {t('events.bulkDelete.warning', 'This will permanently delete the selected events, all their photos, archives, and audit logs. This action cannot be undone.')}
                 </p>
               </div>
@@ -116,7 +116,7 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({
                   onClick={handleSubmit}
                   disabled={!confirmed || isLoading}
                   leftIcon={<Trash2 className="w-4 h-4" />}
-                  className="bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white"
+                  className="bg-danger hover:opacity-90 focus:ring-accent text-white"
                 >
                   {t('events.bulkDelete.submit', 'Delete {{count}} events', { count })}
                 </Button>

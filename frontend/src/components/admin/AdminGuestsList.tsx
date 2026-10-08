@@ -184,7 +184,7 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
                 {t('admin.guests.mergeSelected', '{{count}} selected', { count: mergeSelection.length })}
               </span>
               {keepId === null && (
-                <span className="text-sm text-amber-700 dark:text-amber-300">
+                <span className="text-sm text-warning-text">
                   {t('admin.guests.mergePickKeepHint', 'Pick the entry to keep')}
                 </span>
               )}
@@ -253,8 +253,8 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
           decides which name and verification state the merged guest keeps, and
           that is the admin's call, not a default. */}
       {duplicateGroups.length > 0 && !mergeMode && (
-        <div className="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 flex items-center justify-between gap-4">
-          <p className="text-sm text-amber-800 dark:text-amber-200">
+        <div className="mb-4 rounded-lg border border-warning-line bg-warning-soft px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-warning-text">
             {t('admin.guests.duplicatesFound', {
               guests: duplicateCount,
               groups: duplicateGroups.length,
@@ -334,7 +334,7 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
                           aria-label={t('admin.guests.mergeInclude', 'Include {{name}} in the merge', { name: guest.name })}
                           checked={mergeSelection.includes(guest.id)}
                           onChange={() => toggleMergeSelection(guest.id)}
-                          className="w-4 h-4 text-accent rounded focus:ring-primary-500"
+                          className="w-4 h-4 text-accent rounded focus:ring-accent"
                         />
                       </td>
                     )}
@@ -349,21 +349,21 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
                           checked={keepId === guest.id}
                           disabled={!mergeSelection.includes(guest.id)}
                           onChange={() => setKeepId(guest.id)}
-                          className="w-4 h-4 text-accent focus:ring-primary-500 disabled:opacity-40"
+                          className="w-4 h-4 text-accent focus:ring-accent disabled:opacity-40"
                         />
                       </td>
                     )}
                     <td className="px-4 py-3 font-medium text-heading">
                       {guest.name}
                       {guest.email_verified_at && (
-                        <span className="ml-2 text-xs text-green-600">✓</span>
+                        <span className="ml-2 text-xs text-success-text">✓</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-soft">
                       {guest.email || '—'}
                       {guest.duplicate_group && (
                         <span
-                          className="ml-2 inline-block rounded px-1.5 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200"
+                          className="ml-2 inline-block rounded px-1.5 py-0.5 text-xs bg-warning-soft text-warning-text"
                           title={t('admin.guests.duplicateHint', 'Another entry on this gallery uses the same email — likely the same person registered twice.')}
                         >
                           {t('admin.guests.duplicateBadge', 'duplicate?')}
@@ -424,7 +424,7 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
                         <button
                           type="button"
                           onClick={() => handleDelete(guest)}
-                          className="p-1 text-neutral-500 hover:text-red-600"
+                          className="p-1 text-neutral-500 hover:text-danger-text"
                           title={t('admin.guests.forgetGuest', 'Remove guest')}
                         >
                           <Trash2 className="w-4 h-4" />

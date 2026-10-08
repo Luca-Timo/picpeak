@@ -276,7 +276,7 @@ export const ShareLinkCard: React.FC<ShareLinkCardProps> = ({ event, setShowPass
                           className="p-1 text-neutral-500 hover:text-heading"
                           aria-label={`${t('events.copy')} ${label}`}
                         >
-                          {copiedSecret === key ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                          {copiedSecret === key ? <CheckCircle className="w-4 h-4 text-success-text" /> : <Copy className="w-4 h-4" />}
                         </button>
                       </div>
                     ))

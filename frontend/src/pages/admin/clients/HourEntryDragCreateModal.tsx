@@ -301,7 +301,7 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
                 With this, the Save button is disabled and the reason
                 is visible. */}
             {customerId && !customerHoursAllowed && (
-              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+              <p className="mt-2 text-xs text-warning-text">
                 {t('calendar.hourEntry.customerLoggingDisabled',
                   "This customer has hour logging disabled. Enable it on the customer's detail page to log hours.")}
               </p>

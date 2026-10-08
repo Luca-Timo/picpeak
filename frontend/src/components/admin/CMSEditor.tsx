@@ -486,7 +486,7 @@ export const CMSEditor: React.FC<CMSEditorProps> = ({ content, onChange, onSave,
                 onChange={(e) => setLinkUrl(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addLink()}
                 placeholder={t('cms.editor.linkUrlPlaceholder', 'Enter URL...')}
-                className="flex-1 px-3 py-1 border border-accent-dark/30 bg-shell text-heading rounded-md focus:ring-2 focus:ring-primary-500"
+                className="flex-1 px-3 py-1 border border-accent-dark/30 bg-shell text-heading rounded-md focus:ring-2 focus:ring-accent"
                 autoFocus
               />
               <Button size="sm" onClick={addLink}>{t('cms.editor.addLink', 'Add Link')}</Button>

@@ -199,7 +199,7 @@ export const AnalyticsPage: React.FC = () => {
     const isPositive = trend > 0;
     return (
       <span className={`inline-flex items-center text-xs font-medium ${
-        isPositive ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
+        isPositive ? 'text-success-text' : 'text-danger-text'
       }`}>
         <TrendingUp className={`w-3 h-3 mr-1 ${!isPositive ? 'rotate-180' : ''}`} />
         {Math.abs(trend)}%
@@ -296,7 +296,7 @@ export const AnalyticsPage: React.FC = () => {
           <select
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value as any)}
-            className="px-4 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-primary-500"
+            className="px-4 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent"
           >
             <option value="7d">{t('analytics.last7Days')}</option>
             <option value="30d">{t('analytics.last30Days')}</option>
@@ -316,11 +316,11 @@ export const AnalyticsPage: React.FC = () => {
                 {renderTrendBadge(analytics?.pageViews.trend || 0)}
               </div>
             </div>
-            <Eye className="w-8 h-8 text-blue-600" />
+            <Eye className="w-8 h-8 text-info-text" />
           </div>
           {analytics?.pageViews.chartData && renderMiniChart(
             analytics.pageViews.chartData.map(d => ({ date: d.date, value: d.views })),
-            'bg-blue-500'
+            'bg-info'
           )}
         </Card>
 
@@ -333,11 +333,11 @@ export const AnalyticsPage: React.FC = () => {
                 {renderTrendBadge(analytics?.uniqueVisitors.trend || 0)}
               </div>
             </div>
-            <Users className="w-8 h-8 text-green-600" />
+            <Users className="w-8 h-8 text-success-text" />
           </div>
           {analytics?.uniqueVisitors.chartData && renderMiniChart(
             analytics.uniqueVisitors.chartData.map(d => ({ date: d.date, value: d.visitors })),
-            'bg-green-500'
+            'bg-success'
           )}
         </Card>
 
@@ -480,9 +480,9 @@ export const AnalyticsPage: React.FC = () => {
                 ? adminService.formatBytes(storageInfo.recommended_soft_limit)
                 : t('settings.storage.unlimited');
             const progressColor = overSoftLimit
-              ? 'bg-red-600'
+              ? 'bg-danger'
               : (usagePercent != null && usagePercent >= 90)
-                ? 'bg-amber-500'
+                ? 'bg-warning'
                 : 'bg-accent-dark';
             const limitDescriptor = storageInfo
               ? storageInfo.soft_limit_configured
@@ -514,7 +514,7 @@ export const AnalyticsPage: React.FC = () => {
                         ? t('analytics.storageNoMeasurement', 'no measurement available')
                         : `${usagePercent}% ${t('analytics.of')} ${limitDisplay}`}
                     </p>
-                    <p className={`text-xs mt-1 ${overSoftLimit ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-red-500 dark:text-red-400 font-medium'}`}>
+                    <p className={`text-xs mt-1 ${overSoftLimit ? 'text-danger-text font-semibold' : 'text-danger font-medium'}`}>
                       {limitDescriptor}
                     </p>
                   </div>
@@ -545,12 +545,12 @@ export const AnalyticsPage: React.FC = () => {
 
       {/* Configuration Notice */}
       {umamiConfig.enabled === false && (
-        <Card padding="md" className="mt-6 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
+        <Card padding="md" className="mt-6 bg-warning-soft border-warning-line">
           <div className="flex items-start gap-3">
-            <Activity className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <Activity className="w-5 h-5 text-warning-text flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{t('analytics.notConfigured')}</p>
-              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+              <p className="text-sm font-medium text-warning-text">{t('analytics.notConfigured')}</p>
+              <p className="text-sm text-warning-text mt-1">
                 {t('analytics.configureInstructions')}
               </p>
             </div>

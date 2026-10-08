@@ -294,14 +294,14 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
               </p>
             </>
           ) : noRateConfigured ? (
-            <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm">
-              <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200">
+            <div className="rounded-md border border-warning-line bg-warning-soft p-3 text-sm">
+              <div className="flex items-start gap-2 text-warning-text">
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                 <div>
                   <p className="font-medium">
                     {t('customers.hours.noRate.title', 'No hourly rate configured')}
                   </p>
-                  <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+                  <p className="mt-0.5 text-warning-text">
                     {t('customers.hours.noRate.body',
                       'Logging needs a rate. Set one for this customer, type a per-entry override below, or configure an install-wide default.')}
                   </p>
@@ -413,7 +413,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
         />
         <div className="mt-3 flex items-center justify-end gap-3">
           {noRateConfigured && !overrideTyped && (
-            <span className="text-xs text-amber-700 dark:text-amber-300">
+            <span className="text-xs text-warning-text">
               {t('customers.hours.form.needRate', 'Set a rate or enter an override to log time.')}
             </span>
           )}
@@ -433,7 +433,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           visible in compact mode so the customer-detail page can
           still trigger the on-demand billing action. */}
       {!isMonthly && unbilledCount > 0 && canBill && (
-        <div className="mb-4 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded p-3">
+        <div className="mb-4 flex items-center justify-between bg-info-soft rounded p-3">
           <span className="text-sm">
             {t('customers.hours.unbilledCount',
               '{{count}} unbilled entries totaling {{total}}',
@@ -507,21 +507,21 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
                           // is one click from its (possibly draft) invoice.
                           <Link
                             to={`/admin/clients/bills/${e.invoiceId}`}
-                            className="text-xs text-green-700 dark:text-green-300 underline hover:no-underline"
+                            className="text-xs text-success-text underline hover:no-underline"
                           >
                             {e.invoiceNumber
                               ? t('customers.hours.status.billedOn', 'Billed: {{number}}', { number: e.invoiceNumber })
                               : t('customers.hours.status.billed', 'Billed')}
                           </Link>
                         ) : (
-                          <span className="text-xs text-green-700 dark:text-green-300">
+                          <span className="text-xs text-success-text">
                             {e.invoiceNumber
                               ? t('customers.hours.status.billedOn', 'Billed: {{number}}', { number: e.invoiceNumber })
                               : t('customers.hours.status.billed', 'Billed')}
                           </span>
                         )
                       ) : (
-                        <span className="text-xs text-amber-700 dark:text-amber-300">
+                        <span className="text-xs text-warning-text">
                           {t('customers.hours.status.unbilled', 'Unbilled')}
                         </span>
                       )}
@@ -536,7 +536,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
                             deleteMutation.mutate(e.id);
                           }
                         }}
-                        className="text-xs text-red-600 hover:underline disabled:text-neutral-400 disabled:cursor-not-allowed"
+                        className="text-xs text-danger-text hover:underline disabled:text-neutral-400 disabled:cursor-not-allowed"
                         title={locked ? t('customers.hours.locked',
                           'Locked: invoice already armed for send') as string : undefined}
                       >

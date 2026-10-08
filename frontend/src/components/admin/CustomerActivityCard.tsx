@@ -54,7 +54,7 @@ export const CustomerActivityCard: React.FC<{ customerId: number }> = ({ custome
         {t('customers.activity.hint', 'What happened on this customer\'s account and documents, newest first.')}
       </p>
       {isLoading ? <Loading /> : isError ? (
-        <p className="text-sm text-red-600 dark:text-red-400">
+        <p className="text-sm text-danger-text">
           {t('customers.activity.loadError', 'Could not load the activity.')}
         </p>
       ) : entries.length === 0 ? (

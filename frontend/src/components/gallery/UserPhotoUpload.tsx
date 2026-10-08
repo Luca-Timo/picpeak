@@ -512,7 +512,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
                   </div>
                 )}
                 {identity && nameError && (
-                  <p className="mt-2 text-xs text-red-600">{nameError}</p>
+                  <p className="mt-2 text-xs text-danger-text">{nameError}</p>
                 )}
                 <p className="mt-2 text-xs text-muted-theme">
                   {creditsVisible ? t('upload.namePrivacyShown') : t('upload.namePrivacyHidden')}
@@ -606,9 +606,9 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
                           // resolved yet because the backend is still
                           // generating thumbnails / reading EXIF. Show
                           // a spinner so it doesn't look stuck at 100%.
-                          <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+                          <Loader2 className="w-5 h-5 text-warning-text animate-spin" />
                         ) : uploadProgress[file.name] === 100 ? (
-                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <CheckCircle className="w-5 h-5 text-success-text" />
                         ) : (
                           <div className="w-20">
                             <div className="bg-neutral-200 rounded-full h-2">

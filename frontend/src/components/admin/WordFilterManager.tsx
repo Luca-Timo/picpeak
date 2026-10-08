@@ -131,13 +131,13 @@ export const WordFilterManager: React.FC = () => {
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
       case 'low':
-        return <Shield className="w-4 h-4 text-blue-500" />;
+        return <Shield className="w-4 h-4 text-info" />;
       case 'moderate':
         return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
       case 'high':
         return <XCircle className="w-4 h-4 text-orange-500" />;
       case 'block':
-        return <XCircle className="w-4 h-4 text-red-600" />;
+        return <XCircle className="w-4 h-4 text-danger-text" />;
       default:
         return <Shield className="w-4 h-4 text-gray-500" />;
     }
@@ -146,13 +146,13 @@ export const WordFilterManager: React.FC = () => {
   const getSeverityBadgeClass = (severity: string) => {
     switch (severity) {
       case 'low':
-        return 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300';
+        return 'bg-info-soft text-info-text';
       case 'moderate':
         return 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300';
       case 'high':
         return 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300';
       case 'block':
-        return 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300';
+        return 'bg-danger-soft text-danger-text';
       default:
         return 'bg-inset text-heading';
     }
@@ -203,7 +203,7 @@ export const WordFilterManager: React.FC = () => {
               <select
                 value={newSeverity}
                 onChange={(e) => setNewSeverity(e.target.value as any)}
-                className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 <option value="low">{t('settings.moderation.severityLow', 'Low')}</option>
                 <option value="moderate">{t('settings.moderation.severityModerate', 'Moderate')}</option>
@@ -261,7 +261,7 @@ export const WordFilterManager: React.FC = () => {
                         <select
                           value={editSeverity}
                           onChange={(e) => setEditSeverity(e.target.value as any)}
-                          className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-accent"
                         >
                           <option value="low">{t('settings.moderation.severityLow', 'Low')}</option>
                           <option value="moderate">{t('settings.moderation.severityModerate', 'Moderate')}</option>
@@ -296,7 +296,7 @@ export const WordFilterManager: React.FC = () => {
                           type="checkbox"
                           checked={filter.is_active}
                           onChange={() => handleToggleActive(filter)}
-                          className="w-4 h-4 text-accent rounded focus:ring-primary-500"
+                          className="w-4 h-4 text-accent rounded focus:ring-accent"
                         />
                         <span className="font-medium text-heading">{filter.word}</span>
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSeverityBadgeClass(filter.severity)}`}>
@@ -319,7 +319,7 @@ export const WordFilterManager: React.FC = () => {
                           leftIcon={<Trash2 className="w-4 h-4" />}
                           onClick={() => handleDelete(filter.id)}
                           isLoading={deleteMutation.isPending}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="text-danger-text hover:bg-danger-soft"
                         >
                           {t('common.delete', 'Delete')}
                         </Button>

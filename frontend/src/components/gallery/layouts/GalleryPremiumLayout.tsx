@@ -180,7 +180,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
         <div className="gallery-premium-feedback">
           {(likeCount > 0 || isLiked) && (
             <span className="gallery-premium-feedback-indicator" title="Liked">
-              <Heart className="w-3.5 h-3.5 text-red-500" fill="currentColor" />
+              <Heart className="w-3.5 h-3.5 text-danger" fill="currentColor" />
             </span>
           )}
           {averageRating > 0 && (
@@ -190,7 +190,7 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
           )}
           {commentCount > 0 && (
             <span className="gallery-premium-feedback-indicator" title="Commented">
-              <MessageSquare className="w-3.5 h-3.5 text-blue-500" fill="currentColor" />
+              <MessageSquare className="w-3.5 h-3.5 text-info" fill="currentColor" />
             </span>
           )}
         </div>

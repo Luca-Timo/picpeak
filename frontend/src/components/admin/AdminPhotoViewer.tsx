@@ -351,7 +351,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
             <button
               onClick={handleDelete}
               disabled={isDeleting}
-              className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-lg flex items-center justify-center gap-2"
+              className="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-danger hover:opacity-90 disabled:bg-danger rounded-lg flex items-center justify-center gap-2"
             >
               <Trash2 className="w-4 h-4" />
               Delete
@@ -437,7 +437,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                   maxLength={100}
                   autoFocus
                   aria-label={t('admin.photos.credit.label')}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-neutral-800 border border-neutral-700 text-white focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-neutral-800 border border-neutral-700 text-white focus:ring-2 focus:ring-accent"
                 />
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" size="sm" type="button" onClick={() => setEditingCredit(false)} disabled={savingCredit}>
@@ -592,7 +592,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                 
                 {likeCount > 0 && (
                   <div className="bg-neutral-800 rounded-lg p-3">
-                    <div className="flex items-center gap-1 text-red-400 mb-1">
+                    <div className="flex items-center gap-1 text-danger mb-1">
                       <Heart className="w-4 h-4" fill="currentColor" />
                       <span className="text-white font-medium">{likeCount}</span>
                     </div>
@@ -602,7 +602,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                 
                 {favoriteCount > 0 && (
                   <div className="bg-neutral-800 rounded-lg p-3">
-                    <div className="flex items-center gap-1 text-blue-400 mb-1">
+                    <div className="flex items-center gap-1 text-info mb-1">
                       <Star className="w-4 h-4" />
                       <span className="text-white font-medium">{favoriteCount}</span>
                     </div>
@@ -612,7 +612,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                 
                 {comments.length > 0 && (
                   <div className="bg-neutral-800 rounded-lg p-3">
-                    <div className="flex items-center gap-1 text-green-400 mb-1">
+                    <div className="flex items-center gap-1 text-success mb-1">
                       <MessageSquare className="w-4 h-4" />
                       <span className="text-white font-medium">{comments.length}</span>
                     </div>
@@ -654,13 +654,13 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                                   </span>
                                 )}
                                 {comment.is_approved && !comment.is_hidden && (
-                                  <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded flex items-center gap-1">
+                                  <span className="text-xs bg-success-soft text-success px-2 py-1 rounded flex items-center gap-1">
                                     <CheckCircle className="w-3 h-3" />
                                     Approved
                                   </span>
                                 )}
                                 {comment.is_hidden && (
-                                  <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded flex items-center gap-1">
+                                  <span className="text-xs bg-danger-soft text-danger px-2 py-1 rounded flex items-center gap-1">
                                     <XCircle className="w-3 h-3" />
                                     Hidden
                                   </span>
@@ -681,7 +681,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                                     action: 'approve' 
                                   })}
                                   disabled={moderateFeedbackMutation.isPending}
-                                  className="text-xs px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded"
+                                  className="text-xs px-2 py-1 bg-success hover:opacity-90 text-white rounded"
                                 >
                                   Approve
                                 </button>
@@ -707,7 +707,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                                     action: 'approve' 
                                   })}
                                   disabled={moderateFeedbackMutation.isPending}
-                                  className="text-xs px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded"
+                                  className="text-xs px-2 py-1 bg-success hover:opacity-90 text-white rounded"
                                 >
                                   Unhide
                                 </button>
@@ -720,7 +720,7 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                                   }
                                 }}
                                 disabled={deleteFeedbackMutation.isPending}
-                                className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded"
+                                className="text-xs px-2 py-1 bg-danger hover:opacity-90 text-white rounded"
                               >
                                 Delete
                               </button>
@@ -742,9 +742,9 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                     <div key={item.id} className="bg-neutral-800 rounded-lg p-3">
                       <div className="flex items-center gap-2">
                         {item.decision === 'approved' ? (
-                          <ThumbsUp className="w-4 h-4 text-green-400" aria-label={t('feedback.decisions.approved', 'Approved')} />
+                          <ThumbsUp className="w-4 h-4 text-success" aria-label={t('feedback.decisions.approved', 'Approved')} />
                         ) : (
-                          <ThumbsDown className="w-4 h-4 text-red-400" aria-label={t('feedback.decisions.rejected', 'Rejected')} />
+                          <ThumbsDown className="w-4 h-4 text-danger" aria-label={t('feedback.decisions.rejected', 'Rejected')} />
                         )}
                         <span className="text-sm font-medium text-white">
                           {item.guest_name || t('feedback.anonymous', 'Anonymous')}

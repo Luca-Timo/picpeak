@@ -132,7 +132,7 @@ export const WorkflowsListPage: React.FC = () => {
                   type="button"
                   onClick={() => toggle(w)}
                   className={`text-xs px-2 py-1 rounded-full border ${isEnabled(w)
-                    ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700'
+                    ? 'bg-success-soft text-success-text border-success-line'
                     : 'bg-subtle text-muted border-line-strong'}`}
                 >
                   {isEnabled(w) ? t('workflows.enabled', 'Enabled') : t('workflows.disabled', 'Disabled')}
@@ -150,7 +150,7 @@ export const WorkflowsListPage: React.FC = () => {
                     onClick={() => { if (window.confirm(t('workflows.confirmDelete', 'Delete this workflow?') as string)) deleteMutation.mutate(w.id); }}
                     aria-label={t('common.delete', 'Delete') as string}
                   >
-                    <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    <Trash2 className="w-4 h-4 text-danger-text" />
                   </Button>
                 )}
               </li>
@@ -189,7 +189,7 @@ export const WorkflowsListPage: React.FC = () => {
                       <span className="font-mono text-body">{s.node_type}:{s.node_key}</span>
                       <span className="text-muted">{s.status}</span>
                       {s.result && (s.result as any).would ? <span className="text-purple-600 dark:text-purple-400">→ would {String((s.result as any).would)}</span> : null}
-                      {s.error ? <span className="text-red-600 dark:text-red-400">{s.error}</span> : null}
+                      {s.error ? <span className="text-danger-text">{s.error}</span> : null}
                     </li>
                   ))}
                 </ol>

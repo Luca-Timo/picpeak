@@ -529,11 +529,11 @@ export const NewsletterComposerPage: React.FC = () => {
             {(resolution?.recipientCount ?? 0) >= LARGE_SEND_THRESHOLD && (
               <div
                 data-testid="large-send-warning"
-                className="rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 p-3"
+                className="rounded-md border border-warning-line bg-warning-soft p-3"
               >
                 <div className="flex gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                  <AlertTriangle className="w-4 h-4 text-warning-text shrink-0 mt-0.5" />
+                  <div className="text-xs text-warning-text space-y-1">
                     <p className="font-medium">
                       {t('newsletters.largeSend.title',
                         'Large send — check your sending reputation first')}

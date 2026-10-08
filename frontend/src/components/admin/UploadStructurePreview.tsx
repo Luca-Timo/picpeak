@@ -25,9 +25,9 @@ interface UploadStructurePreviewProps {
 const pillClass: Record<FolderNodeStatus, string> = {
   exists: 'bg-fill text-muted',
   created: 'bg-fill text-muted',
-  new: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  needs_admin: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  requested: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  new: 'bg-success-soft text-success-text',
+  needs_admin: 'bg-warning-soft text-warning-text',
+  requested: 'bg-warning-soft text-warning-text',
 };
 
 /**
@@ -93,7 +93,7 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
           role="switch"
           checked={keepStructure}
           onChange={(e) => onKeepStructureChange(e.target.checked)}
-          className="mt-0.5 rounded border-line-strong text-accent focus:ring-primary-500"
+          className="mt-0.5 rounded border-line-strong text-accent focus:ring-accent"
         />
         <span>
           <span className="block text-sm font-medium text-heading">{t('upload.structure.keepStructure', 'Keep folder structure')}</span>
@@ -109,7 +109,7 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
             type="checkbox"
             checked={skipOuter}
             onChange={(e) => onSkipOuterChange(e.target.checked)}
-            className="mt-0.5 rounded border-line-strong text-accent focus:ring-primary-500"
+            className="mt-0.5 rounded border-line-strong text-accent focus:ring-accent"
           />
           <span>
             <span className="block text-sm font-medium text-heading">
@@ -124,7 +124,7 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
 
       <div className="rounded-lg border border-line bg-subtle p-2">
         {isError ? (
-          <p className="px-2 py-1 text-sm text-red-600 dark:text-red-400" role="alert">
+          <p className="px-2 py-1 text-sm text-danger-text" role="alert">
             {t('upload.structure.previewFailed', 'The folder preview could not be loaded. The upload resolves the folders again when it starts.')}
           </p>
         ) : !preview ? (
@@ -141,13 +141,13 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
               </li>
             )}
             {preview.firstLook && (
-              <li className="flex items-center gap-2 py-1 px-2 rounded bg-amber-50 dark:bg-amber-900/20 text-sm">
-                <Zap className="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-                <span className="font-medium text-amber-800 dark:text-amber-300 truncate">{preview.firstLook.name}</span>
-                <span className="text-xs text-amber-700 dark:text-amber-400 truncate">
+              <li className="flex items-center gap-2 py-1 px-2 rounded bg-warning-soft text-sm">
+                <Zap className="w-4 h-4 flex-shrink-0 text-warning-text" />
+                <span className="font-medium text-warning-text truncate">{preview.firstLook.name}</span>
+                <span className="text-xs text-warning-text truncate">
                   {t('upload.structure.firstLookRow', '→ gallery root, badged "First look"')}
                 </span>
-                <span className="ml-auto pr-1 text-xs tabular-nums text-amber-800 dark:text-amber-300">{preview.firstLook.count}</span>
+                <span className="ml-auto pr-1 text-xs tabular-nums text-warning-text">{preview.firstLook.count}</span>
               </li>
             )}
             {preview.tree.map((node) => renderNode(node, 0))}
@@ -193,9 +193,9 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
       )}
 
       {preview?.firstLook && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm" role="note">
-          <Zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-          <div className="text-amber-900 dark:text-amber-200">
+        <div className="flex items-start gap-3 rounded-lg border border-warning-line bg-warning-soft p-3 text-sm" role="note">
+          <Zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-warning-text" />
+          <div className="text-warning-text">
             <p>
               {t(
                 'upload.structure.firstLookCallout',
@@ -203,7 +203,7 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
                 { name: preview.firstLook.name, count: preview.firstLook.count }
               )}
             </p>
-            <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-300/80">
+            <p className="mt-1 text-xs text-warning-text">
               {t('upload.structure.firstLookSettings', 'Due date and badge: this gallery’s Settings → Folders & delivery. Keywords: Settings → Events.')}
             </p>
           </div>

@@ -11,12 +11,12 @@ import { RoleEditorModal, type RoleEditorSave } from './RoleEditorModal';
 const getRoleBadgeColor = (roleName: string): string => {
   switch (roleName?.toLowerCase()) {
     case 'super_admin':
-      return 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
+      return 'bg-danger-soft text-danger-text border-danger-line';
     case 'admin':
     case 'solo_photographer':
-      return 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+      return 'bg-info-soft text-info-text border-info-line';
     case 'editor':
-      return 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
+      return 'bg-success-soft text-success-text border-success-line';
     default:
       return 'bg-inset text-body border-line';
   }
@@ -162,7 +162,7 @@ export const RoleManagementTab: React.FC = () => {
                     size="sm"
                     leftIcon={<Trash2 className="w-3.5 h-3.5" />}
                     onClick={() => setDeleteTarget(role)}
-                    className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                    className="text-danger-text hover:bg-danger-soft"
                   >
                     {t('common.delete', 'Delete')}
                   </Button>
@@ -190,8 +190,8 @@ export const RoleManagementTab: React.FC = () => {
           <Card className="w-full max-w-md">
             <div className="p-6">
               <div className="flex items-start gap-3 mb-4">
-                <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/40">
-                  <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                <div className="p-2 rounded-full bg-danger-soft">
+                  <AlertTriangle className="w-5 h-5 text-danger-text" />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-heading">
@@ -213,7 +213,7 @@ export const RoleManagementTab: React.FC = () => {
                   onClick={() => deleteMutation.mutate(deleteTarget.id)}
                   isLoading={deleteMutation.isPending}
                   disabled={deleteTarget.userCount > 0}
-                  className="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+                  className="bg-danger hover:opacity-90 focus:ring-accent"
                 >
                   {t('common.delete', 'Delete')}
                 </Button>

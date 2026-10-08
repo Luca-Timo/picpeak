@@ -278,7 +278,7 @@ export const CrmSettingsPage: React.FC = () => {
             </label>
             <textarea
               rows={6}
-              className="w-full rounded-md border border-line-strong bg-panel text-heading px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+              className="w-full rounded-md border border-line-strong bg-panel text-heading px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark"
               value={values.crm_quotes_tos_text ?? ''}
               onChange={(e) => setVal('crm_quotes_tos_text', e.target.value)}
               placeholder={t('crmSettings.crm_quotes_tos_text.placeholder',
@@ -341,7 +341,7 @@ export const CrmSettingsPage: React.FC = () => {
             late-fee math below is configured here in both cases — it's the fee
             the dunning path applies, not part of the schedule. */}
         {workflowsLive ? (
-          <div className="mt-2 rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm text-blue-800 dark:text-blue-200 flex items-start gap-2">
+          <div className="mt-2 rounded-lg border border-info-line bg-info-soft p-3 text-sm text-info-text flex items-start gap-2">
             <WorkflowIcon className="w-4 h-4 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium">{t('crmSettings.dunningMoved.title', 'Reminder schedule is now in Workflows')}</p>
@@ -356,7 +356,7 @@ export const CrmSettingsPage: React.FC = () => {
         )}
 
         {checkbox('crm_invoices_late_fee_enabled', 'Add a late fee (Mahngebühr) on every reminder after the first')}
-        <div className="mt-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+        <div className="mt-2 rounded-lg border border-warning-line bg-warning-soft p-3 text-sm text-warning-text">
           <p className="font-medium">{t('crmSettings.lateFeeAgb.title', 'Late fees must be itemised in your terms (AGB)')}</p>
           <p className="mt-1">{t('crmSettings.lateFeeAgb.body', 'Vertragliche Pflicht: Sätze wie „Es werden Mahnspesen erhoben“ reichen nicht aus. In den AGB muss die konkrete Gebühr klar beziffert sein (z.B. „CHF 20 ab der 2. Mahnung“). Mit dem Treuhänder prüfen.')}</p>
         </div>

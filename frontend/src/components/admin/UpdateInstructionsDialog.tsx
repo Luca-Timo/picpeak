@@ -145,7 +145,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
               {/* The server response is authoritative; the prop covers the
                   window before the query resolves. */}
               {(data?.targetVersion || targetVersion) && (
-                <span className="ml-2 text-blue-600 dark:text-blue-400">
+                <span className="ml-2 text-info-text">
                   v{data?.targetVersion || targetVersion}
                 </span>
               )}
@@ -167,23 +167,23 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
             </div>
             {isLoading && (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-info"></div>
               </div>
             )}
 
             {error && (
-              <div className="flex items-center p-4 bg-red-50 dark:bg-red-900/30 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-red-500 mr-3" />
-                <p className="text-red-700 dark:text-red-300">
+              <div className="flex items-center p-4 bg-danger-soft rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-danger mr-3" />
+                <p className="text-danger-text">
                   {t('admin.updates.updateDialog.error', 'Failed to load update instructions')}
                 </p>
               </div>
             )}
 
             {data && !data.updateAvailable && (
-              <div className="flex items-center p-4 bg-green-50 dark:bg-green-900/30 rounded-lg">
-                <CheckCircle2 className="w-5 h-5 text-green-500 mr-3" />
-                <p className="text-green-700 dark:text-green-300">
+              <div className="flex items-center p-4 bg-success-soft rounded-lg">
+                <CheckCircle2 className="w-5 h-5 text-success mr-3" />
+                <p className="text-success-text">
                   {t('admin.updates.upToDate', "You're up to date")} (v{data.currentVersion})
                 </p>
               </div>
@@ -205,9 +205,9 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                 {data.instructions.warnings.length > 0 && (
                   <div className="space-y-2">
                     {data.instructions.warnings.map((warning, idx) => (
-                      <div key={idx} className="flex items-start p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
-                        <AlertTriangle className="w-5 h-5 text-amber-500 mr-3 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-amber-700 dark:text-amber-300">{warning}</p>
+                      <div key={idx} className="flex items-start p-3 bg-warning-soft rounded-lg">
+                        <AlertTriangle className="w-5 h-5 text-warning mr-3 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-warning-text">{warning}</p>
                       </div>
                     ))}
                   </div>
@@ -216,7 +216,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                 {/* Pre-flight Checklist */}
                 <div>
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
-                    <AlertTriangle className="w-4 h-4 text-amber-500 mr-2" />
+                    <AlertTriangle className="w-4 h-4 text-warning mr-2" />
                     {t('admin.updates.updateDialog.beforeUpdating', 'Before updating:')}
                   </h4>
                   <div className="space-y-2">
@@ -229,12 +229,12 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                           type="checkbox"
                           checked={checkedItems.has(check.id)}
                           onChange={() => handleCheckItem(check.id)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-info-text border-gray-300 rounded focus:ring-accent"
                         />
                         <span className="ml-3 text-sm text-gray-700 dark:text-gray-300">
                           {check.text}
                           {check.required && (
-                            <span className="text-red-500 ml-1">*</span>
+                            <span className="text-danger ml-1">*</span>
                           )}
                         </span>
                       </label>
@@ -248,7 +248,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                 {/* Update Commands */}
                 <div>
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
-                    <Terminal className="w-4 h-4 text-blue-500 mr-2" />
+                    <Terminal className="w-4 h-4 text-info mr-2" />
                     {t('admin.updates.updateDialog.updateCommands', 'Update Commands:')}
                   </h4>
                   <div className="space-y-4">
@@ -265,7 +265,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                           </span>
                         </div>
                         <div className="flex items-center bg-gray-900 dark:bg-gray-950 rounded-lg overflow-hidden">
-                          <code className="flex-1 px-4 py-3 text-sm text-green-400 font-mono overflow-x-auto">
+                          <code className="flex-1 px-4 py-3 text-sm text-success font-mono overflow-x-auto">
                             {step.command}
                           </code>
                           <button
@@ -274,7 +274,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                             title={t('common.copy', 'Copy')}
                           >
                             {copiedCommand === `step-${idx}` ? (
-                              <Check className="w-4 h-4 text-green-500" />
+                              <Check className="w-4 h-4 text-success" />
                             ) : (
                               <Copy className="w-4 h-4" />
                             )}
@@ -296,7 +296,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                 {/* Post-update Checks */}
                 <div>
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
-                    <CheckCircle2 className="w-4 h-4 text-green-500 mr-2" />
+                    <CheckCircle2 className="w-4 h-4 text-success mr-2" />
                     {t('admin.updates.updateDialog.afterUpdating', 'After updating:')}
                   </h4>
                   <ul className="space-y-2">
@@ -315,7 +315,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                     href={data.releaseNotesUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                    className="flex items-center text-sm text-accent"
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />
                     {t('admin.updates.viewReleaseNotes', 'View Release Notes')}
@@ -330,7 +330,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
           <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
             <div className="text-xs text-gray-500 dark:text-gray-400">
               {!allRequiredChecked && data?.instructions && !selfUpdateActive && (
-                <span className="text-amber-600 dark:text-amber-400">
+                <span className="text-warning-text">
                   {t('admin.updates.updateDialog.completeChecklist', 'Complete the checklist before updating')}
                 </span>
               )}
@@ -343,7 +343,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
                 >
                   {copiedCommand === 'all' ? (
                     <>
-                      <Check className="w-4 h-4 mr-2 text-green-500" />
+                      <Check className="w-4 h-4 mr-2 text-success" />
                       {t('common.copied', 'Copied!')}
                     </>
                   ) : (
@@ -356,7 +356,7 @@ export const UpdateInstructionsDialog: React.FC<UpdateInstructionsDialogProps> =
               )}
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                className="px-4 py-2 text-sm font-medium text-white bg-info rounded-lg hover:opacity-90"
               >
                 {t('common.close', 'Close')}
               </button>

@@ -134,9 +134,9 @@ export const QuotesListPage: React.FC = () => {
                         </td>
                         <td className="px-3 py-2">
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            q.status === 'accepted' || q.status === 'converted' ? 'bg-green-100 text-green-800'
-                              : q.status === 'declined' ? 'bg-red-100 text-red-800'
-                              : q.status === 'sent' ? 'bg-blue-100 text-blue-800'
+                            q.status === 'accepted' || q.status === 'converted' ? 'bg-success-soft text-success-text'
+                              : q.status === 'declined' ? 'bg-danger-soft text-danger-text'
+                              : q.status === 'sent' ? 'bg-info-soft text-info-text'
                               : 'bg-neutral-100 text-neutral-700'
                           }`}>{t(`quotes.status.${q.status}`, q.status)}</span>
                         </td>

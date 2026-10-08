@@ -174,7 +174,7 @@ export const VatCodesManager: React.FC = () => {
                   <td className="py-1.5 pr-3">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => setVatModal({ vat: v })} className="p-1 text-neutral-500 hover:text-body"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => { if (window.confirm(t('ledger.vat.confirmDelete', 'Delete this VAT code?') as string)) delVat.mutate(v.id); }} className="p-1 text-neutral-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => { if (window.confirm(t('ledger.vat.confirmDelete', 'Delete this VAT code?') as string)) delVat.mutate(v.id); }} className="p-1 text-neutral-400 hover:text-danger-text"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>

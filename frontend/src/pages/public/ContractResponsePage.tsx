@@ -444,7 +444,7 @@ const DetailsForm: React.FC<{
                 </label>
                 <input
                   id={`contract-details-${field}`}
-                  className={`${INPUT} ${bad ? 'border-red-500 dark:border-red-400' : ''}`}
+                  className={`${INPUT} ${bad ? 'border-danger' : ''}`}
                   value={values[field] || ''}
                   autoComplete={label.autoComplete}
                   required={required}
@@ -454,7 +454,7 @@ const DetailsForm: React.FC<{
               </div>
             );
           })}
-          {error && <p role="alert" className="sm:col-span-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p role="alert" className="sm:col-span-2 text-sm text-danger-text">{error}</p>}
           <div className="sm:col-span-2 flex justify-end">
             <button type="submit" disabled={submit.isPending} className={PRIMARY_BUTTON}>
               {submit.isPending
@@ -602,7 +602,7 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
   if (outcome?.kind === 'uploaded') {
     action = (
       <div className="text-center py-2">
-        <CheckCircle className="w-12 h-12 mx-auto text-green-600 dark:text-green-400 mb-3" />
+        <CheckCircle className="w-12 h-12 mx-auto text-success-text mb-3" />
         <h2 className="text-lg font-semibold">{t('contractSigning.upload.doneTitle', 'Thank you — your signed PDF was uploaded.')}</h2>
         <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
           {t('contractSigning.upload.doneBody', 'You can close this page.')}
@@ -641,7 +641,7 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
   } else if (signing.waitingForOthers) {
     action = (
       <div className="flex items-start gap-3">
-        <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <Clock className="w-6 h-6 text-warning-text shrink-0 mt-0.5" />
         <div>
           <h2 className="text-lg font-semibold">{t('contractSigning.waiting.title', 'It isn\'t your turn yet')}</h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
@@ -737,7 +737,7 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
             </ul>
           </div>
         )}
-        {downloadError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{downloadError}</p>}
+        {downloadError && <p role="alert" className="mt-3 text-sm text-danger-text">{downloadError}</p>}
       </div>
 
       <SignerProgress contract={c} />
@@ -787,8 +787,8 @@ const SigningSummary: React.FC<{ contract: SigningSessionContract }> = ({ contra
 };
 
 const PROGRESS_CHIP: Record<string, string> = {
-  signed: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  declined: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+  signed: 'bg-success-soft text-success-text',
+  declined: 'bg-danger-soft text-danger-text',
   pending: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200',
 };
 
@@ -850,7 +850,7 @@ const SignedResult: React.FC<{
   const viaPortal = c.signing.verifiedVia === 'portal';
   return (
     <div className="text-center py-2">
-      <CheckCircle className="w-12 h-12 mx-auto text-green-600 dark:text-green-400 mb-3" />
+      <CheckCircle className="w-12 h-12 mx-auto text-success-text mb-3" />
       <h2 ref={heading} tabIndex={-1} className="text-lg font-semibold focus:outline-none">
         {t('contractSigning.result.title', 'Thank you — you have signed the contract.')}
       </h2>
@@ -1145,19 +1145,19 @@ const SignForm: React.FC<SignFormProps> = ({
           </p>
         )}
 
-        {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p role="alert" className="text-sm text-danger-text">{error}</p>}
 
         {uncertain ? (
           <div
             role="status"
             aria-live="polite"
-            className="p-4 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30"
+            className="p-4 rounded-md border border-warning-line bg-warning-soft"
           >
-            <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-warning-text flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
               {t('contractSigning.sign.uncertain.title', 'We couldn\'t confirm whether your signature arrived')}
             </h3>
-            <p className="text-sm text-amber-900 dark:text-amber-200 mt-1">
+            <p className="text-sm text-warning-text mt-1">
               {t('contractSigning.sign.uncertain.body',
                 'The connection dropped while it was being sent, so it may or may not have been recorded. Check again first. Sending it a second time cannot sign the contract twice — we recognise the repeat.')}
             </p>
@@ -1245,7 +1245,7 @@ const WetUpload: React.FC<{
           {t('publicContract.uploadButton', 'Upload signed PDF')}
         </button>
       </div>
-      {error && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-sm text-danger-text">{error}</p>}
     </div>
   );
 };
@@ -1297,12 +1297,12 @@ const DeclinePanel: React.FC<{
 
   return (
     <div className="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-      <div className="p-4 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30">
-        <h3 className="text-sm font-semibold text-red-900 dark:text-red-200 flex items-center gap-2">
+      <div className="p-4 rounded-md border border-danger-line bg-danger-soft">
+        <h3 className="text-sm font-semibold text-danger-text flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           {t('contractSigning.decline.confirmTitle', 'Decline this contract?')}
         </h3>
-        <p className="text-sm text-red-900 dark:text-red-200 mt-1">
+        <p className="text-sm text-danger-text mt-1">
           {t('contractSigning.decline.confirmBody', 'The sender is told that you declined, and nobody can sign this contract any more. This can\'t be undone.')}
         </p>
         <label htmlFor="contract-decline-reason" className="block text-sm font-medium mt-3 mb-1 text-neutral-900 dark:text-neutral-100">
@@ -1318,7 +1318,7 @@ const DeclinePanel: React.FC<{
         <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
           {t('contractSigning.decline.reasonHint', 'Shared with the sender.')}
         </p>
-        {error && <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-sm text-danger-text">{error}</p>}
         <div className="mt-3 flex flex-wrap gap-2 justify-end">
           <button type="button" onClick={() => { setOpen(false); setError(null); }} className={SECONDARY_BUTTON}>
             {t('contractSigning.decline.keep', 'Keep the contract')}
@@ -1327,7 +1327,7 @@ const DeclinePanel: React.FC<{
             type="button"
             onClick={() => declineMutation.mutate()}
             disabled={declineMutation.isPending}
-            className="px-3 py-1.5 rounded-md text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+            className="px-3 py-1.5 rounded-md text-sm bg-danger hover:opacity-90 text-white disabled:opacity-50"
           >
             {declineMutation.isPending
               ? t('contractSigning.decline.declining', 'Declining…')
@@ -1697,7 +1697,7 @@ export const ContractResponseView: React.FC<{ adapter: ContractDocumentAdapter }
           {alreadySigned ? (
             <div className="py-2">
               <div className="text-center mb-5">
-                <CheckCircle className="w-12 h-12 mx-auto text-green-600 mb-3" />
+                <CheckCircle className="w-12 h-12 mx-auto text-success-text mb-3" />
                 <h2 className="text-lg font-semibold">
                   {t('publicContract.signed.title', 'Thank you — the contract is signed.')}
                 </h2>
@@ -1727,7 +1727,7 @@ export const ContractResponseView: React.FC<{ adapter: ContractDocumentAdapter }
                     ? t('publicContract.downloadSigned', 'Download signed PDF')
                     : t('publicContract.download', 'Download PDF')}
                 </button>
-                {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+                {error && <p className="text-sm text-danger-text mt-2">{error}</p>}
               </div>
 
               {/* Audit confirmation — issue #4. Surfaces every piece
@@ -1848,7 +1848,7 @@ export const ContractResponseView: React.FC<{ adapter: ContractDocumentAdapter }
                   </span>
                 </label>
 
-                {error && <p className="text-sm text-red-600">{error}</p>}
+                {error && <p className="text-sm text-danger-text">{error}</p>}
 
                 <div className="flex justify-end">
                   <button

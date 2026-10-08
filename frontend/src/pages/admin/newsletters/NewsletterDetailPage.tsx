@@ -24,10 +24,10 @@ import { StatusChip } from './NewsletterListPage';
 
 const RECIPIENT_STATUS_STYLES: Record<RecipientStatus, string> = {
   queued: 'text-soft',
-  sent: 'text-green-700 dark:text-green-400',
-  failed: 'text-red-700 dark:text-red-400',
+  sent: 'text-success-text',
+  failed: 'text-danger-text',
   cancelled: 'text-faint',
-  skipped_opt_out: 'text-amber-700 dark:text-amber-400',
+  skipped_opt_out: 'text-warning-text',
 };
 
 export const NewsletterDetailPage: React.FC = () => {
@@ -122,8 +122,8 @@ export const NewsletterDetailPage: React.FC = () => {
         <div className="grid grid-cols-3 gap-4 text-center">
           {([
             ['recipients', campaign.recipientCount, ''],
-            ['sent', campaign.sentCount, 'text-green-700 dark:text-green-400'],
-            ['failed', campaign.failedCount, campaign.failedCount > 0 ? 'text-red-700 dark:text-red-400' : ''],
+            ['sent', campaign.sentCount, 'text-success-text'],
+            ['failed', campaign.failedCount, campaign.failedCount > 0 ? 'text-danger-text' : ''],
           ] as const).map(([key, value, cls]) => (
             <div key={key} className="rounded-md bg-neutral-50 dark:bg-neutral-800/60 p-3">
               <div className={`text-2xl font-semibold tabular-nums ${cls}`}>{value}</div>

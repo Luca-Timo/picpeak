@@ -202,7 +202,7 @@ export const SetupEventTypesStep: React.FC<Props> = ({ onDone }) => {
             <button
               type="button"
               onClick={() => removeRow(index)}
-              className="flex-shrink-0 p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              className="flex-shrink-0 p-2 rounded-lg text-neutral-400 hover:text-danger-text hover:bg-danger-soft transition-colors"
               aria-label={t('common.delete', 'Delete')}
               title={t('common.delete', 'Delete')}
             >

@@ -28,10 +28,10 @@ const ProxiedNotice: React.FC = () => {
   const { t } = useTranslation();
 
   return (
-    <div className="p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+    <div className="p-4 bg-info-soft border border-info-line rounded-lg">
       <div className="flex items-start gap-3">
-        <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-        <div className="text-sm text-blue-800 dark:text-blue-200">
+        <ShieldCheck className="w-5 h-5 text-info-text flex-shrink-0" />
+        <div className="text-sm text-info-text">
           <p className="font-medium mb-1">
             {t('settings.analytics.proxiedNotice', 'Served from your own domain')}
           </p>
@@ -56,10 +56,10 @@ const CspWarning: React.FC = () => {
   const { t } = useTranslation();
 
   return (
-    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+    <div className="p-4 bg-warning-soft border border-warning-line rounded-lg">
       <div className="flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-        <div className="text-sm text-amber-800 dark:text-amber-200">
+        <AlertCircle className="w-5 h-5 text-warning-text flex-shrink-0" />
+        <div className="text-sm text-warning-text">
           <p className="font-medium mb-1">
             {t('settings.analytics.customCspWarning', 'Content-Security-Policy reminder')}
           </p>
@@ -297,10 +297,10 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         )}
 
         {provider === 'none' && (
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="p-4 bg-info-soft border border-info-line rounded-lg">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-              <div className="text-sm text-blue-800 dark:text-blue-200">
+              <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0" />
+              <div className="text-sm text-info-text">
                 {t(
                   'settings.analytics.providerNoneInfo',
                   'No external tracker injected. The admin dashboard still shows summary cards + the daily chart from PicPeak\'s own access_logs; the device-breakdown chart uses a coarse user-agent heuristic.',

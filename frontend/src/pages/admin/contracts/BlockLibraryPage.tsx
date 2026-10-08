@@ -252,7 +252,7 @@ export const BlockLibraryPage: React.FC = () => {
       {/* Disclaimer banner — kept; the seeded blocks come with a legal
           disclaimer per the maintainer's "legal/financial defaults are
           examples only" rule. */}
-      <div className="mb-4 p-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200">
+      <div className="mb-4 p-3 rounded-md border border-warning-line bg-warning-soft text-sm text-warning-text">
         <p className="font-medium mb-1">
           {t('contracts.blocks.disclaimerTitle', 'Examples only — have your lawyer review')}
         </p>
@@ -449,7 +449,7 @@ export const BlockLibraryPage: React.FC = () => {
                         <span>{lang.name}</span>
                         {!filled && lang.code !== 'en' && (
                           <span
-                            className="w-1.5 h-1.5 rounded-full bg-amber-400"
+                            className="w-1.5 h-1.5 rounded-full bg-warning"
                             title={t('contracts.blocks.noTranslation', 'No translation yet') as string}
                           />
                         )}
@@ -523,7 +523,7 @@ export const BlockLibraryPage: React.FC = () => {
                       to know the table existed (it appears in the PDF
                       but nowhere in the block editor). */}
                   {selection.mode === 'edit' && selection.block.slug === 'quote_line_items_table' && (
-                    <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-900 dark:text-blue-200">
+                    <div className="rounded-md border border-info-line bg-info-soft p-3 text-sm text-info-text">
                       <p className="font-medium mb-1">
                         {t('contracts.blocks.quoteLineItems.calloutTitle',
                           'Auto-generated table follows the body')}

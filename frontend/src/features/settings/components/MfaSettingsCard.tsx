@@ -47,9 +47,9 @@ const RecoveryCodesPanel: React.FC<RecoveryCodesPanelProps> = ({ codes, onConfir
 
   return (
     <div className="space-y-4">
-      <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-amber-800 dark:text-amber-200">{t('settings.mfa.recoveryCodesWarning')}</p>
+      <div className="p-4 rounded-lg bg-warning-soft border border-warning-line flex items-start gap-3">
+        <AlertTriangle className="w-5 h-5 text-warning-text flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-warning-text">{t('settings.mfa.recoveryCodesWarning')}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 p-4 rounded-lg bg-subtle border border-line font-mono text-sm text-heading">
@@ -72,7 +72,7 @@ const RecoveryCodesPanel: React.FC<RecoveryCodesPanelProps> = ({ codes, onConfir
           type="checkbox"
           checked={acknowledged}
           onChange={(e) => setAcknowledged(e.target.checked)}
-          className="mt-1 w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+          className="mt-1 w-4 h-4 text-accent rounded focus:ring-accent"
         />
         <span className="text-sm text-body">{t('settings.mfa.recoveryCodesAck')}</span>
       </label>
@@ -189,9 +189,9 @@ export const MfaSettingsCard: React.FC = () => {
       ) : status?.enabled ? (
         /* ---------------- Enrolled ---------------- */
         <div className="space-y-4">
-          <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-            <span className="text-sm text-green-800 dark:text-green-200">{t('settings.mfa.enabledBadge')}</span>
+          <div className="p-3 rounded-lg bg-success-soft border border-success-line flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-success-text flex-shrink-0" />
+            <span className="text-sm text-success-text">{t('settings.mfa.enabledBadge')}</span>
           </div>
 
           <p className="text-sm text-soft">

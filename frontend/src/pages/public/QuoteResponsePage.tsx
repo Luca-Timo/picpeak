@@ -330,9 +330,9 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
           <div className="flex items-baseline justify-between mb-4 gap-3 flex-wrap">
             <h1 className="text-2xl font-bold">{t('quoteResponse.title', 'Quote')} {quote.quoteNumber}</h1>
             <span className={`text-xs font-medium px-2 py-1 rounded ${
-              quote.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-                : quote.status === 'declined' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+              quote.status === 'accepted' ? 'bg-success-soft text-success-text'
+                : quote.status === 'declined' ? 'bg-danger-soft text-danger-text'
+                : 'bg-info-soft text-info-text'
             }`}>{t(`quotes.status.${quote.status}`, quote.status)}</span>
           </div>
 
@@ -510,7 +510,7 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
 
           {/* Response area */}
           <div className="mt-8 pt-6 border-t border-neutral-200 dark:border-neutral-700 text-center">
-            {error && <p className="text-red-600 dark:text-red-400 mb-4 text-sm">{error}</p>}
+            {error && <p className="text-danger-text mb-4 text-sm">{error}</p>}
             {busy && (
               <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
                 {t('quoteResponse.submitting', 'Recording your response…')}
@@ -582,7 +582,7 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
                           <>
                             {' '}
                             <a href={quote.tos.url} target="_blank" rel="noopener noreferrer"
-                              className="underline text-primary-600 dark:text-primary-400">
+                              className="underline text-accent">
                               {t('quoteResponse.tosLink', 'Read the full Terms')}
                             </a>
                           </>
@@ -606,7 +606,7 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
                     disabled={busy}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder={t('quoteResponse.message.placeholder', 'Anything we should know? It is sent with your acceptance.')}
-                    className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                    className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
 
@@ -627,8 +627,8 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
                     type="button"
                     disabled={busy || (quote.tos?.required && !tosAccepted) || !totalsReady}
                     onClick={() => handleRespond('accept')}
-                    className={`px-6 py-3 rounded-md bg-green-600 hover:bg-green-700 text-white font-medium disabled:opacity-50 ${
-                      preselectedAction === 'accept' ? 'ring-4 ring-green-300 dark:ring-green-700 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900' : ''
+                    className={`px-6 py-3 rounded-md bg-success hover:opacity-90 text-white font-medium disabled:opacity-50 ${
+                      preselectedAction === 'accept' ? 'ring-4 ring-success ring-offset-2 ring-offset-white dark:ring-offset-neutral-900' : ''
                     }`}
                   >{t('quoteResponse.accept', 'Accept quote')}</button>
                   <button

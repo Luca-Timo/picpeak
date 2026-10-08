@@ -101,9 +101,9 @@ const Header: React.FC<{
           {loading || refreshing ? (
             <Loader2 className="w-5 h-5 text-neutral-400 animate-spin" />
           ) : healthy ? (
-            <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-400" />
+            <ShieldCheck className="w-5 h-5 text-success-text" />
           ) : report ? (
-            <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <ShieldAlert className="w-5 h-5 text-warning-text" />
           ) : (
             <ShieldCheck className="w-5 h-5 text-neutral-400" />
           )}
@@ -137,7 +137,7 @@ const Header: React.FC<{
 const ErrorBanner: React.FC<{ message: string }> = ({ message }) => {
   const { t } = useTranslation();
   return (
-    <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 text-sm text-red-700 dark:text-red-300">
+    <div className="mb-4 p-3 rounded-lg bg-danger-soft text-sm text-danger-text">
       {t('backup.coverage.error', 'Could not load coverage report: {{message}}', { message })}
     </div>
   );
@@ -146,7 +146,7 @@ const ErrorBanner: React.FC<{ message: string }> = ({ message }) => {
 const FallbackWarning: React.FC = () => {
   const { t } = useTranslation();
   return (
-    <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-sm text-amber-800 dark:text-amber-200 flex items-start gap-2">
+    <div className="mb-4 p-3 rounded-lg bg-warning-soft text-sm text-warning-text flex items-start gap-2">
       <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
       <span>
         {t(
@@ -331,7 +331,7 @@ const DriftSection: React.FC<{ drift: BackupCoverageReport['drift'] }> = ({ drif
   const { t } = useTranslation();
   if (drift.unconfiguredOnDisk.length === 0) {
     return (
-      <div className="mt-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/30 text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+      <div className="mt-4 p-3 rounded-lg bg-success-soft text-sm text-success-text flex items-center gap-2">
         <CheckCircle2 className="w-4 h-4" />
         {t(
           'backup.coverage.drift.none',
@@ -341,26 +341,26 @@ const DriftSection: React.FC<{ drift: BackupCoverageReport['drift'] }> = ({ drif
     );
   }
   return (
-    <div className="mt-4 border border-amber-300 dark:border-amber-700 rounded-lg overflow-hidden">
-      <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-300 dark:border-amber-700">
+    <div className="mt-4 border border-warning-line rounded-lg overflow-hidden">
+      <div className="px-3 py-2 bg-warning-soft border-b border-warning-line">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-300" />
-          <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="w-4 h-4 text-warning-text" />
+          <h4 className="text-sm font-semibold text-warning-text">
             {t('backup.coverage.drift.heading', 'Drift detected: subdirectories not covered by any backup_paths row')}
           </h4>
         </div>
-        <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+        <p className="text-xs text-warning-text mt-1">
           {t(
             'backup.coverage.drift.caption',
             'These directories exist on disk but the walker will skip them. Either add a backup_paths row, move the files into a covered location, or — if they are runtime caches — confirm they are safe to exclude.',
           )}
         </p>
       </div>
-      <ul className="divide-y divide-amber-200 dark:divide-amber-800">
+      <ul className="divide-y divide-warning-line">
         {drift.unconfiguredOnDisk.map((d) => (
           <li
             key={d}
-            className="px-3 py-2 font-mono text-xs text-amber-900 dark:text-amber-100 flex items-center gap-2"
+            className="px-3 py-2 font-mono text-xs text-warning-text flex items-center gap-2"
           >
             <EyeOff className="w-3.5 h-3.5" />
             {d}
@@ -419,9 +419,9 @@ type Tone = 'neutral' | 'green' | 'amber' | 'red';
 
 const TONE_BG: Record<Tone, string> = {
   neutral: 'bg-subtle text-body',
-  green: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-  amber: 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-  red: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+  green: 'bg-success-soft text-success-text',
+  amber: 'bg-warning-soft text-warning-text',
+  red: 'bg-danger-soft text-danger-text',
 };
 
 function formatBytes(bytes: number): string {

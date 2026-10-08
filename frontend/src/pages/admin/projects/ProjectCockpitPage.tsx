@@ -423,13 +423,13 @@ export const ProjectCockpitPage: React.FC = () => {
                       {item.amount && <span className="text-xs font-medium text-body">{item.amount}</span>}
                       {item.kind === 'email' && item.emailId != null && canActOnEmail(item) && (
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => openPreview(item.emailId as number)} className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline">
+                          <button onClick={() => openPreview(item.emailId as number)} className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
                             <Eye className="w-3 h-3" />{t('projects.email.preview', 'Preview')}
                           </button>
                           {item.reRendered && (
                             <span
                               title={t('projects.email.reRendered', 'Re-rendered from the current template — may differ slightly from what was sent.') as string}
-                              className="inline-block rounded-full px-2 py-0.5 text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
+                              className="inline-block rounded-full px-2 py-0.5 text-xs bg-warning-soft text-warning-text"
                             >
                               {t('projects.email.reRenderedTag', '≈ re-rendered')}
                             </span>
@@ -444,13 +444,13 @@ export const ProjectCockpitPage: React.FC = () => {
                               <button onClick={() => emailActionMutation.mutate({ action: 'sendNow', emailId: item.emailId as number })} className="inline-flex items-center gap-1 text-xs text-body hover:underline">
                                 <Send className="w-3 h-3" />{t('projects.email.sendNow', 'Send now')}
                               </button>
-                              <button onClick={() => emailActionMutation.mutate({ action: 'cancel', emailId: item.emailId as number })} className="inline-flex items-center gap-1 text-xs text-red-600 hover:underline">
+                              <button onClick={() => emailActionMutation.mutate({ action: 'cancel', emailId: item.emailId as number })} className="inline-flex items-center gap-1 text-xs text-danger-text hover:underline">
                                 <Ban className="w-3 h-3" />{t('projects.email.cancel', 'Cancel')}
                               </button>
                             </>
                           )}
                           {canSendEmail && item.emailStatus === 'failed' && (
-                            <button onClick={() => emailActionMutation.mutate({ action: 'retry', emailId: item.emailId as number })} className="inline-flex items-center gap-1 text-xs text-amber-600 hover:underline">
+                            <button onClick={() => emailActionMutation.mutate({ action: 'retry', emailId: item.emailId as number })} className="inline-flex items-center gap-1 text-xs text-warning-text hover:underline">
                               <RotateCw className="w-3 h-3" />{t('projects.email.retry', 'Retry')}
                             </button>
                           )}
@@ -479,7 +479,7 @@ export const ProjectCockpitPage: React.FC = () => {
               ) : preview && preview.available && preview.html ? (
                 <>
                   {!preview.exact && (
-                    <div className="mb-3 rounded-md bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                    <div className="mb-3 rounded-md bg-warning-soft border border-warning-line px-3 py-2 text-xs text-warning-text">
                       {t('projects.email.reRendered', 'Re-rendered from the current template — this email was sent before previews were captured, so it may differ slightly from what the recipient received.')}
                     </div>
                   )}

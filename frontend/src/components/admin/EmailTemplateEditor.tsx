@@ -342,7 +342,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
               onClick={isSourceMode ? switchToVisual : switchToSource}
               className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
                 isSourceMode
-                  ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                  ? 'bg-warning-soft text-warning-text'
                   : 'bg-inset text-body hover:bg-neutral-200 dark:hover:bg-neutral-600'
               }`}
               type="button"
@@ -363,7 +363,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
             onChange={(e) => setLinkUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addLink()}
             placeholder={t('email.editor.enterUrl')}
-            className="flex-1 px-3 py-1 text-sm border border-accent-dark/30 bg-panel text-heading rounded-md focus:ring-2 focus:ring-primary-500"
+            className="flex-1 px-3 py-1 text-sm border border-accent-dark/30 bg-panel text-heading rounded-md focus:ring-2 focus:ring-accent"
             autoFocus
           />
           <button

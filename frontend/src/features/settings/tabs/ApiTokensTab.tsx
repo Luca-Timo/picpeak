@@ -92,15 +92,15 @@ export const ApiTokensTab: React.FC = () => {
         </p>
 
         {justCreatedToken && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-4 mb-4">
+          <div className="rounded-lg border border-warning-line bg-warning-soft p-4 mb-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-warning-text flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">
+                <p className="text-sm font-medium text-warning-text mb-1">
                   {t('settings.apiTokens.copyNow', 'Copy this token now — it will not be shown again.')}
                 </p>
                 <div className="flex items-center gap-2">
-                  <code className="block flex-1 min-w-0 px-3 py-2 bg-shell border border-amber-300 dark:border-amber-700 rounded text-xs font-mono break-all">
+                  <code className="block flex-1 min-w-0 px-3 py-2 bg-shell border border-warning-line rounded text-xs font-mono break-all">
                     {justCreatedToken}
                   </code>
                   <Button
@@ -149,7 +149,7 @@ export const ApiTokensTab: React.FC = () => {
                     type="checkbox"
                     checked={scopes.includes(s)}
                     onChange={() => toggleScope(s)}
-                    className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                    className="w-4 h-4 text-accent rounded focus:ring-accent"
                   />
                   {s}
                 </label>
@@ -216,7 +216,7 @@ export const ApiTokensTab: React.FC = () => {
                         <span className={`text-xs px-2 py-0.5 rounded ${
                           revoked || expired
                             ? 'bg-fill text-soft'
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                            : 'bg-success-soft text-success-text'
                         }`}>
                           {status}
                         </span>

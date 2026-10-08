@@ -17,7 +17,7 @@ import { emailService, type IncomingMailConfig, type ImapFolder } from '../../se
 import { useMutationWithToast, useModal } from '../../hooks';
 
 const labelCls = 'block text-sm font-medium text-body mb-1';
-const selectCls = 'w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark';
+const selectCls = 'w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark';
 
 export const IncomingMailConfigCard: React.FC = () => {
   const { t } = useTranslation();
@@ -105,7 +105,7 @@ export const IncomingMailConfigCard: React.FC = () => {
 
       <div className="space-y-4">
         <div>
-          <label className={labelCls}>{t('email.incoming.host', 'IMAP Host')} <span className="text-red-500">*</span></label>
+          <label className={labelCls}>{t('email.incoming.host', 'IMAP Host')} <span className="text-danger">*</span></label>
           <Input
             type="text"
             value={cfg.imap_host}
@@ -117,7 +117,7 @@ export const IncomingMailConfigCard: React.FC = () => {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>{t('email.incoming.port', 'Port')} <span className="text-red-500">*</span></label>
+            <label className={labelCls}>{t('email.incoming.port', 'Port')} <span className="text-danger">*</span></label>
             <Input type="number" value={cfg.imap_port} onChange={(e) => set('imap_port', parseInt(e.target.value, 10) || 0)} placeholder="993" />
           </div>
           <div>
@@ -130,7 +130,7 @@ export const IncomingMailConfigCard: React.FC = () => {
         </div>
 
         <div>
-          <label className={labelCls}>{t('email.incoming.user', 'Username')} <span className="text-red-500">*</span></label>
+          <label className={labelCls}>{t('email.incoming.user', 'Username')} <span className="text-danger">*</span></label>
           <Input
             type="text"
             value={cfg.imap_user}

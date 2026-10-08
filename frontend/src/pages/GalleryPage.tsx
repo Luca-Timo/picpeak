@@ -378,7 +378,7 @@ export const GalleryPage: React.FC = () => {
           <div className="flex-1 flex items-center justify-center">
             <Card className="max-w-md w-full mx-4">
               <CardContent className="text-center py-12">
-                <Clock className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+                <Clock className="w-16 h-16 text-warning mx-auto mb-4" />
                 <h2 className="text-xl font-semibold mb-2">{t('gallery.expired')}</h2>
                 {galleryInfo.expires_at && (
                   <p className="text-neutral-600 mb-4">
@@ -513,14 +513,14 @@ export const GalleryPage: React.FC = () => {
 
           {/* Expiration Warning */}
           {daysUntilExpiration !== null && daysUntilExpiration <= 7 && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="mb-4 p-3 bg-warning-soft border border-warning-line rounded-lg">
               <div className="flex items-start">
-                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 mt-0.5 mr-2 flex-shrink-0" />
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-warning-text mt-0.5 mr-2 flex-shrink-0" />
                 <div>
-                  <p className="text-xs sm:text-sm font-medium text-amber-800">
+                  <p className="text-xs sm:text-sm font-medium text-warning-text">
                     {t('gallery.expiresIn', { count: daysUntilExpiration })}
                   </p>
-                  <p className="text-xs text-amber-700 mt-1">
+                  <p className="text-xs text-warning-text mt-1">
                     {t('gallery.downloadBefore')}
                   </p>
                 </div>
@@ -542,10 +542,10 @@ export const GalleryPage: React.FC = () => {
               {iabBlocked && (
                 <div
                   role="alert"
-                  className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-900 dark:text-red-100"
+                  className="rounded-lg border border-danger-line bg-danger-soft p-4 text-sm text-danger-text"
                 >
                   <div className="flex items-start">
-                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 mr-2 flex-shrink-0" />
+                    <AlertCircle className="w-5 h-5 text-danger-text mt-0.5 mr-2 flex-shrink-0" />
                     <div>
                       <p className="font-medium">
                         {t('auth.iab.instagram.blockedTitle', "Instagram's browser can't open this gallery")}
@@ -578,7 +578,7 @@ export const GalleryPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIabOverride(true)}
-                    className="mt-3 w-full text-center text-xs text-red-800 dark:text-red-200 underline"
+                    className="mt-3 w-full text-center text-xs text-danger-text underline"
                   >
                     {t('auth.iab.instagram.tryAnyway', 'Try entering the password here anyway')}
                   </button>

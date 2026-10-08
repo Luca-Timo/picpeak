@@ -43,7 +43,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({ expiresAt, class
 
   if (timeLeft.isExpired) {
     return (
-      <div className={`flex items-center gap-2 text-red-600 ${className}`}>
+      <div className={`flex items-center gap-2 text-danger-text ${className}`}>
         <AlertCircle className="w-5 h-5" />
         <span className="font-semibold">{t('gallery.expired')}</span>
       </div>

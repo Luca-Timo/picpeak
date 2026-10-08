@@ -100,7 +100,7 @@ const ActionsMenu: React.FC<{ items: MenuItem[]; align?: 'left' | 'right'; class
               role="menuitem"
               onClick={() => { setOpen(false); item.onSelect(); }}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left hover:bg-hover ${
-                item.danger ? 'text-red-600 dark:text-red-400' : 'text-body'
+                item.danger ? 'text-danger-text' : 'text-body'
               }`}
             >
               {item.icon}
@@ -271,7 +271,7 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
               <span
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                   isGalleryPublic(event.require_password)
-                    ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                    ? 'bg-success-soft text-success-text'
                     : 'bg-inset text-body'
                 }`}
               >
@@ -292,9 +292,9 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                     due?.tone === 'overdue'
-                      ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                      ? 'bg-danger-soft text-danger-text'
                       : due?.tone === 'soon'
-                        ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                        ? 'bg-warning-soft text-warning-text'
                         : 'bg-inset text-body'
                   }`}
                 >
@@ -380,19 +380,19 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
 
       {/* Expiration Warning */}
       {!archived && (isExpired || isExpiring) && (
-        <Card className={`p-4 mb-6 border-2 ${isExpired ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'}`}>
+        <Card className={`p-4 mb-6 border-2 ${isExpired ? 'border-danger bg-danger-soft' : 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'}`}>
           <div className="flex items-start gap-3">
-            <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${isExpired ? 'text-red-600' : 'text-orange-600'}`} />
+            <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${isExpired ? 'text-danger-text' : 'text-orange-600'}`} />
             {/* Text and action share a wrapping row beside the icon: on a
                 phone the button drops under the text, lined up with it. */}
             <div className="flex-1 min-w-0 flex flex-wrap items-start justify-between gap-3">
               <div className="flex-1 basis-64 min-w-0">
-                <p className={`font-medium ${isExpired ? 'text-red-900 dark:text-red-200' : 'text-orange-900 dark:text-orange-200'}`}>
+                <p className={`font-medium ${isExpired ? 'text-danger-text' : 'text-orange-900 dark:text-orange-200'}`}>
                   {isExpired
                     ? t('events.eventExpiredMessage')
                     : t('events.eventExpiresIn', { days: daysUntilExpiration })}
                 </p>
-                <p className={`text-sm mt-1 ${isExpired ? 'text-red-700 dark:text-red-300' : 'text-orange-700 dark:text-orange-300'}`}>
+                <p className={`text-sm mt-1 ${isExpired ? 'text-danger-text' : 'text-orange-700 dark:text-orange-300'}`}>
                   {isExpired ? t('events.guestsCannotAccessGallery') : t('events.warningEmailsHaveBeenSent')}
                 </p>
               </div>

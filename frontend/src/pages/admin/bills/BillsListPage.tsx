@@ -159,7 +159,7 @@ export const BillsListPage: React.FC = () => {
                               from Storno (blue vs purple) so the two
                               kinds are visually unambiguous. */}
                           {inv.kind !== 'storno' && inv.replacesInvoiceId && (
-                            <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 uppercase tracking-wide">
+                            <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-info-soft text-info-text uppercase tracking-wide">
                               {t('bills.kind.reissue', 'Reissue')}
                             </span>
                           )}
@@ -190,12 +190,12 @@ export const BillsListPage: React.FC = () => {
                             </span>
                           ) : (
                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                              inv.status === 'paid' ? 'bg-green-100 text-green-800'
-                                : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
-                                : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
+                              inv.status === 'paid' ? 'bg-success-soft text-success-text'
+                                : inv.status === 'overdue' ? 'bg-danger-soft text-danger-text'
+                                : inv.status === 'sent' ? 'bg-info-soft text-info-text'
                                 : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
                                 : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
-                                : 'bg-amber-100 text-amber-800'
+                                : 'bg-warning-soft text-warning-text'
                             }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
                           )}
                         </td>
@@ -401,7 +401,7 @@ const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) =
               type="file"
               accept="application/pdf"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-primary-700"
+              className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-accent-strong file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
             />
             {file && (
               <p className="text-xs text-neutral-500 mt-1">{file.name} · {(file.size / 1024).toFixed(1)} KB</p>

@@ -184,7 +184,7 @@ export const UpdateNotificationSettings: React.FC<UpdateNotificationSettingsProp
             type="checkbox"
             checked={localEnabled}
             onChange={(e) => handleToggleEnabled(e.target.checked)}
-            className="w-4 h-4 text-primary-600 bg-neutral-100 border-neutral-300 rounded focus:ring-primary-500"
+            className="w-4 h-4 text-accent bg-neutral-100 border-neutral-300 rounded focus:ring-accent"
           />
           <div>
             <p className="font-medium text-heading">
@@ -212,8 +212,8 @@ export const UpdateNotificationSettings: React.FC<UpdateNotificationSettingsProp
 
         {/* Last notified version */}
         {settings?.lastNotifiedVersion && (
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-            <p className="text-sm text-blue-700 dark:text-blue-300">
+          <div className="p-3 bg-info-soft rounded-lg">
+            <p className="text-sm text-info-text">
               {t('settings.updateNotifications.lastNotified', 'Last notification sent for version: {{version}}', {
                 version: settings.lastNotifiedVersion
               })}

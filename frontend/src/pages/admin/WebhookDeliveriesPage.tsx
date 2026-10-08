@@ -49,9 +49,9 @@ type StatusFilter = typeof STATUS_FILTERS[number];
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
-    success: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-    pending: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-    failed: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+    success: 'bg-success-soft text-success-text',
+    pending: 'bg-warning-soft text-warning-text',
+    failed: 'bg-danger-soft text-danger-text',
   };
   return map[status] || 'bg-fill text-soft';
 }
@@ -320,7 +320,7 @@ export const WebhookDeliveriesPage: React.FC = () => {
                     <span className="block text-xs text-neutral-500">
                       {t('settings.webhooks.deliveries.lastError', 'Last error')}
                     </span>
-                    <pre className="text-xs whitespace-pre-wrap break-words bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded p-2">
+                    <pre className="text-xs whitespace-pre-wrap break-words bg-danger-soft text-danger-text rounded p-2">
                       {detailQuery.data.last_error}
                     </pre>
                   </div>

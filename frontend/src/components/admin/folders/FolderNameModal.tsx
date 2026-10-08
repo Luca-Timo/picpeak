@@ -75,7 +75,7 @@ const FolderNameDialog: React.FC<FolderNameModalProps> = ({
               if (e.key === 'Enter') submit();
               if (e.key === 'Escape') onClose();
             }}
-            className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent"
           />
           <div className="flex justify-end gap-3 mt-6">
             <Button variant="outline" onClick={onClose} disabled={isLoading}>

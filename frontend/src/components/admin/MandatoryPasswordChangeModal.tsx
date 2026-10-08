@@ -105,8 +105,8 @@ export const MandatoryPasswordChangeModal: React.FC = () => {
       <Card className="w-full max-w-md">
         <div className="p-6">
           <div className="mb-6 text-center">
-            <div className="mx-auto w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-4">
-              <AlertCircle className="w-6 h-6 text-amber-600" />
+            <div className="mx-auto w-12 h-12 bg-warning-soft rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-6 h-6 text-warning-text" />
             </div>
             <h2 className="text-xl font-semibold text-neutral-900 mb-2">{t('mandatoryPasswordChange.title')}</h2>
             <p className="text-sm text-neutral-600">
@@ -200,10 +200,10 @@ export const MandatoryPasswordChangeModal: React.FC = () => {
             </div>
 
             {/* Password Requirements */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="bg-info-soft border border-info-line rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-800">
+                <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-info-text">
                   <p className="font-medium">{t('passwordChange.requirements')}</p>
                   <ul className="list-disc list-inside mt-1 space-y-1">
                     <li>{t('mandatoryPasswordChange.minLength')}</li>

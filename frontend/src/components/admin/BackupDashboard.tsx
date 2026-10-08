@@ -82,8 +82,8 @@ interface BackupDashboardProps {
 // Full class names, never assembled from parts: Tailwind only emits classes
 // it finds verbatim in the source (issue 1641).
 const statCardColors: Record<string, { box: string; icon: string }> = {
-  blue: { box: 'bg-blue-100 dark:bg-blue-900/40', icon: 'text-blue-600 dark:text-blue-400' },
-  green: { box: 'bg-green-100 dark:bg-green-900/40', icon: 'text-green-600 dark:text-green-400' },
+  blue: { box: 'bg-info-soft', icon: 'text-info-text' },
+  green: { box: 'bg-success-soft', icon: 'text-success-text' },
   purple: { box: 'bg-purple-100 dark:bg-purple-900/40', icon: 'text-purple-600 dark:text-purple-400' },
   gray: { box: 'bg-gray-100 dark:bg-gray-900/40', icon: 'text-gray-600 dark:text-gray-400' },
 };
@@ -114,10 +114,10 @@ const formatBytes = (bytes: number): string => {
 };
 
 const healthColors: Record<HealthStatus, { badge: string; ring: string }> = {
-  excellent: { badge: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300', ring: 'text-green-500' },
-  good: { badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300', ring: 'text-blue-500' },
-  warning: { badge: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300', ring: 'text-amber-500' },
-  critical: { badge: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300', ring: 'text-red-500' },
+  excellent: { badge: 'bg-success-soft text-success-text', ring: 'text-success' },
+  good: { badge: 'bg-info-soft text-info-text', ring: 'text-info' },
+  warning: { badge: 'bg-warning-soft text-warning-text', ring: 'text-warning' },
+  critical: { badge: 'bg-danger-soft text-danger-text', ring: 'text-danger' },
 };
 
 export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config, onRunBackup, isBackupRunning }) => {
@@ -176,14 +176,14 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
     <div className="space-y-6">
       {/* Configuration Alert */}
       {!isConfigured && (
-        <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+        <div className="bg-warning-soft border border-warning-line rounded-lg p-4">
           <div className="flex">
-            <AlertTriangle className="h-5 w-5 text-amber-400 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              <h3 className="text-sm font-medium text-warning-text">
                 {t('backup.dashboard.notConfigured.title')}
               </h3>
-              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+              <p className="mt-1 text-sm text-warning-text">
                 {t('backup.dashboard.notConfigured.message')}
               </p>
             </div>
@@ -244,16 +244,16 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
             {lastBackup && lastBackup.id !== lastSuccessfulBackup?.id && (
               <p className={`text-sm mt-1 ${
                 lastBackup.status === 'failed'
-                  ? 'text-red-600 dark:text-red-400 font-medium'
+                  ? 'text-danger-text font-medium'
                   : lastBackup.status === 'running'
-                    ? 'text-blue-600 dark:text-blue-400'
+                    ? 'text-info-text'
                     : 'text-muted'
               }`}>
                 {t('backup.dashboard.lastAttempt', 'Last attempt')}: {formatDistanceToNow(new Date(lastBackup.created_at), { addSuffix: true })}
                 {' · '}
                 {t(`backup.dashboard.status.${lastBackup.status}`, lastBackup.status)}
                 {lastBackup.status === 'failed' && lastBackup.error_message && (
-                  <span className="block text-xs text-red-600 dark:text-red-400 mt-0.5">
+                  <span className="block text-xs text-danger-text mt-0.5">
                     {backupErrorText(backupErrorCode(lastBackup.error_message), t)
                       ?? lastBackup.error_message.split('\n')[0].slice(0, 200)}
                   </span>
@@ -264,7 +264,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
                 Admin needs to know they may be looking at a hung row
                 that won't ever flip to completed. */}
             {zombieRuns.length > 0 && (
-              <p className="text-sm mt-1 text-amber-700 dark:text-amber-300 font-medium">
+              <p className="text-sm mt-1 text-warning-text font-medium">
                 {t('backup.dashboard.zombieRuns',
                   '{{count}} backup(s) running >30min — may have crashed without completing',
                   { count: zombieRuns.length })}
@@ -337,11 +337,11 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
               <div key={backup.id} className="flex items-center justify-between py-3 border-b border-line last:border-0">
                 <div className="flex items-center space-x-3">
                   {backup.status === 'completed' ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <CheckCircle className="h-5 w-5 text-success" />
                   ) : backup.status === 'failed' ? (
-                    <AlertCircle className="h-5 w-5 text-red-500" />
+                    <AlertCircle className="h-5 w-5 text-danger" />
                   ) : (
-                    <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                    <Loader2 className="h-5 w-5 text-info animate-spin" />
                   )}
                   <div>
                     <p className="font-medium text-heading">
@@ -377,7 +377,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
                 <span className="text-body">Database</span>
               </div>
               <span className={`px-2 py-1 rounded text-xs font-medium ${
-                statistics.database_backed_up ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' : 'bg-inset text-body'
+                statistics.database_backed_up ? 'bg-success-soft text-success-text' : 'bg-inset text-body'
               }`}>
                 {statistics.database_backed_up ? t('backup.dashboard.coverage.included') : t('backup.dashboard.coverage.excluded')}
               </span>
@@ -410,7 +410,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
               {config?.backup_destination_type === 's3' ? (
-                <Cloud className="h-5 w-5 text-blue-500" />
+                <Cloud className="h-5 w-5 text-info" />
               ) : config?.backup_destination_type === 'rsync' ? (
                 <Server className="h-5 w-5 text-purple-500" />
               ) : (

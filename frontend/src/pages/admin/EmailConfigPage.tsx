@@ -662,7 +662,7 @@ export const EmailConfigPage: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-body mb-1">
-                  {t('email.smtpHost')} <span className="text-red-500">*</span>
+                  {t('email.smtpHost')} <span className="text-danger">*</span>
                 </label>
                 <Input
                   type="text"
@@ -676,7 +676,7 @@ export const EmailConfigPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-body mb-1">
-                    {t('email.port')} <span className="text-red-500">*</span>
+                    {t('email.port')} <span className="text-danger">*</span>
                   </label>
                   <Input
                     type="number"
@@ -693,7 +693,7 @@ export const EmailConfigPage: React.FC = () => {
                   <select
                     value={smtpConfig.smtp_secure ? 'ssl' : 'tls'}
                     onChange={(e) => setSmtpConfig(prev => ({ ...prev, smtp_secure: e.target.value === 'ssl' }))}
-                    className="w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                    className="w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark"
                   >
                     <option value="tls">TLS</option>
                     <option value="ssl">SSL</option>
@@ -708,17 +708,17 @@ export const EmailConfigPage: React.FC = () => {
                     type="checkbox"
                     checked={!smtpConfig.tls_reject_unauthorized}
                     onChange={(e) => setSmtpConfig(prev => ({ ...prev, tls_reject_unauthorized: !e.target.checked }))}
-                    className="w-4 h-4 text-accent border-line-strong rounded focus:ring-primary-500"
+                    className="w-4 h-4 text-accent border-line-strong rounded focus:ring-accent"
                   />
                   <span className="text-sm font-medium text-body">
                     {t('email.ignoreSslErrors')}
                   </span>
                 </label>
                 {!smtpConfig.tls_reject_unauthorized && (
-                  <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <div className="mt-2 p-3 bg-warning-soft border border-warning-line rounded-lg">
                     <div className="flex items-start gap-2">
-                      <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-800 dark:text-amber-300">
+                      <ShieldAlert className="w-4 h-4 text-warning-text flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-warning-text">
                         {t('email.ignoreSslWarning')}
                       </p>
                     </div>
@@ -762,7 +762,7 @@ export const EmailConfigPage: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-body mb-1">
-                  {t('email.fromEmail')} <span className="text-red-500">*</span>
+                  {t('email.fromEmail')} <span className="text-danger">*</span>
                 </label>
                 <Input
                   type="email"
@@ -791,10 +791,10 @@ export const EmailConfigPage: React.FC = () => {
           <Card padding="md">
             <h2 className="text-lg font-semibold text-heading mb-4">{t('email.testEmailSection')}</h2>
 
-            <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <div className="mb-4 p-4 bg-warning-soft border border-warning-line rounded-lg">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                <div className="text-sm text-amber-800 dark:text-amber-300">
+                <AlertCircle className="w-5 h-5 text-warning-text flex-shrink-0" />
+                <div className="text-sm text-warning-text">
                   <p className="font-medium">{t('email.beforeTesting')}</p>
                   <ul className="list-disc list-inside mt-1">
                     <li>{t('email.saveSmtpFirst')}</li>
@@ -830,10 +830,10 @@ export const EmailConfigPage: React.FC = () => {
               </Button>
             </div>
 
-            <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg">
+            <div className="mt-6 p-4 bg-success-soft border border-success-line rounded-lg">
               <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                <div className="text-sm text-green-800 dark:text-green-300">
+                <CheckCircle className="w-5 h-5 text-success-text flex-shrink-0" />
+                <div className="text-sm text-success-text">
                   <p className="font-medium">{t('email.commonSmtpSettings')}</p>
                   <ul className="mt-2 space-y-1">
                     <li><strong>Gmail:</strong> smtp.gmail.com:587 (TLS)</li>
@@ -931,7 +931,7 @@ export const EmailConfigPage: React.FC = () => {
               const ratio = lowListPanelContrast(emailBodyTextColor, emailListBgColor);
               if (ratio === null) return null;
               return (
-                <div role="status" className="mt-6 flex items-start gap-2 p-3 text-sm border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
+                <div role="status" className="mt-6 flex items-start gap-2 p-3 text-sm border border-warning-line bg-warning-soft text-warning-text rounded-lg">
                   <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span>
                     {t('email.listContrastWarning', 'Body text is hard to read on the Info panel (contrast {{ratio}}:1, 4.5:1 recommended). Emails switch the panel text to a readable colour automatically, but matching colours look better.', { ratio: (Math.floor(ratio * 10) / 10).toLocaleString(i18n.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}
@@ -999,7 +999,7 @@ export const EmailConfigPage: React.FC = () => {
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {featureOff && (
                           <span
-                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                            className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-warning-soft text-warning-text"
                             title={t('email.featureOffTooltip', 'The feature this template belongs to is currently disabled. You can still edit the template — it will be used once the feature is re-enabled.')}
                           >
                             {t('email.featureOff', 'Feature off')}
@@ -1104,7 +1104,7 @@ export const EmailConfigPage: React.FC = () => {
                       <lang.Flag/>
                       <span>{lang.name}</span>
                       {!hasContent && lang.code !== 'en' && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title={t('email.noTranslation')} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-warning" title={t('email.noTranslation')} />
                       )}
                     </button>
                   );
@@ -1113,14 +1113,14 @@ export const EmailConfigPage: React.FC = () => {
 
               {/* Copy from language */}
               {!currentTranslation.body_html && copySourceLanguages.length > 0 && (
-                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">{t('email.noTranslationYet')}</p>
+                <div className="mb-4 p-3 bg-info-soft border border-info-line rounded-lg">
+                  <p className="text-sm text-info-text mb-2">{t('email.noTranslationYet')}</p>
                   <div className="flex flex-wrap gap-2">
                     {copySourceLanguages.map(lang => (
                       <button
                         key={lang.code}
                         onClick={() => handleCopyFromLanguage(lang.code)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 text-sm bg-panel border border-blue-300 dark:border-blue-700 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                        className="inline-flex items-center gap-1.5 px-3 py-1 text-sm bg-panel border border-info-line rounded-md hover:bg-info-soft text-info-text"
                       >
                         <Copy className="w-3.5 h-3.5" />
                         {t('email.copyFrom')} <lang.Flag/> {lang.name}

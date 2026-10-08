@@ -20,9 +20,9 @@ import { emailService, type EmailQueueStatus } from '../../services/email.servic
 const STATUSES: EmailQueueStatus[] = ['pending', 'sent', 'failed'];
 
 const statusClass = (s: EmailQueueStatus): string =>
-  s === 'sent' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-    : s === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-      : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+  s === 'sent' ? 'bg-success-soft text-success-text'
+    : s === 'failed' ? 'bg-danger-soft text-danger-text'
+      : 'bg-warning-soft text-warning-text';
 
 export const SentEmailsPanel: React.FC = () => {
   const { t } = useTranslation();
@@ -122,13 +122,13 @@ export const SentEmailsPanel: React.FC = () => {
                           {t(`email.sentEmails.status.${m.status}`, m.status)}
                         </span>
                         {m.status === 'failed' && m.errorMessage && (
-                          <div className="mt-1 flex items-start gap-1 text-xs text-red-700 dark:text-red-400 max-w-xs">
+                          <div className="mt-1 flex items-start gap-1 text-xs text-danger-text max-w-xs">
                             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                             <span className="break-words">{m.errorMessage}</span>
                           </div>
                         )}
                         {m.status === 'pending' && m.retryCount > 0 && (
-                          <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                          <div className="mt-1 text-xs text-warning-text">
                             {t('email.sentEmails.retries', '{{count}} retries', { count: m.retryCount })}
                           </div>
                         )}

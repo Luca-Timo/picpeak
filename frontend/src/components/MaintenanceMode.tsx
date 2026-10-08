@@ -47,8 +47,8 @@ export const MaintenanceMode: React.FC = () => {
       {/* Main content */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-amber-100 rounded-full mb-6">
-            <AlertTriangle className="w-10 h-10 text-amber-600" />
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-warning-soft rounded-full mb-6">
+            <AlertTriangle className="w-10 h-10 text-warning-text" />
           </div>
           
           <h1 className="text-3xl font-bold text-neutral-900 mb-4">
@@ -64,7 +64,7 @@ export const MaintenanceMode: React.FC = () => {
               {t('maintenance.urgentMatters')}{' '}
               <a 
                 href={`mailto:${settings.branding_support_email}`}
-                className="text-primary-600 hover:text-primary-700"
+                className="text-accent"
               >
                 {settings.branding_support_email}
               </a>

@@ -140,8 +140,8 @@ export const PhotoDecision: React.FC<PhotoDecisionProps> = ({
   const buttonClass = (active: boolean, tone: 'approve' | 'reject') => `flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-sm transition-all ${
     active
       ? (tone === 'approve'
-        ? 'bg-green-600 text-white ring-1 ring-green-300'
-        : 'bg-red-600 text-white ring-1 ring-red-300')
+        ? 'bg-success text-white ring-1 ring-success'
+        : 'bg-danger text-white ring-1 ring-danger')
       : 'bg-white/10 text-white hover:bg-white/20'
   } ${isSubmitting ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`;
 

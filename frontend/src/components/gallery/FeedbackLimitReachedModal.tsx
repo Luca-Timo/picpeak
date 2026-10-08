@@ -95,11 +95,11 @@ export const FeedbackLimitReachedModal: React.FC<FeedbackLimitReachedModalProps>
             className={`
               flex-shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-full
               flex items-center justify-center
-              ${isFavorite ? 'bg-amber-100 dark:bg-amber-900/40' : 'bg-rose-100 dark:bg-rose-900/40'}
+              ${isFavorite ? 'bg-warning-soft' : 'bg-danger-soft'}
             `}
           >
             <Icon
-              className={`w-6 h-6 ${isFavorite ? 'text-amber-600 dark:text-amber-300' : 'text-rose-600 dark:text-rose-300'}`}
+              className={`w-6 h-6 ${isFavorite ? 'text-warning-text' : 'text-danger-text'}`}
               aria-hidden="true"
             />
           </div>

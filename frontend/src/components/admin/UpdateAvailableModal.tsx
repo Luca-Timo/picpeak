@@ -139,7 +139,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-line">
           <div className="flex items-start gap-3">
-            <ArrowUpCircle className="w-6 h-6 text-blue-600 mt-0.5 flex-shrink-0" />
+            <ArrowUpCircle className="w-6 h-6 text-info-text mt-0.5 flex-shrink-0" />
             <div>
               <h2 className="text-lg font-semibold text-heading">
                 {t('admin.updates.modalTitle', 'Update available')}
@@ -204,7 +204,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
                             aria-label={t('admin.updates.copyCommand', 'Copy command')}
                           >
                             {copiedKey === key
-                              ? <CheckCircle className="w-4 h-4 text-green-400" />
+                              ? <CheckCircle className="w-4 h-4 text-success" />
                               : <Copy className="w-4 h-4" />}
                           </button>
                         </div>
@@ -233,7 +233,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
               <p className="text-sm text-neutral-500">{t('common.loading', 'Loading…')}</p>
             )}
             {changelogError && (
-              <p className="text-sm text-red-600">
+              <p className="text-sm text-danger-text">
                 {t('admin.updates.changelogError', 'Could not load release notes. Check the release pages directly on GitHub.')}
               </p>
             )}
@@ -273,7 +273,7 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                          className="text-xs text-info-text hover:underline flex items-center gap-1"
                         >
                           {t('admin.updates.viewOnGitHub', 'View on GitHub')}
                           <ExternalLink className="w-3 h-3" />

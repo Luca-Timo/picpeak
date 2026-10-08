@@ -14,7 +14,7 @@ import { emailService, type MailAccount } from '../../services/email.service';
 import { useMutationWithToast, useModal } from '../../hooks';
 
 const labelCls = 'block text-sm font-medium text-body mb-1';
-const selectCls = 'w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark';
+const selectCls = 'w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark';
 
 const ACCOUNT_KEY = 'customers';
 
@@ -69,13 +69,13 @@ export const CustomerMailboxCard: React.FC = () => {
         </label>
 
         <div>
-          <label className={labelCls}>{t('email.incoming.host', 'IMAP Host')} <span className="text-red-500">*</span></label>
+          <label className={labelCls}>{t('email.incoming.host', 'IMAP Host')} <span className="text-danger">*</span></label>
           <Input type="text" value={cfg.imap_host || ''} onChange={(e) => set('imap_host', e.target.value)} placeholder="imap.example.com" leftIcon={<Server className="w-5 h-5 text-neutral-400" />} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>{t('email.incoming.port', 'Port')} <span className="text-red-500">*</span></label>
+            <label className={labelCls}>{t('email.incoming.port', 'Port')} <span className="text-danger">*</span></label>
             <Input type="number" value={cfg.imap_port ?? 993} onChange={(e) => set('imap_port', parseInt(e.target.value, 10) || 0)} placeholder="993" />
           </div>
           <div>
@@ -88,7 +88,7 @@ export const CustomerMailboxCard: React.FC = () => {
         </div>
 
         <div>
-          <label className={labelCls}>{t('email.incoming.user', 'Username')} <span className="text-red-500">*</span></label>
+          <label className={labelCls}>{t('email.incoming.user', 'Username')} <span className="text-danger">*</span></label>
           <Input type="text" value={cfg.imap_user || ''} onChange={(e) => set('imap_user', e.target.value)} autoComplete="off" placeholder="hello@yourdomain.com" leftIcon={<User className="w-5 h-5 text-neutral-400" />} />
         </div>
 

@@ -783,7 +783,7 @@ export const BillEditorPage: React.FC = () => {
                   const email = e.target.value;
                   if (email) setCcPdfEmail(email);
                 }}
-                className="text-xs px-2 py-1 border border-line-strong bg-panel text-heading rounded focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                className="text-xs px-2 py-1 border border-line-strong bg-panel text-heading rounded focus:ring-2 focus:ring-accent focus:border-accent-dark"
               >
                 <option value="">{t('bills.field.ccPdfCustom', 'Custom email')}</option>
                 {activeAdmins.map((a: any) => (

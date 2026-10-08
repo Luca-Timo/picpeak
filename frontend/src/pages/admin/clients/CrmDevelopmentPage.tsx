@@ -202,9 +202,9 @@ export const CrmDevelopmentPage: React.FC = () => {
         description={t('crmDev.subtitle', 'Internal tools for verifying CRM flows. Hidden by default — enabled via Settings → Features → Development.')}
       />
 
-      <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 mb-5 flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
-        <p className="text-sm text-amber-800 dark:text-amber-200">
+      <div className="rounded-md border border-warning-line bg-warning-soft p-3 mb-5 flex items-start gap-2">
+        <AlertTriangle className="w-4 h-4 text-warning-text mt-0.5 shrink-0" />
+        <p className="text-sm text-warning-text">
           {t('crmDev.warning',
             'These tools fire real side effects (emails, status changes). Use against test data.')}
         </p>
@@ -216,9 +216,9 @@ export const CrmDevelopmentPage: React.FC = () => {
           templates list silently shows up empty and admins assume the
           tools are broken. */}
       {isEnvDisabled(templatesError) && (
-        <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700 p-3 mb-5 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-red-700 dark:text-red-300 mt-0.5 shrink-0" />
-          <div className="text-sm text-red-800 dark:text-red-200">
+        <div className="rounded-md border border-danger-line bg-danger-soft p-3 mb-5 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-danger-text mt-0.5 shrink-0" />
+          <div className="text-sm text-danger-text">
             <p className="font-semibold mb-1">
               {t('crmDev.envDisabled.title', 'Dev tools blocked by env gate')}
             </p>
@@ -313,7 +313,7 @@ export const CrmDevelopmentPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-neutral-500">{tpl.key}</span>
                       {!tpl.present && (
-                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-warning-soft text-warning-text">
                           {t('crmDev.templates.notSeeded', 'Not seeded')}
                         </span>
                       )}

@@ -139,7 +139,7 @@ export const CategoryManager: React.FC = () => {
             onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
             placeholder={t('categories.categoryName')}
             maxLength={100}
-            className="flex-1 px-3 py-2 border border-line-strong rounded-md bg-panel text-heading focus:ring-2 focus:ring-primary-500"
+            className="flex-1 px-3 py-2 border border-line-strong rounded-md bg-panel text-heading focus:ring-2 focus:ring-accent"
             autoFocus
           />
           <Button
@@ -190,7 +190,7 @@ export const CategoryManager: React.FC = () => {
                       if (e.key === 'Escape') cancelEdit();
                     }}
                     maxLength={100}
-                    className="flex-1 px-3 py-1 border border-line-strong rounded-md bg-panel text-heading focus:ring-2 focus:ring-primary-500"
+                    className="flex-1 px-3 py-1 border border-line-strong rounded-md bg-panel text-heading focus:ring-2 focus:ring-accent"
                     autoFocus
                   />
                   <Button
@@ -253,7 +253,7 @@ export const CategoryManager: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleDelete(category)}
-                      className="p-1.5 text-soft hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                      className="p-1.5 text-soft hover:text-danger-text hover:bg-danger-soft rounded transition-colors"
                       title={t('common.delete')}
                       disabled={deleteMutation.isPending}
                     >

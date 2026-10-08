@@ -13,8 +13,8 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { emailService } from '../../services/email.service';
 
 const statusClass = (s: string): string =>
-  s === 'ingested' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-    : s === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+  s === 'ingested' ? 'bg-success-soft text-success-text'
+    : s === 'error' ? 'bg-danger-soft text-danger-text'
       : 'bg-fill text-body';
 
 export const ReceivedEmailsPanel: React.FC = () => {
@@ -56,7 +56,7 @@ export const ReceivedEmailsPanel: React.FC = () => {
                 {r.attachment_count > 0 && (
                   <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-neutral-500">
                     <Paperclip className="w-3 h-3" />{r.attachment_count}
-                    {r.inbound_document_id && <Link to="/admin/accounting/inbox" className="ml-1 text-primary-600 hover:underline">{t('email.received.inbox', 'inbox')}</Link>}
+                    {r.inbound_document_id && <Link to="/admin/accounting/inbox" className="ml-1 text-accent hover:underline">{t('email.received.inbox', 'inbox')}</Link>}
                   </span>
                 )}
               </td>

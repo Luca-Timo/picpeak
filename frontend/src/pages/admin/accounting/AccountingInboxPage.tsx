@@ -32,7 +32,7 @@ const PAYMENT_METHODS: PaymentMethod[] = ['bank_transfer', 'cash', 'twint', 'pay
 const BOOKING_DISPOSITIONS: Disposition[] = ['rebill', 'durchlaufend'];
 
 const statusClasses: Record<string, string> = {
-  unsorted: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  unsorted: 'bg-warning-soft text-warning-text',
   categorized: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
   declined: 'bg-fill text-body',
   duplicate: 'bg-fill text-body',
@@ -321,7 +321,7 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">
           {rebillNeedsAmount && (
-            <span className="mr-auto text-xs text-amber-600 dark:text-amber-400">
+            <span className="mr-auto text-xs text-warning-text">
               {t('accounting.incoming.amountRequired', 'Enter the invoice amount before re-billing (0 is allowed).')}
             </span>
           )}
@@ -455,7 +455,7 @@ export const AccountingInboxPage: React.FC = () => {
                   {/* #1: once paid, the front status reads "Paid" — not the
                       stale "categorized". */}
                   {doc.supplierPaid
-                    ? <span className="inline-block rounded px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">{t('accounting.incoming.paid', 'Paid')}</span>
+                    ? <span className="inline-block rounded px-2 py-0.5 text-xs font-medium bg-success-soft text-success-text">{t('accounting.incoming.paid', 'Paid')}</span>
                     : <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${statusClasses[doc.status] || ''}`}>{t(`accounting.inbox.status.${doc.status}`, doc.status)}</span>}
                   <span className="text-sm font-medium text-heading truncate hover:underline">{doc.supplierName || doc.originalFilename || t('accounting.inbox.untitled', 'Untitled document')}</span>
                   {doc.source === 'camera' && <Camera className="w-3.5 h-3.5 text-neutral-400" />}

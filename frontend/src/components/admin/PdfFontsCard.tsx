@@ -16,7 +16,7 @@ import { Button, Card } from '../common';
 import { PermissionGate } from './PermissionGate';
 import { pdfThemesService } from '../../services/pdfThemes.service';
 
-const fieldClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 w-full px-3 py-2 rounded-md border border-line-strong '
+const fieldClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 w-full px-3 py-2 rounded-md border border-line-strong '
   + 'bg-panel text-sm text-heading';
 const labelClass = 'block text-sm font-medium text-body mb-1';
 const FACES = ['regular', 'bold', 'italic'] as const;
@@ -98,7 +98,7 @@ export const PdfFontsCard: React.FC = () => {
       </div>
 
       {data?.legacyMoveFailure && (
-        <p role="status" className="mb-4 p-2 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200">
+        <p role="status" className="mb-4 p-2 rounded border border-warning-line bg-warning-soft text-sm text-warning-text">
           {t('branding.pdfFonts.legacyFailed', 'The font set before this update could not be moved: {{reason}}', {
             reason: t(`branding.pdfFonts.errors.${data.legacyMoveFailure.reason}`, data.legacyMoveFailure.reason),
           })}
@@ -153,7 +153,7 @@ export const PdfFontsCard: React.FC = () => {
             <input type="checkbox" className="mt-1" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
             {t('branding.pdfFonts.confirm', 'I have the right to embed this font in the documents I send.')}
           </label>
-          {problem && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{problem}</p>}
+          {problem && <p role="alert" className="text-sm text-danger-text">{problem}</p>}
           <div className="flex justify-end">
             <Button type="submit" disabled={!ready || busy}>{t('branding.pdfFonts.upload', 'Add font')}</Button>
           </div>

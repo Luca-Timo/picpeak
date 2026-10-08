@@ -162,7 +162,7 @@ export const QuoteAddOnsCard: React.FC<{ quote: QuoteDetail; lineItems: QuoteLin
                     </PermissionGate>
                   </>
                 ) : (
-                  <span className={booked ? 'text-green-700 dark:text-green-400' : 'text-muted'}>
+                  <span className={booked ? 'text-success-text' : 'text-muted'}>
                     {booked ? t('quotes.selection.chosen', 'Booked') : t('quotes.selection.notChosen', 'Not booked')}
                   </span>
                 )}

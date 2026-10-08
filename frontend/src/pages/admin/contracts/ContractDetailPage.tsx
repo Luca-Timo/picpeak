@@ -50,14 +50,14 @@ function signerProgressOf(signers: { role: string; status: string }[] | undefine
 }
 
 function statusBadgeClass(status: ContractStatus): string {
-  return status === 'fully_signed'         ? 'bg-green-100 text-green-800'
-    : status === 'signed_by_customer'      ? 'bg-blue-100 text-blue-800'
-    : status === 'signed_by_admin'         ? 'bg-blue-100 text-blue-800'
-    : status === 'sent'                    ? 'bg-amber-100 text-amber-800'
-    : status === 'declined'                ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
+  return status === 'fully_signed'         ? 'bg-success-soft text-success-text'
+    : status === 'signed_by_customer'      ? 'bg-info-soft text-info-text'
+    : status === 'signed_by_admin'         ? 'bg-info-soft text-info-text'
+    : status === 'sent'                    ? 'bg-warning-soft text-warning-text'
+    : status === 'declined'                ? 'bg-danger-soft text-danger-text'
     : status === 'cancelled'               ? 'bg-neutral-200 text-neutral-600'
     : status === 'expired'                 ? 'bg-neutral-200 text-neutral-600'
-    : status === 'awaiting_data'           ? 'bg-amber-100 text-amber-800'
+    : status === 'awaiting_data'           ? 'bg-warning-soft text-warning-text'
     :                                        'bg-neutral-100 text-neutral-700';
 }
 
@@ -525,17 +525,17 @@ export const ContractDetailPage: React.FC = () => {
           (which re-stamps from the immutable pdf_path) without having
           to discover the orphan state via monitoring. */}
       {c.signedPdfRenderFailedAt && (
-        <Card padding="lg" className="mb-4 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30">
-          <h2 className="font-semibold mb-1 text-red-900 dark:text-red-200">
+        <Card padding="lg" className="mb-4 border-danger-line bg-danger-soft">
+          <h2 className="font-semibold mb-1 text-danger-text">
             {t('contracts.detail.renderFailedTitle',
               'Signed PDF stamp failed — re-stamp required')}
           </h2>
-          <p className="text-sm text-red-900 dark:text-red-200">
+          <p className="text-sm text-danger-text">
             {t('contracts.detail.renderFailedBody',
               'The signature evidence is recorded, but the stamped PDF was not generated on the last attempt. Click "Re-send signed PDF" above to re-stamp from the original document and resend.')}
           </p>
           {c.signedPdfRenderError && (
-            <p className="mt-2 text-xs font-mono text-red-800 dark:text-red-300 break-words">
+            <p className="mt-2 text-xs font-mono text-danger-text break-words">
               {c.signedPdfRenderError}
             </p>
           )}
@@ -634,7 +634,7 @@ export const ContractDetailPage: React.FC = () => {
                   <p className="font-medium">{c.signedCustomerName}</p>
                   <p className="text-xs text-body">{formatDateTime(c.signedByCustomerAt)}</p>
                   {!c.signedCustomerSignaturePath && (
-                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                    <p className="text-xs text-warning-text mt-1">
                       {t('contracts.detail.noSignatureImage',
                         'No signature image captured — use "Re-stamp signatures" below to add one.')}
                     </p>
@@ -653,7 +653,7 @@ export const ContractDetailPage: React.FC = () => {
                   <p className="font-medium">{c.signedAdminName}</p>
                   <p className="text-xs text-body">{formatDateTime(c.signedByAdminAt)}</p>
                   {!c.signedAdminSignaturePath && (
-                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                    <p className="text-xs text-warning-text mt-1">
                       {t('contracts.detail.noSignatureImage',
                         'No signature image captured — use "Re-stamp signatures" below to add one.')}
                     </p>
@@ -713,7 +713,7 @@ export const ContractDetailPage: React.FC = () => {
             <span className="text-muted mr-2">
               {t('contracts.detail.convertedToEvent', 'Converted to event')}:
             </span>
-            <Link to={`/admin/events/${c.convertedEventId}`} className="font-medium text-primary-600 dark:text-primary-400 hover:underline">
+            <Link to={`/admin/events/${c.convertedEventId}`} className="font-medium text-accent hover:underline">
               #{c.convertedEventId}
             </Link>
           </p>
@@ -830,17 +830,17 @@ export const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractI
   // one that was altered.
   const isMissing = (c: ContractIntegrityCheck) => c.ok === false && !(c.expected && c.actual);
   const verdict = (c: ContractIntegrityCheck) => (c.ok === true ? (
-    <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-300">
+    <span className="inline-flex items-center gap-1 text-xs text-success-text">
       <CheckCircle2 className="w-3.5 h-3.5" />
       {t('contracts.detail.integrity.match', 'Hash matches')}
     </span>
   ) : isMissing(c) ? (
-    <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
+    <span className="inline-flex items-center gap-1 text-xs text-danger-text">
       <XCircle className="w-3.5 h-3.5" />
       {t('contracts.detail.integrity.missingArtefact', 'Missing — the file (or record) is gone')}
     </span>
   ) : c.ok === false ? (
-    <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
+    <span className="inline-flex items-center gap-1 text-xs text-danger-text">
       <XCircle className="w-3.5 h-3.5" />
       {t('contracts.detail.integrity.mismatch', 'Hash mismatch — file altered')}
     </span>
@@ -880,13 +880,13 @@ export const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractI
           'Re-reads every file of this contract — both PDFs, the signing certificate, each signature image and attachment — and re-checks the frozen content, the attachment list and the signing log against what was recorded when each was made. A mismatch names the item that changed.')}
       </p>
       {error && (
-        <p className="text-sm text-red-700 dark:text-red-300">
+        <p className="text-sm text-danger-text">
           {t('contracts.detail.integrity.error', 'Integrity check failed.')}
         </p>
       )}
       {data && data.checks && (
         <>
-          <p className={`text-sm font-medium mb-2 ${data.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+          <p className={`text-sm font-medium mb-2 ${data.ok ? 'text-success-text' : 'text-danger-text'}`}>
             {data.ok
               ? t('contracts.detail.integrity.allOk', 'Every check passed.')
               : t('contracts.detail.integrity.someFailed', 'At least one check failed.')}
@@ -906,7 +906,7 @@ export const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractI
                   <dt className="text-neutral-500">{t('contracts.detail.integrity.expected', 'expected')}</dt>
                   <dd className="break-all">{c.expected || '—'}</dd>
                   <dt className="text-neutral-500">{t('contracts.detail.integrity.actual', 'actual')}</dt>
-                  <dd className={c.ok === false ? 'break-all text-red-700 dark:text-red-300' : 'break-all'}>{c.actual || '—'}</dd>
+                  <dd className={c.ok === false ? 'break-all text-danger-text' : 'break-all'}>{c.actual || '—'}</dd>
                 </dl>
               </li>
             ))}
@@ -1253,7 +1253,7 @@ const RestampSignaturesCard: React.FC<RestampCardProps> = ({ contract, onSuccess
   const missingAdmin = !contract.signedAdminSignaturePath && contract.signedByAdminAt;
 
   return (
-    <Card padding="lg" className="mb-4 border-amber-300 dark:border-amber-700">
+    <Card padding="lg" className="mb-4 border-warning-line">
       <h2 className="font-semibold mb-2">
         {t('contracts.detail.restampTitle', 'Re-stamp missing signatures')}
       </h2>

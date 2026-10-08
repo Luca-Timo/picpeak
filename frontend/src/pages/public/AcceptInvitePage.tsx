@@ -142,10 +142,10 @@ export const AcceptInvitePage: React.FC = () => {
   const passwordStrength = useMemo(() => {
     const metCount = passwordRequirements.filter(req => req.test(formData.password)).length;
     if (metCount === 0) return { level: 0, label: '', color: '' };
-    if (metCount <= 2) return { level: 1, label: t('acceptInvitation.strength.weak'), color: 'bg-red-500' };
+    if (metCount <= 2) return { level: 1, label: t('acceptInvitation.strength.weak'), color: 'bg-danger' };
     if (metCount <= 3) return { level: 2, label: t('acceptInvitation.strength.fair'), color: 'bg-yellow-500' };
-    if (metCount <= 4) return { level: 3, label: t('acceptInvitation.strength.good'), color: 'bg-blue-500' };
-    return { level: 4, label: t('acceptInvitation.strength.strong'), color: 'bg-green-500' };
+    if (metCount <= 4) return { level: 3, label: t('acceptInvitation.strength.good'), color: 'bg-info' };
+    return { level: 4, label: t('acceptInvitation.strength.strong'), color: 'bg-success' };
   }, [formData.password, passwordRequirements, t]);
 
   // Redirect countdown effect
@@ -274,8 +274,8 @@ export const AcceptInvitePage: React.FC = () => {
         <div className="w-full max-w-md">
           <Card padding="lg">
             <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-red-100 flex items-center justify-center">
-                <XCircle className="w-8 h-8 text-red-600" />
+              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-danger-soft flex items-center justify-center">
+                <XCircle className="w-8 h-8 text-danger-text" />
               </div>
               <h1 className="text-2xl font-bold text-neutral-900 mb-2">
                 {t('acceptInvitation.invalidToken')}
@@ -306,8 +306,8 @@ export const AcceptInvitePage: React.FC = () => {
         <div className="w-full max-w-md">
           <Card padding="lg">
             <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="w-8 h-8 text-green-600" />
+              <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-success-soft flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-success-text" />
               </div>
               <h1 className="text-2xl font-bold text-neutral-900 mb-2">
                 {t('acceptInvitation.success')}
@@ -358,14 +358,14 @@ export const AcceptInvitePage: React.FC = () => {
         {/* Invitation Info Card */}
         <Card padding="md" className="mb-6">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-              <Mail className="w-5 h-5 text-primary-600" />
+            <div className="w-10 h-10 rounded-full bg-accent-soft flex items-center justify-center flex-shrink-0">
+              <Mail className="w-5 h-5 text-accent" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-neutral-500">{t('acceptInvitation.invitedAs')}</p>
               <p className="font-medium text-neutral-900 truncate">{invitation.email}</p>
               <div className="flex items-center gap-2 mt-2">
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-info-soft text-info-text">
                   <Shield className="w-3 h-3" />
                   {formatRole(invitation.role)}
                 </span>
@@ -437,10 +437,10 @@ export const AcceptInvitePage: React.FC = () => {
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs text-neutral-500">{t('acceptInvitation.passwordStrength')}</span>
                     <span className={`text-xs font-medium ${
-                      passwordStrength.level <= 1 ? 'text-red-600' :
+                      passwordStrength.level <= 1 ? 'text-danger-text' :
                       passwordStrength.level === 2 ? 'text-yellow-600' :
-                      passwordStrength.level === 3 ? 'text-blue-600' :
-                      'text-green-600'
+                      passwordStrength.level === 3 ? 'text-info-text' :
+                      'text-success-text'
                     }`}>
                       {passwordStrength.label}
                     </span>
@@ -462,11 +462,11 @@ export const AcceptInvitePage: React.FC = () => {
                   return (
                     <div key={index} className="flex items-center gap-2">
                       {isMet ? (
-                        <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                        <CheckCircle className="w-3.5 h-3.5 text-success" />
                       ) : (
                         <div className="w-3.5 h-3.5 rounded-full border border-neutral-300" />
                       )}
-                      <span className={`text-xs ${isMet ? 'text-green-700' : 'text-neutral-500'}`}>
+                      <span className={`text-xs ${isMet ? 'text-success-text' : 'text-neutral-500'}`}>
                         {req.label}
                       </span>
                     </div>
@@ -506,8 +506,8 @@ export const AcceptInvitePage: React.FC = () => {
               </div>
               {formData.confirmPassword && formData.password === formData.confirmPassword && (
                 <div className="flex items-center gap-1.5 mt-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                  <span className="text-xs text-green-700">{t('acceptInvitation.passwordsMatch')}</span>
+                  <CheckCircle className="w-3.5 h-3.5 text-success" />
+                  <span className="text-xs text-success-text">{t('acceptInvitation.passwordsMatch')}</span>
                 </div>
               )}
             </div>

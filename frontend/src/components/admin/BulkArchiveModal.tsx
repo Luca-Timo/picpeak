@@ -45,7 +45,7 @@ export const BulkArchiveModal: React.FC<BulkArchiveModalProps> = ({
 
           <div className="mb-6">
             <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-warning-text flex-shrink-0 mt-0.5" />
               <div className="text-sm text-neutral-700">
                 <p className="mb-2">
                   {t('events.bulkArchive.intro', 'You are about to archive {{count}} events. This action will:', { count })}

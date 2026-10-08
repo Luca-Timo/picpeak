@@ -123,7 +123,7 @@ export const GuestNamePromptModal: React.FC<GuestNamePromptModalProps> = ({
           />
 
           {submitError && (
-            <div className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded px-3 py-2">
+            <div className="text-sm text-danger-text bg-danger-soft rounded px-3 py-2">
               {submitError}
             </div>
           )}

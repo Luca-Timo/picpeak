@@ -33,11 +33,11 @@ type TabType = 'users' | 'invitations' | 'roles';
 const getRoleBadgeColor = (roleName: string): string => {
   switch (roleName?.toLowerCase()) {
     case 'super_admin':
-      return 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
+      return 'bg-danger-soft text-danger-text border-danger-line';
     case 'admin':
-      return 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+      return 'bg-info-soft text-info-text border-info-line';
     case 'editor':
-      return 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800';
+      return 'bg-success-soft text-success-text border-success-line';
     case 'viewer':
     default:
       return 'bg-inset text-body border-line';
@@ -130,7 +130,7 @@ const CreateInvitationModal: React.FC<CreateInvitationModalProps> = ({
                   disabled={isLoading}
                 />
                 {errors.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                  <p className="mt-1 text-sm text-danger-text">{errors.email}</p>
                 )}
               </div>
 
@@ -144,7 +144,7 @@ const CreateInvitationModal: React.FC<CreateInvitationModalProps> = ({
                     setRoleId(e.target.value ? Number(e.target.value) : '');
                     setErrors((prev) => ({ ...prev, role: undefined }));
                   }}
-                  className="w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                  className="w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark"
                   disabled={isLoading}
                 >
                   <option value="">{t('userManagement.selectRole')}</option>
@@ -155,7 +155,7 @@ const CreateInvitationModal: React.FC<CreateInvitationModalProps> = ({
                   ))}
                 </select>
                 {errors.role && (
-                  <p className="mt-1 text-sm text-red-600">{errors.role}</p>
+                  <p className="mt-1 text-sm text-danger-text">{errors.role}</p>
                 )}
               </div>
             </div>
@@ -260,7 +260,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
               <select
                 value={roleId}
                 onChange={(e) => setRoleId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                className="w-full px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark"
                 disabled={isLoading}
               >
                 <option value="">{t('userManagement.selectRole')}</option>
@@ -347,12 +347,12 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <div className="flex items-start gap-3 mb-4">
             <div
               className={`p-2 rounded-full ${
-                variant === 'danger' ? 'bg-red-100 dark:bg-red-900/40' : 'bg-amber-100 dark:bg-amber-900/40'
+                variant === 'danger' ? 'bg-danger-soft' : 'bg-warning-soft'
               }`}
             >
               <AlertTriangle
                 className={`w-5 h-5 ${
-                  variant === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+                  variant === 'danger' ? 'text-danger-text' : 'text-warning-text'
                 }`}
               />
             </div>
@@ -376,7 +376,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               isLoading={isLoading}
               className={
                 variant === 'danger'
-                  ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+                  ? 'bg-danger hover:opacity-90 focus:ring-accent'
                   : ''
               }
             >
@@ -657,7 +657,7 @@ export const UserManagementPage: React.FC = () => {
           <p className="text-soft mt-1">{t('userManagement.subtitle')}</p>
         </div>
         <div className="text-center py-12">
-          <p className="text-red-600">{t('userManagement.loadError')}</p>
+          <p className="text-danger-text">{t('userManagement.loadError')}</p>
           <Button onClick={() => window.location.reload()} className="mt-4">
             {t('common.tryAgain')}
           </Button>
@@ -723,7 +723,7 @@ export const UserManagementPage: React.FC = () => {
                 {users?.filter((u) => u.isActive).length || 0}
               </p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-600" />
+            <CheckCircle className="w-8 h-8 text-success-text" />
           </div>
         </Card>
 
@@ -737,7 +737,7 @@ export const UserManagementPage: React.FC = () => {
                 {invitations?.length || 0}
               </p>
             </div>
-            <Mail className="w-8 h-8 text-blue-600" />
+            <Mail className="w-8 h-8 text-info-text" />
           </div>
         </Card>
 
@@ -854,7 +854,7 @@ export const UserManagementPage: React.FC = () => {
                             </p>
                             <p className="text-xs text-muted">{user.email}</p>
                             {isSuperAdmin && user.emailLinkEligible === false && (
-                              <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                              <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-warning-soft text-warning-text">
                                 <AlertTriangle className="w-3 h-3" />
                                 {t('userManagement.ssoNotConfirmed', 'Email not confirmed for SSO')}
                               </span>
@@ -876,7 +876,7 @@ export const UserManagementPage: React.FC = () => {
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             user.isActive
-                              ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                              ? 'bg-success-soft text-success-text'
                               : 'bg-inset text-muted'
                           }`}
                         >
@@ -906,7 +906,7 @@ export const UserManagementPage: React.FC = () => {
                           {isSuperAdmin && user.emailLinkEligible === false && (
                             <button
                               onClick={() => handleConfirmEmail(user)}
-                              className="p-1.5 text-neutral-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-lg transition-colors"
+                              className="p-1.5 text-neutral-400 hover:text-warning-text hover:bg-warning-soft rounded-lg transition-colors"
                               title={t('userManagement.confirmEmailForSso', 'Confirm email for SSO')}
                             >
                               <MailCheck className="w-4 h-4" />
@@ -922,7 +922,7 @@ export const UserManagementPage: React.FC = () => {
                           {user.isActive ? (
                             <button
                               onClick={() => handleDeactivateUser(user)}
-                              className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                              className="p-1.5 text-neutral-400 hover:text-danger-text hover:bg-danger-soft rounded-lg transition-colors"
                               title={t('userManagement.deactivateUser')}
                             >
                               <UserX className="w-4 h-4" />
@@ -931,14 +931,14 @@ export const UserManagementPage: React.FC = () => {
                             <>
                               <button
                                 onClick={() => handleActivateUser(user)}
-                                className="p-1.5 text-neutral-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-colors"
+                                className="p-1.5 text-neutral-400 hover:text-success-text hover:bg-success-soft rounded-lg transition-colors"
                                 title={t('userManagement.activateUser', 'Reactivate user')}
                               >
                                 <UserCheck className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDeleteUser(user)}
-                                className="p-1.5 text-neutral-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                className="p-1.5 text-neutral-400 hover:text-danger-text hover:bg-danger-soft rounded-lg transition-colors"
                                 title={t('userManagement.deleteUser', 'Delete user permanently')}
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -996,8 +996,8 @@ export const UserManagementPage: React.FC = () => {
                       <tr key={invitation.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-700/50">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-                              <Mail className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            <div className="w-10 h-10 rounded-full bg-info-soft flex items-center justify-center">
+                              <Mail className="w-5 h-5 text-info-text" />
                             </div>
                             <p className="text-sm font-medium text-heading">
                               {invitation.email}
@@ -1020,7 +1020,7 @@ export const UserManagementPage: React.FC = () => {
                         <td className="px-6 py-4">
                           <span
                             className={`inline-flex items-center gap-1 text-sm ${
-                              isExpired ? 'text-red-600 dark:text-red-400' : 'text-body'
+                              isExpired ? 'text-danger-text' : 'text-body'
                             }`}
                           >
                             <Clock className="w-4 h-4" />
@@ -1034,7 +1034,7 @@ export const UserManagementPage: React.FC = () => {
                         <td className="px-6 py-4 text-right">
                           <button
                             onClick={() => handleCancelInvitation(invitation)}
-                            className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                            className="p-1.5 text-neutral-400 hover:text-danger-text hover:bg-danger-soft rounded-lg transition-colors"
                             title={t('userManagement.cancelInvitation')}
                           >
                             <Trash2 className="w-4 h-4" />

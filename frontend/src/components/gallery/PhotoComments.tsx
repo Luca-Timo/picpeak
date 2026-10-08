@@ -179,14 +179,14 @@ export const PhotoComments: React.FC<PhotoCommentsProps> = ({
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               placeholder={t('feedback.writeComment', 'Write a comment...')}
-              className={`w-full px-3 py-2 text-sm border rounded-lg resize-vertical min-h-[100px] focus:ring-2 focus:ring-primary-500 focus:border-accent-dark ${
-                errors.comment_text ? 'border-red-500' : 'border-surface'
+              className={`w-full px-3 py-2 text-sm border rounded-lg resize-vertical min-h-[100px] focus:ring-2 focus:ring-accent focus:border-accent-dark ${
+                errors.comment_text ? 'border-danger' : 'border-surface'
               }`}
               rows={4}
               maxLength={500}
             />
             {errors.comment_text && (
-              <p className="text-xs text-red-600 mt-1">{errors.comment_text}</p>
+              <p className="text-xs text-danger-text mt-1">{errors.comment_text}</p>
             )}
             <p className="text-xs text-muted-theme mt-1">
               {commentText.length}/500

@@ -132,7 +132,7 @@ export const CustomerGroupsPanel: React.FC<{ canManage: boolean }> = ({ canManag
   if (error) {
     return (
       <Card padding="lg">
-        <p className="text-sm text-red-600 dark:text-red-400">
+        <p className="text-sm text-danger-text">
           {t('customers.groups.loadError', 'The groups could not be loaded. Reload the page to try again.')}
         </p>
       </Card>
@@ -294,8 +294,8 @@ export const CustomerGroupsPanel: React.FC<{ canManage: boolean }> = ({ canManag
       )}
 
       {confirmDelete && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
-          <p className="text-sm text-red-800 dark:text-red-200">
+        <div className="mt-4 rounded-lg border border-danger-line bg-danger-soft p-3">
+          <p className="text-sm text-danger-text">
             {t('customers.groups.confirmDelete', 'Delete "{{name}}"? No customer is removed by this.', { name: confirmDelete.name })}
           </p>
           <div className="mt-2 flex gap-2">
@@ -364,7 +364,7 @@ const ColorPicker: React.FC<{ value: string; onChange: (color: string) => void }
       {/* Advice, not a refusal: the name carries the meaning and the dot has
           a ring, so any colour is safe — some are just hard to make out. */}
       {lowContrastTheme(value) && (
-        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400" role="status">
+        <p className="mt-1 text-xs text-warning-text" role="status">
           {lowContrastTheme(value) === 'light'
             ? t('customers.groups.lowContrastLight', 'This colour is hard to see in light mode.')
             : t('customers.groups.lowContrastDark', 'This colour is hard to see in dark mode.')}

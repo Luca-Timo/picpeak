@@ -244,13 +244,13 @@ export const StatusTab: React.FC<StatusTabProps> = ({
           ? settingsService.formatBytes(storageInfo.recommended_soft_limit)
           : null;
         const progressColor = overSoftLimit
-          ? 'bg-red-600'
+          ? 'bg-danger'
           : usagePercentage >= 90
-            ? 'bg-amber-500'
-            : 'bg-primary-600';
-        const limitCardClass = overSoftLimit ? 'bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800' : 'bg-subtle';
-        const limitValueClass = overSoftLimit ? 'text-amber-700 dark:text-amber-300' : 'text-heading';
-        const limitDescriptorClass = overSoftLimit ? 'text-amber-700 dark:text-amber-300 font-semibold' : 'text-soft';
+            ? 'bg-warning'
+            : 'bg-accent-strong';
+        const limitCardClass = overSoftLimit ? 'bg-warning-soft border border-warning-line' : 'bg-subtle';
+        const limitValueClass = overSoftLimit ? 'text-warning-text' : 'text-heading';
+        const limitDescriptorClass = overSoftLimit ? 'text-warning-text font-semibold' : 'text-soft';
         const recommendedDescriptorValue = (recommendedDisplay ?? limitDisplay);
         const diskMetricsReliable = storageInfo.disk_metrics_reliable;
         const overrideSource = storageInfo.disk_override_source;
@@ -326,7 +326,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
             <div className="mb-4">
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-soft">{t('settings.storage.storageUsage')}</span>
-                <span className={`font-medium ${overSoftLimit ? 'text-red-600 dark:text-red-400' : 'text-heading'}`}>
+                <span className={`font-medium ${overSoftLimit ? 'text-danger-text' : 'text-heading'}`}>
                   {usagePercentage}%
                 </span>
               </div>
@@ -528,7 +528,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 </div>
                 <div className="w-full bg-fill rounded-full h-2">
                   <div
-                    className="bg-blue-600 h-2 rounded-full transition-all"
+                    className="bg-info h-2 rounded-full transition-all"
                     style={{
                       width: `${Math.round((systemStatus.system.memory.used / systemStatus.system.memory.total) * 100)}%`
                     }}
@@ -578,14 +578,14 @@ export const StatusTab: React.FC<StatusTabProps> = ({
               <div className="bg-subtle rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-body">{t('settings.systemStatus.fileWatcher')}</p>
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <CheckCircle className="w-5 h-5 text-success-text" />
                 </div>
                 <p className="text-xs text-soft">{t('settings.systemStatus.fileWatcherDesc')}</p>
               </div>
               <div className="bg-subtle rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-body">{t('settings.systemStatus.expirationChecker')}</p>
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <CheckCircle className="w-5 h-5 text-success-text" />
                 </div>
                 <p className="text-xs text-soft">{t('settings.systemStatus.expirationCheckerDesc')}</p>
               </div>
@@ -598,9 +598,9 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-body">{t('settings.systemStatus.emailProcessor')}</p>
                   {systemStatus?.services?.emailProcessor?.status === 'active' ? (
-                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <CheckCircle className="w-5 h-5 text-success-text" />
                   ) : (
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <AlertTriangle className="w-5 h-5 text-danger-text" />
                   )}
                 </div>
                 <p className="text-xs text-soft">
@@ -616,12 +616,12 @@ export const StatusTab: React.FC<StatusTabProps> = ({
               </div>
             </div>
 
-            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">{t('settings.systemStatus.emailQueue')}</h3>
+            <div className="mt-4 p-4 bg-info-soft rounded-lg">
+              <h3 className="text-sm font-semibold text-info-text mb-2">{t('settings.systemStatus.emailQueue')}</h3>
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div>
-                  <span className="text-blue-700 dark:text-blue-300">{t('settings.systemStatus.pending')}:</span>
-                  <span className="ml-2 font-semibold text-blue-900 dark:text-blue-200">
+                  <span className="text-info-text">{t('settings.systemStatus.pending')}:</span>
+                  <span className="ml-2 font-semibold text-info-text">
                     {systemStatus.emailQueue.pending}
                     {systemStatus.emailQueue.stuck > 0 && (
                       <span className="text-orange-600 text-xs ml-1">
@@ -631,12 +631,12 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-green-700 dark:text-green-400">{t('settings.systemStatus.sent')}:</span>
-                  <span className="ml-2 font-semibold text-green-900 dark:text-green-300">{systemStatus.emailQueue.sent}</span>
+                  <span className="text-success-text">{t('settings.systemStatus.sent')}:</span>
+                  <span className="ml-2 font-semibold text-success-text">{systemStatus.emailQueue.sent}</span>
                 </div>
                 <div>
-                  <span className="text-red-700 dark:text-red-400">{t('settings.systemStatus.failed')}:</span>
-                  <span className="ml-2 font-semibold text-red-900 dark:text-red-300">{systemStatus.emailQueue.failed}</span>
+                  <span className="text-danger-text">{t('settings.systemStatus.failed')}:</span>
+                  <span className="ml-2 font-semibold text-danger-text">{systemStatus.emailQueue.failed}</span>
                 </div>
               </div>
               {systemStatus.emailQueue.stuck > 0 && (
@@ -674,11 +674,11 @@ export const StatusTab: React.FC<StatusTabProps> = ({
               <p className="text-xs text-soft">{t('settings.photoDimensions.totalPhotos')}</p>
             </div>
             <div className="bg-subtle rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{dimensionStatus.withDimensions}</p>
+              <p className="text-2xl font-bold text-success-text">{dimensionStatus.withDimensions}</p>
               <p className="text-xs text-soft">{t('settings.photoDimensions.withDimensions')}</p>
             </div>
-            <div className={`rounded-lg p-3 text-center ${Number(dimensionStatus.withoutDimensions) > 0 ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-subtle'}`}>
-              <p className={`text-2xl font-bold ${Number(dimensionStatus.withoutDimensions) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-heading'}`}>{dimensionStatus.withoutDimensions}</p>
+            <div className={`rounded-lg p-3 text-center ${Number(dimensionStatus.withoutDimensions) > 0 ? 'bg-warning-soft' : 'bg-subtle'}`}>
+              <p className={`text-2xl font-bold ${Number(dimensionStatus.withoutDimensions) > 0 ? 'text-warning-text' : 'text-heading'}`}>{dimensionStatus.withoutDimensions}</p>
               <p className="text-xs text-soft">{t('settings.photoDimensions.missingDimensions')}</p>
             </div>
           </div>
@@ -733,11 +733,11 @@ export const StatusTab: React.FC<StatusTabProps> = ({
               <p className="text-xs text-soft">{t('settings.captureDates.totalPhotos', 'Total Photos')}</p>
             </div>
             <div className="bg-subtle rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{captureDateStatus.withCaptureDate}</p>
+              <p className="text-2xl font-bold text-success-text">{captureDateStatus.withCaptureDate}</p>
               <p className="text-xs text-soft">{t('settings.captureDates.withDates', 'With Capture Date')}</p>
             </div>
-            <div className={`rounded-lg p-3 text-center ${Number(captureDateStatus.withoutCaptureDate) > 0 ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-subtle'}`}>
-              <p className={`text-2xl font-bold ${Number(captureDateStatus.withoutCaptureDate) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-heading'}`}>{captureDateStatus.withoutCaptureDate}</p>
+            <div className={`rounded-lg p-3 text-center ${Number(captureDateStatus.withoutCaptureDate) > 0 ? 'bg-warning-soft' : 'bg-subtle'}`}>
+              <p className={`text-2xl font-bold ${Number(captureDateStatus.withoutCaptureDate) > 0 ? 'text-warning-text' : 'text-heading'}`}>{captureDateStatus.withoutCaptureDate}</p>
               <p className="text-xs text-soft">{t('settings.captureDates.missingDates', 'Missing Capture Date')}</p>
             </div>
           </div>
@@ -767,7 +767,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                   The Missing Capture Date figure above is what says whether
                   anything is actually left to do. */}
               {Number(captureDateStatus.lastResult.skipped) > 0 && (
-                <span className="block text-amber-600 dark:text-amber-400 mt-1">
+                <span className="block text-warning-text mt-1">
                   {t('settings.captureDates.skipped', {
                     count: captureDateStatus.lastResult.skipped,
                     defaultValue: '{{count}} photo(s) were changed by something else while the run was reading them and were not updated.',
@@ -814,7 +814,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
               <p className="text-xs text-soft">{t('settings.captureDates.totalPhotos', 'Total Photos')}</p>
             </div>
             <div className="bg-subtle rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{creditStatus.withCredit}</p>
+              <p className="text-2xl font-bold text-success-text">{creditStatus.withCredit}</p>
               <p className="text-xs text-soft">{t('settings.creditBackfill.withCredit')}</p>
             </div>
             <div className="bg-subtle rounded-lg p-3 text-center">
@@ -831,7 +831,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 failed: creditStatus.lastResult.failed,
               })}
               {Number(creditStatus.lastResult.skipped) > 0 && (
-                <span className="block text-amber-600 dark:text-amber-400 mt-1">
+                <span className="block text-warning-text mt-1">
                   {t('settings.captureDates.skipped', {
                     count: creditStatus.lastResult.skipped,
                     defaultValue: '{{count}} photo(s) were changed by something else while the run was reading them and were not updated.',
@@ -863,7 +863,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
       {orientationStatus && canManageSystem && (
         <Card padding="md">
           <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2">
-            <RotateCw className="w-5 h-5 text-primary-600" />
+            <RotateCw className="w-5 h-5 text-accent" />
             {t('settings.orientationBackfill.title', 'Photo Orientation')}
           </h2>
 
@@ -881,7 +881,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 defaultValue: 'Last run: {{checked}} checked, {{corrected}} corrected, {{requeued}} requeued for face scanning, {{failed}} unreachable',
               })}
               {Number(orientationStatus.lastResult.staleTiers) > 0 && (
-                <span className="block text-amber-600 dark:text-amber-400 mt-1">
+                <span className="block text-warning-text mt-1">
                   {t('settings.orientationBackfill.staleTiers', {
                     count: orientationStatus.lastResult.staleTiers,
                     defaultValue: '{{count}} cached size(s) could not be deleted and will keep serving the old orientation — re-run once storage is writable.',

@@ -62,9 +62,9 @@ export const BackupIntegrityCard: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 mb-1">
             {isHealthy ? (
-              <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <ShieldCheck className="w-5 h-5 text-success-text" />
             ) : report ? (
-              <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400" />
+              <ShieldAlert className="w-5 h-5 text-danger-text" />
             ) : (
               <ShieldCheck className="w-5 h-5 text-neutral-400" />
             )}
@@ -96,7 +96,7 @@ export const BackupIntegrityCard: React.FC = () => {
       </div>
 
       {runCheck.isError && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 text-sm text-red-700 dark:text-red-300">
+        <div className="mb-4 p-3 rounded-lg bg-danger-soft text-sm text-danger-text">
           {t('backup.integrity.error', 'Check failed: {{message}}', {
             message: (runCheck.error as Error)?.message ?? 'unknown error',
           })}
@@ -203,9 +203,9 @@ type Tone = 'neutral' | 'green' | 'amber' | 'red';
 
 const TONE_CLASSES: Record<Tone, string> = {
   neutral: 'bg-subtle text-body',
-  green: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-  amber: 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-  red: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+  green: 'bg-success-soft text-success-text',
+  amber: 'bg-warning-soft text-warning-text',
+  red: 'bg-danger-soft text-danger-text',
 };
 
 const Counter: React.FC<{

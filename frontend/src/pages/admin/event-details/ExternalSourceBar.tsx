@@ -63,12 +63,12 @@ export const ExternalSourceBar: React.FC<{ event: Event; onChangeFolder: () => v
         <code className="px-1.5 py-0.5 rounded bg-inset text-xs break-all">/external-media/{event.external_path}</code>
       </span>
       {watched && (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-success-soft text-success-text">
           {t('events.externalSource.watching', 'Watching for new files')}
         </span>
       )}
       {imp.failed ? (
-        <span className="text-xs text-red-700 dark:text-red-400" role="alert">
+        <span className="text-xs text-danger-text" role="alert">
           {imp.failureText}
         </span>
       ) : (

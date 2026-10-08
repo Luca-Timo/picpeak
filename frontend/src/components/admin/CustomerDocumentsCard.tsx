@@ -36,12 +36,12 @@ import {
 const PERMISSION = 'customers.documents.manage';
 
 const STATUS_STYLE: Record<AdminCustomerDocument['status'], string> = {
-  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  clean: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  rejected: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  pending: 'bg-warning-soft text-warning-text',
+  clean: 'bg-success-soft text-success-text',
+  rejected: 'bg-danger-soft text-danger-text',
 };
 
-const selectClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 h-9 rounded-lg border border-line-strong bg-panel px-2 text-sm text-heading';
+const selectClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 h-9 rounded-lg border border-line-strong bg-panel px-2 text-sm text-heading';
 
 interface Props {
   customerId: number;
@@ -289,7 +289,7 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
       </PermissionGate>
 
       {isLoading ? <Loading /> : isError ? (
-        <p className="text-sm text-red-600 dark:text-red-400">
+        <p className="text-sm text-danger-text">
           {t('customers.documents.loadError', 'Could not load documents.')}
         </p>
       ) : documents.length === 0 ? (
@@ -332,7 +332,7 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                         : t('customers.documents.notViewed', 'Not downloaded by the customer yet')}
                     </p>
                     {doc.status === 'rejected' && doc.reviewNote && (
-                      <p className="text-xs text-red-700 dark:text-red-400 mt-0.5">
+                      <p className="text-xs text-danger-text mt-0.5">
                         {t('customers.documents.rejectedNote', 'Reason given: {{note}}', { note: doc.reviewNote })}
                       </p>
                     )}
@@ -414,7 +414,7 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                       </Button>
                       <Button
                         type="button" variant="ghost" size="sm" disabled={busy}
-                        leftIcon={<Trash2 className="w-4 h-4 text-red-600" />}
+                        leftIcon={<Trash2 className="w-4 h-4 text-danger-text" />}
                         onClick={() => remove(doc)}
                       >
                         {t('customers.documents.delete', 'Delete')}

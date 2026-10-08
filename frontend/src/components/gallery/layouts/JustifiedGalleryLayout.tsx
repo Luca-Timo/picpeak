@@ -176,7 +176,7 @@ const JustifiedPhoto: React.FC<JustifiedPhotoProps> = ({
               className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/90 backdrop-blur-sm"
               title="Liked"
             >
-              <Heart className="w-3.5 h-3.5 text-red-500" fill="currentColor" />
+              <Heart className="w-3.5 h-3.5 text-danger" fill="currentColor" />
             </span>
           )}
           {averageRating > 0 && (

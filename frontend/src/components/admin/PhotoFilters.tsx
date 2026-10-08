@@ -73,7 +73,7 @@ export const PhotoFilters: React.FC<PhotoFiltersProps> = ({
               const numeric = Number(raw);
               onCategoryChange(Number.isNaN(numeric) ? raw : numeric);
             }}
-            className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+            className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent-dark"
           >
             <option value="">{t('gallery.allCategories', 'All Categories')}</option>
             {/* The literal the backend understands, not 0 (#1211). It skips
@@ -99,7 +99,7 @@ export const PhotoFilters: React.FC<PhotoFiltersProps> = ({
               value={selectedCredit ?? ''}
               onChange={(e) => onCreditChange(e.target.value === '' ? undefined : e.target.value)}
               aria-label={t('admin.photos.credit.filterLabel')}
-              className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-accent-dark max-w-[16rem]"
+              className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent-dark max-w-[16rem]"
             >
               <option value="">{t('admin.photos.credit.filterAll')}</option>
               {credits.map((credit) => (
@@ -126,7 +126,7 @@ export const PhotoFilters: React.FC<PhotoFiltersProps> = ({
             <select
               value={mediaType}
               onChange={(e) => onMediaTypeChange(e.target.value as 'all' | 'photo' | 'video')}
-              className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+              className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent-dark"
             >
               <option value="all">{t('gallery.allMedia', 'All media')}</option>
               <option value="photo">{t('gallery.photosOnly', 'Photos only')}</option>
@@ -140,7 +140,7 @@ export const PhotoFilters: React.FC<PhotoFiltersProps> = ({
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as PhotoSortKey, sortOrder)}
-            className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+            className="px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent-dark"
           >
             <option value="date">{t('gallery.sortByDate', 'Sort by Date')}</option>
             <option value="capture_date">{t('gallery.sortByCaptureDate', 'Sort by Capture Date')}</option>

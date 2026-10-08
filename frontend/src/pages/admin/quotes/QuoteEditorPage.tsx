@@ -801,7 +801,7 @@ export const QuoteEditorPage: React.FC = () => {
               <TextBlockPicker id="quote-intro-block" blocks={textBlocks}
                 onPick={(body) => setForm((f) => ({ ...f, introText: appendTextBlock(f.introText, body) }))} />
             </div>
-            <textarea rows={3} className="w-full rounded-md border border-line-strong bg-panel text-heading px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+            <textarea rows={3} className="w-full rounded-md border border-line-strong bg-panel text-heading px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark"
               value={form.introText} onChange={(e) => setForm((f) => ({ ...f, introText: e.target.value }))} />
           </div>
           <div>
@@ -810,7 +810,7 @@ export const QuoteEditorPage: React.FC = () => {
               <TextBlockPicker id="quote-outro-block" blocks={textBlocks}
                 onPick={(body) => setForm((f) => ({ ...f, outroText: appendTextBlock(f.outroText, body) }))} />
             </div>
-            <textarea rows={3} className="w-full rounded-md border border-line-strong bg-panel text-heading px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+            <textarea rows={3} className="w-full rounded-md border border-line-strong bg-panel text-heading px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark"
               value={form.outroText} onChange={(e) => setForm((f) => ({ ...f, outroText: e.target.value }))} />
           </div>
 
@@ -837,7 +837,7 @@ export const QuoteEditorPage: React.FC = () => {
                     const email = e.target.value;
                     if (email) setForm((prev) => ({ ...prev, ccPdfEmail: email }));
                   }}
-                  className="text-xs px-2 py-1 border border-line-strong bg-panel text-heading rounded focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                  className="text-xs px-2 py-1 border border-line-strong bg-panel text-heading rounded focus:ring-2 focus:ring-accent focus:border-accent-dark"
                 >
                   <option value="">{t('quotes.field.ccPdfCustom', 'Custom email')}</option>
                   {activeAdmins.map((a: any) => (
@@ -850,7 +850,7 @@ export const QuoteEditorPage: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium mb-1">{t('quotes.field.internalNotes', 'Internal notes (not on PDF)')}</label>
-            <textarea rows={3} className="w-full rounded-md border border-line-strong bg-panel text-heading px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+            <textarea rows={3} className="w-full rounded-md border border-line-strong bg-panel text-heading px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent-dark"
               value={form.internalNotes} onChange={(e) => setForm((f) => ({ ...f, internalNotes: e.target.value }))} />
           </div>
         </div>

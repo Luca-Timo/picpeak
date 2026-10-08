@@ -358,9 +358,9 @@ export const SetupPage: React.FC = () => {
 
         <Card padding="lg">
           {errors.form && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{errors.form}</p>
+            <div className="mb-6 bg-danger-soft border border-danger-line rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-danger-text flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-danger-text">{errors.form}</p>
             </div>
           )}
 
@@ -396,7 +396,7 @@ export const SetupPage: React.FC = () => {
                       aria-label={t('setup.copyCommand')}
                       title={t('setup.copyCommand')}
                     >
-                      {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                      {copied ? <Check className="w-4 h-4 text-success-text" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
                   <a

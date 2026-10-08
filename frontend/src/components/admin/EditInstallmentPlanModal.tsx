@@ -169,9 +169,9 @@ export const EditInstallmentPlanModal: React.FC<EditInstallmentPlanModalProps> =
           </button>
         </div>
 
-        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 mb-3 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-200">
+        <div className="rounded-md border border-warning-line bg-warning-soft p-3 mb-3 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-warning-text mt-0.5 shrink-0" />
+          <p className="text-sm text-warning-text">
             {t('dealLineage.editPlanWarning',
               'Trimming rows deletes their invoice numbers (the sequence cannot release them — a §14 UStG continuity rule). Adding rows claims fresh numbers.')}
           </p>

@@ -76,7 +76,7 @@ export const FolderTreeNode: React.FC<{
           )}
           {isError && (
             <div
-              className="py-1 text-xs text-red-600 dark:text-red-400"
+              className="py-1 text-xs text-danger-text"
               style={childIndentStyle}
             >
               {t('errors.somethingWentWrong', 'Something went wrong')}

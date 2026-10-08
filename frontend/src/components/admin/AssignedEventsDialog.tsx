@@ -244,7 +244,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('customers.assignedEvents.searchPlaceholder', 'Search by event name')}
                 disabled={saveMutation.isPending}
-                className="w-full pl-9 pr-9 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full pl-9 pr-9 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:outline-none focus:ring-2 focus:ring-accent"
               />
               {/* Inline clear button — visible only while the query has
                   content. We keep the query through add() now so the

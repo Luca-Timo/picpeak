@@ -100,7 +100,7 @@ export const DocumentLineageCard: React.FC<DocumentLineageCardProps> = ({
   if (error) {
     return (
       <Card padding="md" className={className}>
-        <p className="text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
+        <p className="text-sm text-danger-text flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           {t('dealLineage.error', 'Could not load related documents.')}
         </p>

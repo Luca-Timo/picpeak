@@ -50,9 +50,9 @@ function uploadUrl(token: string): string {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  active: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  active: 'bg-success-soft text-success-text',
   expired: 'bg-fill text-body',
-  deleted: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  deleted: 'bg-danger-soft text-danger-text',
 };
 
 type TabKey = 'all' | 'send' | 'request';
@@ -175,7 +175,7 @@ export const TransfersPage: React.FC = () => {
               onClick={() => setTab(tb.key)}
               className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
                 tab === tb.key
-                  ? 'border-primary-600 text-primary-700 dark:text-primary-400'
+                  ? 'border-accent text-accent'
                   : 'border-transparent text-muted hover:text-body'
               }`}
             >
@@ -726,7 +726,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                     {t('transfers.resend', 'Send again')}
                   </Button>
                 )}
-                <Button size="sm" variant="ghost" className="text-red-600" leftIcon={<Trash2 className="h-4 w-4" />} onClick={handleDelete}>
+                <Button size="sm" variant="ghost" className="text-danger-text" leftIcon={<Trash2 className="h-4 w-4" />} onClick={handleDelete}>
                   {t('common.delete', 'Delete')}
                 </Button>
               </div>
@@ -797,13 +797,13 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                           </span>
                           <span className="flex shrink-0 items-center gap-3 text-muted">
                             <span>{formatBytes(f.size_bytes)}</span>
-                            <a href={transfersService.adminExtraFileDownloadUrl(transferId, f.id)} className="text-primary-600 hover:underline">
+                            <a href={transfersService.adminExtraFileDownloadUrl(transferId, f.id)} className="text-accent hover:underline">
                               <Download className="h-4 w-4" />
                             </a>
                             {canEdit && (
                               <button
                                 onClick={() => removeExtraFileMutation.mutate(f.id)}
-                                className="rounded p-1 text-muted hover:bg-hover hover:text-red-600"
+                                className="rounded p-1 text-muted hover:bg-hover hover:text-danger-text"
                                 title={t('common.remove', 'Remove')}
                               ><X className="h-3.5 w-3.5" /></button>
                             )}
@@ -832,7 +832,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                         <Button size="sm" variant="outline" leftIcon={<RefreshCw className="h-4 w-4" />} onClick={() => issueCodeMutation.mutate(true)} isLoading={issueCodeMutation.isPending}>
                           {t('transfers.rotateCode', 'New code')}
                         </Button>
-                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => revokeCodeMutation.mutate()}>
+                        <Button size="sm" variant="ghost" className="text-danger-text" onClick={() => revokeCodeMutation.mutate()}>
                           {t('transfers.revokeCode', 'Withdraw')}
                         </Button>
                       </div>
@@ -874,7 +874,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                             <span className="flex shrink-0 items-center gap-3 text-muted">
                               <span>{fmtDate(u.uploaded_at)}</span>
                               <span>{formatBytes(u.size_bytes)}</span>
-                              <a href={transfersService.adminUploadDownloadUrl(transferId, u.id)} className="text-primary-600 hover:underline">
+                              <a href={transfersService.adminUploadDownloadUrl(transferId, u.id)} className="text-accent hover:underline">
                                 <Download className="h-4 w-4" />
                               </a>
                             </span>

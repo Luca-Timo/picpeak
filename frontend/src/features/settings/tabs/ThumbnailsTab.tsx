@@ -155,7 +155,7 @@ export const ThumbnailsTab: React.FC = () => {
   if (error) {
     return (
       <Card padding="md">
-        <div className="flex items-center gap-3 text-red-600">
+        <div className="flex items-center gap-3 text-danger-text">
           <AlertCircle className="w-5 h-5" />
           <p>{t('settings.thumbnails.loadError', 'Failed to load thumbnail settings')}</p>
         </div>
@@ -169,8 +169,8 @@ export const ThumbnailsTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {!canEdit && (
-        <Card padding="md" className="bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
-          <div className="flex items-start gap-3 text-sm text-amber-800 dark:text-amber-200">
+        <Card padding="md" className="bg-warning-soft border-warning-line">
+          <div className="flex items-start gap-3 text-sm text-warning-text">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <p>{t('settings.thumbnails.readOnly', 'Only admins who can edit settings can change these values or regenerate the whole library.')}</p>
           </div>
@@ -180,7 +180,7 @@ export const ThumbnailsTab: React.FC = () => {
       {/* Dimensions & Quality */}
       <Card padding="md">
         <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2">
-          <Image className="w-5 h-5 text-primary-600" />
+          <Image className="w-5 h-5 text-accent" />
           {t('settings.thumbnails.dimensionsTitle', 'Thumbnail Dimensions & Quality')}
         </h2>
         <p className="text-sm text-soft mb-4">
@@ -198,7 +198,7 @@ export const ThumbnailsTab: React.FC = () => {
               max="1000"
               value={settings.width}
               onChange={(e) => handleChange('width', parseInt(e.target.value) || 300)}
-              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent"
             />
             <p className="text-xs text-muted mt-1">
               {t('settings.thumbnails.widthHelp', '50-1000 pixels')}
@@ -215,7 +215,7 @@ export const ThumbnailsTab: React.FC = () => {
               max="1000"
               value={settings.height}
               onChange={(e) => handleChange('height', parseInt(e.target.value) || 300)}
-              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent"
             />
             <p className="text-xs text-muted mt-1">
               {t('settings.thumbnails.heightHelp', '50-1000 pixels')}
@@ -232,7 +232,7 @@ export const ThumbnailsTab: React.FC = () => {
               max="100"
               value={settings.quality}
               onChange={(e) => handleChange('quality', parseInt(e.target.value) || 85)}
-              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent"
             />
             <p className="text-xs text-muted mt-1">
               {t('settings.thumbnails.qualityHelp', '1-100, higher = better quality but larger files')}
@@ -246,7 +246,7 @@ export const ThumbnailsTab: React.FC = () => {
             <select
               value={settings.format}
               onChange={(e) => handleChange('format', e.target.value)}
-              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent"
             >
               {formatOptions.map((fmt) => (
                 <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
@@ -262,7 +262,7 @@ export const ThumbnailsTab: React.FC = () => {
           <select
             value={settings.fit}
             onChange={(e) => handleChange('fit', e.target.value)}
-            className="w-full sm:w-64 px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full sm:w-64 px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent"
           >
             {fitOptions.map((opt) => (
               <option key={opt} value={opt}>
@@ -282,7 +282,7 @@ export const ThumbnailsTab: React.FC = () => {
       {/* Regenerate */}
       <Card padding="md">
         <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2">
-          <RefreshCw className="w-5 h-5 text-primary-600" />
+          <RefreshCw className="w-5 h-5 text-accent" />
           {t('settings.thumbnails.regenerateTitle', 'Regenerate Thumbnails')}
         </h2>
         <p className="text-sm text-soft mb-4">
@@ -307,7 +307,7 @@ export const ThumbnailsTab: React.FC = () => {
           preview_url emitted. */}
       <Card padding="md">
         <h2 className="text-lg font-semibold text-heading mb-1 flex items-center gap-2">
-          <Image className="w-5 h-5 text-primary-600" />
+          <Image className="w-5 h-5 text-accent" />
           {t('settings.thumbnails.lightboxTitle', 'Lightbox Preview Tier')}
         </h2>
         <p className="text-sm text-soft mb-4">
@@ -317,7 +317,7 @@ export const ThumbnailsTab: React.FC = () => {
         <label className="flex items-start gap-3 cursor-pointer mb-4">
           <input
             type="checkbox"
-            className="mt-0.5 rounded border-line-strong text-accent focus:ring-primary-500"
+            className="mt-0.5 rounded border-line-strong text-accent focus:ring-accent"
             checked={settings.lightbox_preview_enabled}
             onChange={(e) => handleChange('lightbox_preview_enabled', e.target.checked)}
           />
@@ -346,10 +346,10 @@ export const ThumbnailsTab: React.FC = () => {
       </Card>
 
       {/* Info Box */}
-      <Card padding="md" className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800">
+      <Card padding="md" className="bg-info-soft border-info-line">
         <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-blue-800 dark:text-blue-200">
+          <AlertCircle className="w-5 h-5 text-info-text flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-info-text">
             <p className="font-medium mb-1">{t('settings.thumbnails.infoTitle', 'About Thumbnails')}</p>
             <p>
               {t('settings.thumbnails.infoText', 'Thumbnails are smaller preview images generated from your originals. Increasing the size or quality improves how photos look in the gallery grid but uses more storage and bandwidth. After changing settings, use "Regenerate All Thumbnails" to update existing photos.')}

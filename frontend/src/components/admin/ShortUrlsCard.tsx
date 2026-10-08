@@ -122,7 +122,7 @@ export const ShortUrlsCard: React.FC<Props> = ({ eventId }) => {
   return (
     <Card padding="md">
       <div className="flex items-center gap-2 mb-3">
-        <LinkIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+        <LinkIcon className="w-5 h-5 text-accent" />
         <h3 className="text-lg font-semibold text-heading">
           {t('events.shortUrls.title', 'Branded short URLs')}
         </h3>
@@ -163,7 +163,7 @@ export const ShortUrlsCard: React.FC<Props> = ({ eventId }) => {
           <button
             type="button"
             onClick={handleUseSuggested}
-            className="mt-2 text-xs text-primary-600 dark:text-primary-400 underline hover:no-underline"
+            className="mt-2 text-xs text-accent underline hover:no-underline"
           >
             {t('events.shortUrls.useSuggested', 'Use “{{suggested}}” instead', { suggested })}
           </button>
@@ -212,17 +212,17 @@ export const ShortUrlsCard: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => handleCopy(row)}
-                  className="p-2 text-neutral-500 hover:text-primary-600 dark:hover:text-primary-400"
+                  className="p-2 text-neutral-500 hover:text-accent"
                   title={t('common.copy', 'Copy') as string}
                   aria-label={t('common.copy', 'Copy') as string}
                 >
-                  {copiedId === row.id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                  {copiedId === row.id ? <Check className="w-4 h-4 text-success-text" /> : <Copy className="w-4 h-4" />}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDelete(row)}
                   disabled={deleteMutation.isPending}
-                  className="p-2 text-neutral-500 hover:text-red-600"
+                  className="p-2 text-neutral-500 hover:text-danger-text"
                   title={t('common.delete', 'Delete') as string}
                   aria-label={t('common.delete', 'Delete') as string}
                 >

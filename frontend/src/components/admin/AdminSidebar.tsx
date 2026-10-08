@@ -620,7 +620,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
                     }}
                     placeholder={t('settings.search.placeholder', 'Search settings…')}
                     aria-label={t('settings.search.label', 'Search settings')}
-                    className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg bg-subtle text-heading placeholder:text-muted border border-transparent focus:bg-panel focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg bg-subtle text-heading placeholder:text-muted border border-transparent focus:bg-panel focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
               </div>
@@ -810,9 +810,9 @@ const StorageInfo: React.FC = () => {
     ? Math.round((storageInfo.total_used / limitInUse) * 100)
     : 0;
   const isOverSoftLimit = limitInUse && storageInfo.total_used >= limitInUse;
-  const progressBarClass = isOverSoftLimit ? 'bg-red-600' : 'bg-accent-dark';
+  const progressBarClass = isOverSoftLimit ? 'bg-danger' : 'bg-accent-dark';
   const containerClass = isOverSoftLimit
-    ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
+    ? 'bg-danger-soft border border-danger-line'
     : 'bg-subtle';
   const softLimitDisplay = settingsService.formatBytes(limitInUse);
 

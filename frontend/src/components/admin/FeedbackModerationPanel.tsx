@@ -92,7 +92,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
 
         {!hasPending ? (
           <div className="text-center py-8">
-            <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+            <CheckCircle className="w-12 h-12 text-success mx-auto mb-3" />
             <p className="text-body">{t('feedback.noPendingComments', 'No comments pending moderation')}</p>
           </div>
         ) : (
@@ -172,7 +172,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
                           }
                         }}
                         isLoading={deleteMutation.isPending}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="text-danger-text hover:bg-danger-soft"
                       >
                         {t('common.delete', 'Delete')}
                       </Button>

@@ -29,9 +29,9 @@ export const ExpirationBanner: React.FC<ExpirationBannerProps> = ({
   };
 
   const getBannerColor = () => {
-    if (daysRemaining <= 1) return 'bg-red-600';
-    if (daysRemaining <= 3) return 'bg-amber-600';
-    return 'bg-amber-500';
+    if (daysRemaining <= 1) return 'bg-danger';
+    if (daysRemaining <= 3) return 'bg-warning';
+    return 'bg-warning';
   };
 
   return (

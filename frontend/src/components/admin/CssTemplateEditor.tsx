@@ -143,7 +143,7 @@ export const CssTemplateEditor: React.FC = () => {
                   </span>
                 )}
                 {template?.is_enabled && (
-                  <Check className="w-3 h-3 inline ml-1 text-green-500" />
+                  <Check className="w-3 h-3 inline ml-1 text-success" />
                 )}
               </button>
             );
@@ -162,7 +162,7 @@ export const CssTemplateEditor: React.FC = () => {
                 value={activeTemplate.name}
                 onChange={(e) => updateLocalTemplate({ name: e.target.value })}
                 maxLength={50}
-                className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:ring-2 focus:ring-accent focus:border-accent-dark"
               />
             </div>
 
@@ -173,7 +173,7 @@ export const CssTemplateEditor: React.FC = () => {
                   type="checkbox"
                   checked={activeTemplate.is_enabled}
                   onChange={(e) => updateLocalTemplate({ is_enabled: e.target.checked })}
-                  className="rounded border-neutral-300 text-accent focus:ring-primary-500"
+                  className="rounded border-neutral-300 text-accent focus:ring-accent"
                 />
                 <span className="text-sm font-medium text-body">
                   {t('cssTemplates.enableTemplate', 'Enable this template')}
@@ -193,7 +193,7 @@ export const CssTemplateEditor: React.FC = () => {
                 <textarea
                   value={activeTemplate.css_content}
                   onChange={(e) => updateLocalTemplate({ css_content: e.target.value })}
-                  className="w-full h-96 px-4 py-3 font-mono text-sm border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark bg-neutral-900 text-green-400"
+                  className="w-full h-96 px-4 py-3 font-mono text-sm border border-neutral-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent-dark bg-neutral-900 text-success"
                   spellCheck={false}
                   placeholder="/* Enter your custom CSS here */"
                 />
@@ -207,9 +207,9 @@ export const CssTemplateEditor: React.FC = () => {
             </div>
 
             {/* Security Notice */}
-            <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-amber-800 dark:text-amber-200">
+            <div className="flex items-start gap-2 p-3 bg-warning-soft border border-warning-line rounded-lg">
+              <AlertTriangle className="w-4 h-4 text-warning-text mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-warning-text">
                 <strong>{t('cssTemplates.securityNotice', 'Security Notice')}:</strong>{' '}
                 {t('cssTemplates.securityText', 'CSS is sanitized to prevent malicious code. External URLs, @import, and JavaScript expressions are blocked.')}
               </div>

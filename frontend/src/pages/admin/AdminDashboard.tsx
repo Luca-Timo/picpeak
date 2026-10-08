@@ -211,7 +211,7 @@ export const AdminDashboard: React.FC = () => {
       title: t('admin.activeEvents'),
       value: dashboardStats?.activeEvents || 0,
       icon: Calendar,
-      color: 'text-green-600',
+      color: 'text-success-text',
     },
     {
       title: t('admin.expiringSoon'),
@@ -227,7 +227,7 @@ export const AdminDashboard: React.FC = () => {
       value: formatNumber(dashboardStats?.totalPhotos || 0),
       change: installMedia.hasVideos ? mediaSplitLabel(t, installMedia) : undefined,
       icon: Image,
-      color: 'text-blue-600',
+      color: 'text-info-text',
     },
     {
       // Real bytes under the storage root (#1164). This used to be the summed
@@ -280,7 +280,7 @@ export const AdminDashboard: React.FC = () => {
       title: t('admin.systemHealth'),
       value: systemHealth ? t(`admin.health.${systemHealth.overall}`) : t('admin.health.checking'),
       icon: Heart,
-      color: systemHealth?.overall === 'healthy' ? 'text-green-600' : systemHealth?.overall === 'warning' ? 'text-yellow-600' : 'text-red-600',
+      color: systemHealth?.overall === 'healthy' ? 'text-success-text' : systemHealth?.overall === 'warning' ? 'text-yellow-600' : 'text-danger-text',
     },
   ];
 
@@ -394,8 +394,8 @@ export const AdminDashboard: React.FC = () => {
                 {awaitingEvents.map((event) => {
                   const due = deliveryDue(event.delivery_due_at);
                   const tone = due?.tone === 'overdue'
-                    ? 'text-red-600 dark:text-red-400'
-                    : due?.tone === 'soon' ? 'text-amber-600 dark:text-amber-400' : 'text-body';
+                    ? 'text-danger-text'
+                    : due?.tone === 'soon' ? 'text-warning-text' : 'text-body';
                   return (
                     <div
                       key={event.id}
@@ -509,12 +509,12 @@ export const AdminDashboard: React.FC = () => {
                 // Get color based on activity type
                 const getActivityColor = (type: ActivityType) => {
                   const colors: Partial<Record<ActivityType, string>> = {
-                    'event_created': 'bg-green-500',
-                    'photos_uploaded': 'bg-blue-500',
+                    'event_created': 'bg-success',
+                    'photos_uploaded': 'bg-info',
                     'event_archived': 'bg-purple-500',
                     'archive_restored': 'bg-indigo-500',
-                    'archive_deleted': 'bg-red-500',
-                    'bulk_download': 'bg-blue-500',
+                    'archive_deleted': 'bg-danger',
+                    'bulk_download': 'bg-info',
                     'email_config_updated': 'bg-yellow-500',
                     'branding_updated': 'bg-pink-500',
                     'theme_updated': 'bg-purple-500',

@@ -96,7 +96,7 @@ export const PeopleSheet: React.FC<PeopleSheetProps> = ({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('gallery.people.searchPlaceholder', { defaultValue: 'Find a person' })}
-                className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                 style={{
                   backgroundColor: 'var(--color-background)',
                   borderColor: 'var(--color-surface-border)',
@@ -124,7 +124,7 @@ export const PeopleSheet: React.FC<PeopleSheetProps> = ({
                     className={[
                       'relative block w-16 h-16 rounded-full overflow-hidden transition-all',
                       selected
-                        ? 'ring-[3px] ring-offset-2 ring-primary-600'
+                        ? 'ring-[3px] ring-offset-2 ring-accent'
                         : 'ring-1 ring-[color:var(--color-surface-border)] group-hover:ring-[color:var(--color-muted-text)]',
                     ].join(' ')}
                     style={{

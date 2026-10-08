@@ -134,7 +134,7 @@ export const HoursLoggingPage: React.FC = () => {
             'Search by email or company…') as string}
         />
         {selectedId && !customerHoursAllowed && (
-          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          <p className="mt-2 text-xs text-warning-text">
             {t('hoursLogging.customerLoggingDisabled',
               "This customer has hour logging disabled. Enable it on the customer's detail page to log hours.")}
           </p>
@@ -196,7 +196,7 @@ export const HoursLoggingPage: React.FC = () => {
                           {formatMoneyMinor(r.openAmountMinor, currency)}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 text-amber-700 dark:text-amber-300 text-xs">
+                        <div className="flex items-center gap-1 text-warning-text text-xs">
                           <AlertTriangle className="w-3.5 h-3.5" />
                           {t('hoursLogging.openHours.needsRate', 'Rate not set')}
                         </div>

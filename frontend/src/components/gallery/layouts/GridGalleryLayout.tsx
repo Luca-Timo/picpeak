@@ -175,7 +175,7 @@ const GridPhoto: React.FC<GridPhotoProps> = ({
         <div className={`absolute ${photo.type === 'collage' ? 'bottom-8' : 'bottom-2'} left-2 flex items-center gap-1 z-10`}>
           {(likeCount > 0 || liked) && (
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/90 backdrop-blur-sm" title="Liked">
-              <Heart className="w-3.5 h-3.5 text-red-500" fill="currentColor" />
+              <Heart className="w-3.5 h-3.5 text-danger" fill="currentColor" />
             </span>
           )}
           {averageRating > 0 && (
@@ -316,7 +316,7 @@ export const GridGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
                 }}
                 className={`absolute top-2 left-2 z-10 p-1.5 rounded-full shadow-md transition-colors ${
                   isHidden
-                    ? 'bg-red-500/90 text-white hover:bg-red-600'
+                    ? 'bg-danger text-white hover:opacity-90'
                     : 'bg-white/90 text-neutral-700 hover:bg-white dark:bg-neutral-800/90 dark:text-neutral-200 dark:hover:bg-neutral-700'
                 }`}
                 title={isHidden ? 'Hidden from guests' : 'Visible to guests'}

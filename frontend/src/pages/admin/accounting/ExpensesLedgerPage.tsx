@@ -128,7 +128,7 @@ const ExpenseFormModal: React.FC<{ categories: ExpenseCategory[]; expense?: Expe
             <label className={labelCls}>{t('accounting.expense.proof', 'Proof')}{requireProof ? ' *' : ''}</label>
             {isEdit && expense!.hasProof && !file && <p className="mb-1 text-xs text-muted">{t('accounting.expense.proofExisting', 'A proof file is already attached — upload a new one to replace it.')}</p>}
             <input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-sm" />
-            {requireProof && !file && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t('accounting.expense.proofRequired', 'A proof file is required.')}</p>}
+            {requireProof && !file && <p className="mt-1 text-xs text-warning-text">{t('accounting.expense.proofRequired', 'A proof file is required.')}</p>}
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
@@ -295,11 +295,11 @@ export const ExpensesLedgerPage: React.FC = () => {
                     {/* invoiced = on a real client invoice → locked (#2/#3). */}
                     {ex.invoiced && (
                       ex.billedInvoiceId ? (
-                        <Link to={`/admin/bills/${ex.billedInvoiceId}`} className="inline-flex items-center gap-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider hover:underline">
+                        <Link to={`/admin/bills/${ex.billedInvoiceId}`} className="inline-flex items-center gap-1 rounded bg-info-soft text-info-text px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider hover:underline">
                           <FileText className="w-3 h-3" /> {t('accounting.ledger.invoiced', 'Invoiced')}
                         </Link>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider"><FileText className="w-3 h-3" /> {t('accounting.ledger.invoiced', 'Invoiced')}</span>
+                        <span className="inline-flex items-center gap-1 rounded bg-info-soft text-info-text px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider"><FileText className="w-3 h-3" /> {t('accounting.ledger.invoiced', 'Invoiced')}</span>
                       )
                     )}
                   </div>
@@ -309,11 +309,11 @@ export const ExpensesLedgerPage: React.FC = () => {
                     {' · '}{format(ex.createdAt)}
                   </div>
                 </div>
-                {ex.hasProof && <button onClick={() => openProof(ex.id)} className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"><Paperclip className="w-3.5 h-3.5" /> {t('accounting.expense.viewProof', 'Proof')}</button>}
+                {ex.hasProof && <button onClick={() => openProof(ex.id)} className="inline-flex items-center gap-1 text-xs text-accent hover:underline"><Paperclip className="w-3.5 h-3.5" /> {t('accounting.expense.viewProof', 'Proof')}</button>}
 
                 {/* Paid toggle (#2): manual, independent of invoiced. */}
                 {ex.paid
-                  ? <button onClick={() => unpay.mutate(ex.id)} disabled={unpay.isPending} title={ex.paidAt ? format(ex.paidAt) : undefined} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30"><CheckCircle2 className="w-4 h-4" /> {t('accounting.ledger.paid', 'Paid')}</button>
+                  ? <button onClick={() => unpay.mutate(ex.id)} disabled={unpay.isPending} title={ex.paidAt ? format(ex.paidAt) : undefined} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-success-text hover:bg-success-soft"><CheckCircle2 className="w-4 h-4" /> {t('accounting.ledger.paid', 'Paid')}</button>
                   : <Button size="sm" variant="outline" onClick={() => setPaidExpense(ex)}><Circle className="w-3.5 h-3.5 mr-1" /> {t('accounting.ledger.markPaid', 'Mark paid')}</Button>}
 
                 {/* Edit + add-to-invoice only until invoiced (#3). */}

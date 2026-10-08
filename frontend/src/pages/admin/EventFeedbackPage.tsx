@@ -262,20 +262,20 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             {item.feedback_type === 'rating' && <Star className="w-4 h-4 text-yellow-500" />}
-                            {item.feedback_type === 'like' && <Heart className="w-4 h-4 text-red-500" />}
-                            {item.feedback_type === 'comment' && <MessageSquare className="w-4 h-4 text-blue-500" />}
+                            {item.feedback_type === 'like' && <Heart className="w-4 h-4 text-danger" />}
+                            {item.feedback_type === 'comment' && <MessageSquare className="w-4 h-4 text-info" />}
                             {item.feedback_type === 'reaction' && item.reaction && (
                               <span className="text-base leading-none">{item.reaction}</span>
                             )}
                             {/* Approve / reject (issue 744); the reason is the comment_text below. */}
                             {item.feedback_type === 'decision' && item.decision === 'approved' && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
                                 <ThumbsUp className="w-4 h-4" aria-hidden="true" />
                                 {t('feedback.decisions.approved', 'Approved')}
                               </span>
                             )}
                             {item.feedback_type === 'decision' && item.decision === 'rejected' && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400">
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-danger-text">
                                 <ThumbsDown className="w-4 h-4" aria-hidden="true" />
                                 {t('feedback.decisions.rejected', 'Rejected')}
                               </span>
@@ -429,7 +429,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                 <Card>
                   <div className="p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <Heart className="w-8 h-8 text-red-500" />
+                      <Heart className="w-8 h-8 text-danger" />
                       <div>
                         <p className="text-2xl font-bold">{analytics.summary.total_likes}</p>
                         <p className="text-sm text-neutral-600">{t('feedback.totalLikes', 'Total Likes')}</p>
@@ -440,7 +440,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                 <Card>
                   <div className="p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <Smile className="w-8 h-8 text-amber-500" />
+                      <Smile className="w-8 h-8 text-warning" />
                       <div>
                         <p className="text-2xl font-bold">{analytics.summary.total_reactions || 0}</p>
                         <p className="text-sm text-neutral-600">{t('feedback.totalReactions', 'Total Reactions')}</p>
@@ -451,7 +451,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                 <Card>
                   <div className="p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <MessageSquare className="w-8 h-8 text-blue-500" />
+                      <MessageSquare className="w-8 h-8 text-info" />
                       <div>
                         <p className="text-2xl font-bold">{analytics.summary.total_comments}</p>
                         <p className="text-sm text-neutral-600">{t('feedback.totalComments', 'Total Comments')}</p>
@@ -472,11 +472,11 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                     <div className="p-6">
                       <div className="flex items-center gap-4 mb-2">
                         <div className="flex items-center gap-2">
-                          <ThumbsUp className="w-6 h-6 text-green-600 dark:text-green-400" aria-hidden="true" />
+                          <ThumbsUp className="w-6 h-6 text-success-text" aria-hidden="true" />
                           <p className="text-2xl font-bold">{analytics.summary.total_approved || 0}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <ThumbsDown className="w-6 h-6 text-red-600 dark:text-red-400" aria-hidden="true" />
+                          <ThumbsDown className="w-6 h-6 text-danger-text" aria-hidden="true" />
                           <p className="text-2xl font-bold">{analytics.summary.total_rejected || 0}</p>
                         </div>
                       </div>
@@ -487,7 +487,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
                 <Card>
                   <div className="p-6">
                     <div className="flex items-center gap-3 mb-2">
-                      <TrendingUp className="w-8 h-8 text-green-500" />
+                      <TrendingUp className="w-8 h-8 text-success" />
                       <div>
                         <p className="text-2xl font-bold">{analytics.summary.total_feedback}</p>
                         <p className="text-sm text-neutral-600">{t('feedback.totalInteractions', 'Total Interactions')}</p>

@@ -74,12 +74,12 @@ const extractEmail = (addr?: string | null) => {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  sent: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  ingested: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  received: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  failed: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-  error: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  sent: 'bg-success-soft text-success-text',
+  ingested: 'bg-success-soft text-success-text',
+  received: 'bg-info-soft text-info-text',
+  pending: 'bg-warning-soft text-warning-text',
+  failed: 'bg-danger-soft text-danger-text',
+  error: 'bg-danger-soft text-danger-text',
 };
 
 export const MessagesPage: React.FC = () => {
@@ -628,7 +628,7 @@ const QueueDetail: React.FC<{ d: import('../../../services/email.service').Email
         <div className="flex flex-col gap-2 max-w-md">
           {d.attachments.map((a, i) => (
             <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-line-faint bg-neutral-50 dark:bg-neutral-800/40">
-              <FileText className="w-5 h-5 text-red-500 flex-none" />
+              <FileText className="w-5 h-5 text-danger flex-none" />
               <span className="text-[13.5px] font-medium text-heading truncate">{a.filename}</span>
               <span className="ml-auto text-[11px] text-neutral-400" title={t('messages.sentAttachHint', 'Sent attachments are not archived yet — Phase 2.')}>
                 {t('messages.notArchived', 'not archived yet')}
@@ -697,7 +697,7 @@ const ReceivedDetail: React.FC<{
         </div>
       )}
       {item.error && (
-        <div className="mt-4 text-sm text-red-600 dark:text-red-400">{item.error}</div>
+        <div className="mt-4 text-sm text-danger-text">{item.error}</div>
       )}
     </>
   );
@@ -795,7 +795,7 @@ const PdfModal: React.FC<{ docId: number; onClose: () => void; t: TFunction }> =
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-6" onClick={onClose}>
       <div className="bg-shell rounded-xl w-[min(620px,94vw)] max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-line-faint">
-          <FileText className="w-4 h-4 text-red-500" />
+          <FileText className="w-4 h-4 text-danger" />
           <span className="text-sm font-medium text-heading">{t('messages.document', 'Document')}</span>
           <div className="ml-auto flex items-center gap-1">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}

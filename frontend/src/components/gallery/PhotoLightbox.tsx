@@ -1126,7 +1126,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
               <div className="flex items-center gap-1">
                 <button
                   onClick={submitLike}
-                  className={`p-2 rounded-full transition-colors ${myLiked ? 'bg-red-500/80 hover:bg-red-500' : 'bg-white/10 hover:bg-white/20'}`}
+                  className={`p-2 rounded-full transition-colors ${myLiked ? 'bg-danger hover:opacity-90' : 'bg-white/10 hover:bg-white/20'}`}
                   aria-label={myLiked ? 'Unlike photo' : 'Like photo'}
                   title={myLiked ? 'Unlike' : 'Like'}
                 >

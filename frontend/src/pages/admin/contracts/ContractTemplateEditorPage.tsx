@@ -773,7 +773,7 @@ export const ContractTemplateEditorPage: React.FC = () => {
       )}
 
       {lineage && lineage.updateAvailable && !readOnly && (
-        <div role="status" className="p-3 rounded-md border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/30 text-sm text-blue-900 dark:text-blue-100 flex flex-wrap items-center gap-3">
+        <div role="status" className="p-3 rounded-md border border-info-line bg-info-soft text-sm text-info-text flex flex-wrap items-center gap-3">
           <p className="flex-1">
             {lineage.sourceIsSystem
               ? t('contracts.templates.lineage.systemUpdated', 'The system template was updated (v{{from}} → v{{to}}). Your copy is unchanged.',
@@ -802,15 +802,15 @@ export const ContractTemplateEditorPage: React.FC = () => {
             <Redo2 className="w-4 h-4" />
           </button>
           <span role="status" aria-live="polite" data-testid="autosave-status"
-            className={`text-sm ${saveState === 'conflict' || saveState === 'error' ? 'text-red-700 dark:text-red-400'
-              : saveState === 'offline' || dirty ? 'text-amber-800 dark:text-amber-300' : 'text-soft'}`}>
+            className={`text-sm ${saveState === 'conflict' || saveState === 'error' ? 'text-danger-text'
+              : saveState === 'offline' || dirty ? 'text-warning-text' : 'text-soft'}`}>
             {status}
           </span>
         </div>
       )}
 
       {conflict && (
-        <div role="alert" className="p-3 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200 flex flex-wrap items-center gap-3">
+        <div role="alert" className="p-3 rounded-md border border-warning-line bg-warning-soft text-sm text-warning-text flex flex-wrap items-center gap-3">
           <p className="flex-1">
             <strong>{t('contracts.templates.conflictTitle', 'Changed by someone else.')}</strong>{' '}
             {t('contracts.templates.conflictBody', 'Another admin saved this template while you were editing. Autosave is paused and your changes are still here.')}
@@ -821,7 +821,7 @@ export const ContractTemplateEditorPage: React.FC = () => {
         </div>
       )}
       {problem && (
-        <div role="alert" className="p-3 rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30 text-sm text-red-800 dark:text-red-200">
+        <div role="alert" className="p-3 rounded-md border border-danger-line bg-danger-soft text-sm text-danger-text">
           {problem}
         </div>
       )}

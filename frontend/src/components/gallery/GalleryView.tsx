@@ -1782,14 +1782,14 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
 
         {/* Client Access Banner (#172) */}
         {isClient && (
-          <div className="mt-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+          <div className="mt-4 rounded-lg border border-warning-line bg-warning-soft p-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                <Shield className="w-5 h-5 text-warning-text" />
+                <span className="text-sm font-medium text-warning-text">
                   {t('clientAccess.banner')}
                 </span>
-                <span className="text-xs text-amber-600 dark:text-amber-400 ml-2">
+                <span className="text-xs text-warning-text ml-2">
                   {t('clientAccess.visibleCount', { visible: visibleCount, total: totalCount })}
                 </span>
               </div>
@@ -1901,7 +1901,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
                       key={id}
                       type="button"
                       onClick={() => togglePerson(id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-50 text-primary-700 text-sm hover:bg-primary-100"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-soft text-accent text-sm"
                     >
                       {person.label || t('gallery.people.unnamedCount', {
                         count: person.face_count,

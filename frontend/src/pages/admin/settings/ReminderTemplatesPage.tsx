@@ -291,7 +291,7 @@ export const ReminderTemplatesPage: React.FC = () => {
           else the legacy global controls. */}
       <Card className="mb-4">
         {workflowsLive ? (
-          <div className="flex items-start gap-2 text-sm text-blue-800 dark:text-blue-200">
+          <div className="flex items-start gap-2 text-sm text-info-text">
             <WorkflowIcon className="w-4 h-4 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium">{t('reminderTemplates.scheduleMoved.title', 'The reminder schedule is now in Workflows')}</p>
@@ -369,7 +369,7 @@ export const ReminderTemplatesPage: React.FC = () => {
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {!row.hasTemplate && !row.isDefault && (
                             <span
-                              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-warning-soft text-warning-text"
                               title={t('reminderTemplates.usesDefaultTooltip',
                                 'No dedicated template yet — this event type falls back to the default. Edit + save here to create one.') as string}
                             >
@@ -424,7 +424,7 @@ export const ReminderTemplatesPage: React.FC = () => {
                         <span>{lang.name}</span>
                         {!filled && lang.code !== 'en' && (
                           <span
-                            className="w-1.5 h-1.5 rounded-full bg-amber-400"
+                            className="w-1.5 h-1.5 rounded-full bg-warning"
                             title={t('reminderTemplates.noTranslation', 'No translation yet') as string}
                           />
                         )}
@@ -434,9 +434,9 @@ export const ReminderTemplatesPage: React.FC = () => {
                 </div>
 
                 {isNewPerType && (
-                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 mb-3 flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                  <div className="rounded-md border border-warning-line bg-warning-soft p-3 mb-3 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning-text mt-0.5 shrink-0" />
+                    <p className="text-sm text-warning-text">
                       {t('reminderTemplates.willCreateOnSave',
                         'This event type uses the default template. The fields below are pre-filled from the default; saving will create a dedicated template for this event type.')}
                     </p>

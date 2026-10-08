@@ -138,10 +138,10 @@ export const GuestInviteDialog: React.FC<GuestInviteDialogProps> = ({ eventId, o
                           <span
                             className={`inline-block px-2 py-0.5 rounded-full font-medium ${
                               invite.status === 'redeemed'
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                ? 'bg-success-soft text-success-text'
                                 : invite.status === 'revoked'
                                 ? 'bg-fill text-body'
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                : 'bg-info-soft text-info-text'
                             }`}
                           >
                             {t(`admin.guests.inviteStatus.${invite.status}`, invite.status)}
@@ -161,7 +161,7 @@ export const GuestInviteDialog: React.FC<GuestInviteDialogProps> = ({ eventId, o
                               title={t('admin.guests.copyLink', 'Copy link')}
                             >
                               {copiedId === invite.id ? (
-                                <Check className="w-4 h-4 text-green-600" />
+                                <Check className="w-4 h-4 text-success-text" />
                               ) : (
                                 <Copy className="w-4 h-4" />
                               )}
@@ -169,7 +169,7 @@ export const GuestInviteDialog: React.FC<GuestInviteDialogProps> = ({ eventId, o
                             <button
                               type="button"
                               onClick={() => revokeMutation.mutate(invite.id)}
-                              className="p-1.5 text-neutral-500 hover:text-red-600"
+                              className="p-1.5 text-neutral-500 hover:text-danger-text"
                               title={t('admin.guests.revokeInvite', 'Revoke')}
                             >
                               <Trash2 className="w-4 h-4" />

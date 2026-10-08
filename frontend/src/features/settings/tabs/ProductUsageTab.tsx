@@ -157,7 +157,7 @@ export default function ProductUsageTab() {
           <p>{t('productUsage.lastReport', { date: data.last_report_date })}</p>
         )}
         {data.collector_error === 'INVALID_COLLECTOR_URL' && (
-          <p role="alert" className="text-amber-700 dark:text-amber-300">
+          <p role="alert" className="text-warning-text">
             {/* Shown alongside the real controls, not instead of them: with a
                 bad URL the operator still needs to read their status and
                 still needs to be able to withdraw. */}
@@ -192,7 +192,7 @@ export default function ProductUsageTab() {
         {data.can_abandon && (
           // The one dead end the operator cannot retry out of. Offered only
           // here, and worded so nobody mistakes it for a confirmed deletion.
-          <div className="rounded border border-amber-300 dark:border-amber-700 p-3 space-y-2">
+          <div className="rounded border border-warning-line p-3 space-y-2">
             <p>
               {t(
                 data.abandon_never_registered
@@ -306,7 +306,7 @@ export default function ProductUsageTab() {
                       href={portalUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-primary-600 dark:text-primary-400 hover:underline self-center"
+                      className="text-sm text-accent hover:underline self-center"
                     >
                       {t('productUsage.portalReady')}
                     </a>
@@ -324,7 +324,7 @@ export default function ProductUsageTab() {
                 </a>
               )}
               <a
-                className="text-sm text-primary-600 dark:text-primary-400 hover:underline self-center"
+                className="text-sm text-accent hover:underline self-center"
                 href={`${data.collector_url}/transparency`}
                 target="_blank"
                 rel="noreferrer"
