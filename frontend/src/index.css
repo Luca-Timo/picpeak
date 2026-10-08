@@ -298,7 +298,7 @@
   /*
    * Foreground for content sitting on .bg-accent-soft. Not the accent
    * itself: accent on accent-soft is what made the Sidebar Preview pills
-   * read as "barely visible". Values in tokens.css § 4.
+   * read as "barely visible". Values in tokens.css › Accent.
    */
   .text-on-accent-soft {
     color: var(--ui-accent-on-soft);
@@ -505,7 +505,7 @@
     color: color-mix(in srgb, var(--chip-hue) 72%, var(--color-text, #171717));
   }
 
-  /* Same hues as the admin (tokens.css § 3, Branding › Colours). */
+  /* Same hues as the admin (tokens.css › Status, Branding › Colours). */
   .hue-success { --chip-hue: var(--status-success); }
   .hue-warning { --chip-hue: var(--status-warning); }
   .hue-danger { --chip-hue: var(--status-danger); }

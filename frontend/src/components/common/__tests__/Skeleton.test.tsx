@@ -9,7 +9,7 @@ import { Skeleton, SkeletonGalleryGrid, SkeletonCard } from '../Skeleton';
  * gallery themes (Rekoo-PS's "most annoying" frame). They must instead
  * use the active theme's surface-border colour so the placeholders
  * track whatever the theme defines for both light and dark modes. They read
- * it through --shared-fill / --shared-surface (tokens.css § 6), which are the
+ * it through --shared-fill / --shared-surface (tokens.css › Shared components), which are the
  * theme colours on gallery pages and the UI tokens inside the admin.
  */
 describe('Skeleton — theme-aware colour', () => {

@@ -25,7 +25,87 @@
  */
 
 :root {
-  /* ---- 1. UI tokens: light -------------------------------------------- */
+  /* ---- Theme tokens: defaults ("Classic Grid") --------------------- */
+  /* Names match ThemeConfig in src/types/theme.types.ts. */
+  --color-background: #fafafa;        /* page base */
+  --color-surface: #ffffff;           /* cards, nav, alternating sections */
+  --color-elevated: #f5f5f5;          /* raised panels */
+  --color-surface-border: #e5e5e5;    /* dividers, borders */
+  --color-text: #171717;              /* primary text */
+  --color-muted-text: #737373;        /* secondary text */
+  --color-accent: #22c55e;            /* links, focus rings, hover */
+  --color-accent-dark: #5C8762;       /* primary CTA fill */
+  /* Legacy aliases — kept for any consumer that still reads --color-primary.
+   * Both resolve to the accent-dark token (the previous "primary" CTA color). */
+  --color-primary: #5C8762;
+  --color-primary-light: #7aa583;
+  --color-primary-dark: #4a6f4f;
+  --font-family: 'Inter', 'Noto Sans', system-ui, -apple-system, sans-serif;
+  --heading-font-family: 'Inter', 'Noto Sans', system-ui, -apple-system, sans-serif;
+  --border-radius: 0.5rem;            /* theme-controlled button radius */
+  --font-size-base: 16px;
+  --shadow-default: 0 4px 6px rgba(0,0,0,0.1);   /* gallery card shadow */
+  /* Tailwind RGB values for primary color (legacy, used by primary-* utilities) */
+  --tw-color-primary: 92 135 98;
+  --radius: 0.5rem;
+
+  /* ---- Status: one hue per meaning ------------------------------- */
+  /* Branding › Colours writes --status-* inline on <html>; these are the
+   * defaults. Everything else (text, tint, border, dark mode) is derived
+   * below, so a studio picks five colours, never twenty. */
+  --status-success: #16a34a;      /* paid, signed, published, done */
+  --status-warning: #d97706;      /* due soon, draft needs attention, unsaved */
+  --status-danger: #dc2626;       /* overdue, failed, destructive */
+  --status-info: #2563eb;         /* neutral notices, in progress */
+  --status-storno: #9333ea;       /* cancelled / credited documents */
+
+  /* ---- Data colours ---------------------------------------------- */
+  /* Charts, calendar entries, categories, colour labels: things that need
+   * to look different from each other without meaning good or bad. Use in
+   * order; never use a status colour for a series. */
+  --chart-1: #2563eb;  /* blue   */
+  --chart-2: #0d9488;  /* teal   */
+  --chart-3: #d97706;  /* amber  */
+  --chart-4: #9333ea;  /* purple */
+  --chart-5: #db2777;  /* pink   */
+  --chart-6: #65a30d;  /* lime   */
+  --chart-7: #0891b2;  /* cyan   */
+  --chart-8: #ea580c;  /* orange */
+
+  /* ---- Shared components ---------------------------------------- */
+  /* Components used on both sides (Skeleton) read these: the gallery theme
+   * by default, the UI tokens inside the admin (.admin-ui, below). */
+  --shared-fill: var(--color-surface-border);
+  --shared-surface: var(--color-surface);
+
+  /* ---- Scale tokens ------------------------------------------------ */
+  /* Tailwind's rounded-*, shadow-* and font-sans read these. */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-large: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+/*
+ * Admin colours, light. Also on `.ui-light`, which pins a subtree to the
+ * light admin palette whatever the page mode (Branding's colour preview
+ * shows both side by side). Status and accent tokens derive from the hues
+ * at the element they are declared on, so they are declared here too.
+ */
+:root,
+.ui-light {
+  /* ---- UI tokens: light -------------------------------------------- */
 
   /* Surfaces, from the page floor upwards */
   --ui-canvas: #fafafa;        /* page background            (neutral-50)  */
@@ -50,40 +130,6 @@
   --ui-line-strong: #d4d4d4;   /* input borders              (neutral-300) */
   --ui-line-faint: #f5f5f5;    /* hairlines inside a panel   (neutral-100) */
 
-  /* ---- 2. Theme tokens: defaults ("Classic Grid") --------------------- */
-  /* Names match ThemeConfig in src/types/theme.types.ts. */
-  --color-background: #fafafa;        /* page base */
-  --color-surface: #ffffff;           /* cards, nav, alternating sections */
-  --color-elevated: #f5f5f5;          /* raised panels */
-  --color-surface-border: #e5e5e5;    /* dividers, borders */
-  --color-text: #171717;              /* primary text */
-  --color-muted-text: #737373;        /* secondary text */
-  --color-accent: #22c55e;            /* links, focus rings, hover */
-  --color-accent-dark: #5C8762;       /* primary CTA fill */
-  /* Legacy aliases — kept for any consumer that still reads --color-primary.
-   * Both resolve to the accent-dark token (the previous "primary" CTA color). */
-  --color-primary: #5C8762;
-  --color-primary-light: #7aa583;
-  --color-primary-dark: #4a6f4f;
-  --font-family: 'Inter', 'Noto Sans', system-ui, -apple-system, sans-serif;
-  --heading-font-family: 'Inter', 'Noto Sans', system-ui, -apple-system, sans-serif;
-  --border-radius: 0.5rem;            /* theme-controlled button radius */
-  --font-size-base: 16px;
-  --shadow-default: 0 4px 6px rgba(0,0,0,0.1);   /* gallery card shadow */
-  /* Tailwind RGB values for primary color (legacy, used by primary-* utilities) */
-  --tw-color-primary: 92 135 98;
-  --radius: 0.5rem;
-
-  /* ---- 3. Status: one hue per meaning ------------------------------- */
-  /* Branding › Colours writes --status-* inline on <html>; these are the
-   * defaults. Everything else (text, tint, border, dark mode) is derived
-   * below, so a studio picks five colours, never twenty. */
-  --status-success: #16a34a;      /* paid, signed, published, done */
-  --status-warning: #d97706;      /* due soon, draft needs attention, unsaved */
-  --status-danger: #dc2626;       /* overdue, failed, destructive */
-  --status-info: #2563eb;         /* neutral notices, in progress */
-  --status-storno: #9333ea;       /* cancelled / credited documents */
-
   /* Derived per status: solid (dots, fills), -text (readable on a panel),
    * -soft (badge / notice background), -line (notice border). */
   --ui-success: var(--status-success);
@@ -107,7 +153,7 @@
   --ui-storno-soft: color-mix(in srgb, var(--status-storno) 10%, var(--ui-panel));
   --ui-storno-line: color-mix(in srgb, var(--status-storno) 30%, var(--ui-panel));
 
-  /* ---- 4. Accent (admin) ------------------------------------------- */
+  /* ---- Accent (admin) ------------------------------------------- */
   /* The studio's brand colour, from Branding. applyTheme() also writes
    * --color-accent-dark-fg: white or near-black, whichever reads on the
    * filled accent, so a pastel brand colour keeps a readable button. */
@@ -117,44 +163,8 @@
   --ui-accent-soft: color-mix(in srgb, var(--color-accent-dark) 18%, transparent);  /* .bg-accent-soft */
   --ui-accent-line: color-mix(in srgb, var(--color-accent-dark) 45%, transparent);  /* .border-accent-soft */
   --ui-accent-on-soft: var(--color-accent-dark);                                     /* .text-on-accent-soft */
-
-  /* ---- 5. Data colours ---------------------------------------------- */
-  /* Charts, calendar entries, categories, colour labels: things that need
-   * to look different from each other without meaning good or bad. Use in
-   * order; never use a status colour for a series. */
-  --chart-1: #2563eb;  /* blue   */
-  --chart-2: #0d9488;  /* teal   */
-  --chart-3: #d97706;  /* amber  */
-  --chart-4: #9333ea;  /* purple */
-  --chart-5: #db2777;  /* pink   */
-  --chart-6: #65a30d;  /* lime   */
-  --chart-7: #0891b2;  /* cyan   */
-  --chart-8: #ea580c;  /* orange */
-
-  /* ---- 6. Shared components ---------------------------------------- */
-  /* Components used on both sides (Skeleton) read these: the gallery theme
-   * by default, the UI tokens inside the admin (.admin-ui, below). */
-  --shared-fill: var(--color-surface-border);
-  --shared-surface: var(--color-surface);
-
-  /* ---- 7. Scale tokens ------------------------------------------------ */
-  /* Tailwind's rounded-*, shadow-* and font-sans read these. */
-  --radius-sm: 0.125rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.25rem;
-  --radius-3xl: 1.5rem;
-
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
-  --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-large: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
+
 
 /*
  * Dark mode. AdminDarkModeContext (admin) and usePublicDarkMode (public
@@ -164,6 +174,29 @@
  * wins because it writes inline --color-* styles on <html>.
  */
 .dark {
+  --color-background: #0a0a0a;
+  --color-surface: #171717;
+  --color-elevated: #1f1f1f;
+  --color-surface-border: #262626;
+  --color-text: #f5f5f5;
+  --color-muted-text: #a3a3a3;
+  --color-accent: #22c55e;
+  --color-accent-dark: #5C8762;
+
+  /* Data colours, lighter for dark backgrounds */
+  --chart-1: #60a5fa;
+  --chart-2: #2dd4bf;
+  --chart-3: #fbbf24;
+  --chart-4: #c084fc;
+  --chart-5: #f472b6;
+  --chart-6: #a3e635;
+  --chart-7: #22d3ee;
+  --chart-8: #fb923c;
+}
+
+/* Admin colours, dark — and `.ui-dark` to pin a subtree to them. */
+.dark,
+.ui-dark {
   --ui-canvas: #0a0a0a;        /* neutral-950 */
   --ui-shell: #171717;         /* neutral-900 */
   --ui-panel: #262626;         /* neutral-800 */
@@ -183,15 +216,6 @@
   --ui-line: #404040;          /* neutral-700 */
   --ui-line-strong: #525252;   /* neutral-600 */
   --ui-line-faint: #262626;    /* neutral-800 */
-
-  --color-background: #0a0a0a;
-  --color-surface: #171717;
-  --color-elevated: #1f1f1f;
-  --color-surface-border: #262626;
-  --color-text: #f5f5f5;
-  --color-muted-text: #a3a3a3;
-  --color-accent: #22c55e;
-  --color-accent-dark: #5C8762;
 
   /* Status, derived for dark panels */
   --ui-success-text: color-mix(in srgb, var(--status-success) 55%, #fff);
@@ -213,15 +237,6 @@
   --ui-accent-soft: color-mix(in srgb, var(--color-accent-dark) 55%, transparent);
   --ui-accent-line: color-mix(in srgb, var(--color-accent-dark) 70%, transparent);
   --ui-accent-on-soft: #ffffff;
-
-  --chart-1: #60a5fa;
-  --chart-2: #2dd4bf;
-  --chart-3: #fbbf24;
-  --chart-4: #c084fc;
-  --chart-5: #f472b6;
-  --chart-6: #a3e635;
-  --chart-7: #22d3ee;
-  --chart-8: #fb923c;
 }
 
 /* Inside the admin (AdminDarkModeProvider puts .admin-ui on <html>), shared

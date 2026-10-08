@@ -31,7 +31,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   // Theme-aware placeholder colour. Without this the skeleton tiles
   // rendered as bright bg-neutral-200 light grey on dark gallery
   // themes — the "most annoying" frame in #358's screenshots. Using
-  // --shared-fill (tokens.css § 6) is the gallery theme's border shade on
+  // --shared-fill (tokens.css › Shared components) is the gallery theme's border shade on
   // themed pages and the UI fill token in the admin.
   const style: React.CSSProperties = {
     backgroundColor: 'var(--shared-fill)',

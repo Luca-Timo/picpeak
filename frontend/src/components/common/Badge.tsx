@@ -50,7 +50,7 @@ const DOT: Record<BadgeTone, string> = {
 
 /**
  * The one status pill of the admin: "Paid", "Draft", "Beta", "Default".
- * Colours come from tokens.css § 3 (Branding › Colours), so they follow the
+ * Colours come from tokens.css › Status (Branding › Colours), so they follow the
  * studio's status colours in light and dark. Portal and public pages use
  * `.status-chip` instead, which mixes the same hues into the themed surface.
  */
