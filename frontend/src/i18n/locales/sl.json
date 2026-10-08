@@ -3418,7 +3418,6 @@
     },
     "pdfTheme": {
       "title": "Tema PDF",
-      "description": "Barve, pisava, noga in številke strani za ponudbe, račune in pogodbe. Prazna polja podedujejo iz »Vsi dokumenti«, nato iz poslovnega profila.",
       "scopeLabel": "Vrsta dokumenta",
       "scope": {
         "default": "Vsi dokumenti",
@@ -3434,7 +3433,6 @@
         "subtle": "Noga in številke strani",
         "rule": "Črte"
       },
-      "inherited": "Podedovano",
       "inherit": "Podeduj ({{value}})",
       "reset": "Ponastavi",
       "titleSize": "Velikost naslova",
@@ -3462,12 +3460,8 @@
       "marginsNote": "Zgornji rob določata naslovno okno in glava dokumenta. Podpisna stran pogodbe ohrani svojo fiksno postavitev ne glede na robove, zato podpisi vedno padejo v svoja polja.",
       "preview": "Predogled PDF-ja",
       "resetScope": "Ponastavi na podedovano",
-      "save": "Shrani temo",
-      "saved": "Tema PDF shranjena",
-      "saveFailed": "Teme PDF ni bilo mogoče shraniti",
       "previewFailed": "Predogleda ni bilo mogoče izrisati",
       "presets": "Začni s prednastavitvijo",
-      "presetsHint": "Prednastavitev izpolni obrazec; nič se ne shrani, dokler teme ne shranite.",
       "preset": {
         "classic": "Klasično",
         "modern": "Moderno",

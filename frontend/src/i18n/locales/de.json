@@ -4334,7 +4334,7 @@
     },
     "pdfTheme": {
       "title": "PDF-Design",
-      "description": "Farben, Schrift, Fußzeile und Seitenzahlen für Angebote, Rechnungen und Verträge. Leere Felder übernehmen die Werte von „Alle Dokumente“, danach aus Ihrem Unternehmensprofil.",
+      "description": "Farben, Schrift, Fusszeile und Seitenzahlen für Angebote, Rechnungen und Verträge. Leere Felder übernehmen die Werte aus „Alle Dokumente“, dann aus den Farben oben (die gefüllte Akzentfarbe für Überschriften) und aus Ihrem Unternehmensprofil.",
       "scopeLabel": "Dokumentart",
       "scope": {
         "default": "Alle Dokumente",
@@ -4350,7 +4350,6 @@
         "subtle": "Fußzeile und Seitenzahlen",
         "rule": "Linien"
       },
-      "inherited": "Übernommen",
       "inherit": "Übernehmen ({{value}})",
       "reset": "Zurücksetzen",
       "titleSize": "Titelgröße",
@@ -4378,12 +4377,9 @@
       "marginsNote": "Den oberen Rand bestimmen Adressfenster und Briefkopf. Die Unterschriftenseite eines Vertrags behält ihr festes Layout unabhängig von den Rändern, damit Unterschriften immer in ihren Feldern landen.",
       "preview": "PDF-Vorschau",
       "resetScope": "Auf übernommene Werte zurücksetzen",
-      "save": "Design speichern",
-      "saved": "PDF-Design gespeichert",
-      "saveFailed": "Das PDF-Design konnte nicht gespeichert werden",
       "previewFailed": "Die Vorschau konnte nicht erstellt werden",
       "presets": "Mit einer Vorlage beginnen",
-      "presetsHint": "Eine Vorlage füllt das Formular aus; gespeichert wird erst, wenn Sie das Design speichern.",
+      "presetsHint": "Eine Vorlage füllt das Formular aus; gespeichert wird erst, wenn Sie die Seite speichern.",
       "preset": {
         "classic": "Klassisch",
         "modern": "Modern",
@@ -4425,7 +4421,14 @@
       },
       "uploadedFonts": "Ihre Schriften",
       "uploadedFont": "Hochgeladene Schrift",
-      "fontUnavailable": "{{name}} (nicht mehr verfügbar)"
+      "fontUnavailable": "{{name}} (nicht mehr verfügbar)",
+      "fromAllDocuments": "Aus „Alle Dokumente“",
+      "fromBranding": "Aus Farben",
+      "builtIn": "Standard",
+      "followBranding": "Farben folgen",
+      "readOnly": "Sie können das PDF-Design sehen, aber nicht ändern.",
+      "invalid": "Das PDF-Design enthält einen ungültigen Rand oder eine ungültige Farbe. Bitte vor dem Speichern korrigieren.",
+      "saveFailedScopes": "PDF-Design konnte nicht gespeichert werden für: {{scopes}}"
     },
     "pdfFonts": {
       "title": "Ihre Schriften für PDFs",

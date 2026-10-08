@@ -13,7 +13,7 @@ import { buildResourceUrl } from '../../utils/url';
 import { useFeatureEnabled, useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { CustomerDashboardBrandingCard } from '../../components/admin/CustomerDashboardBrandingCard';
 import { PdfTypographyCard } from '../../components/admin/PdfTypographyCard';
-import { PdfThemeCard } from '../../components/admin/PdfThemeCard';
+import { PdfThemeCard, usePdfThemeDrafts } from '../../components/admin/PdfThemeCard';
 import { PdfFontsCard } from '../../components/admin/PdfFontsCard';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { useMutationWithToast } from '../../hooks';
@@ -82,6 +82,10 @@ export const BrandingPage: React.FC = () => {
   // fall back to Helvetica" — same encoding the column uses.
   const [pdfFontFamily, setPdfFontFamily] = useState<string | null>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
+  // The PDF theme (quotes, invoices, contracts) sits under the Colours card
+  // and saves with this page's save bar.
+  const pdfEnabled = !!(flags.quotes || flags.bills || flags.taxReport || flags.contracts);
+  const pdfTheme = usePdfThemeDrafts(pdfEnabled);
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -377,6 +381,10 @@ export const BrandingPage: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (pdfTheme.invalidScopes.length > 0) {
+      toast.error(t('branding.pdfTheme.invalid', 'The PDF theme has a margin or colour that is not valid. Fix it before saving.'));
+      return;
+    }
     try {
       // Sync logo URL from theme to branding settings, but never let an
       // undefined/empty theme.logoUrl wipe a logo that is still configured in
@@ -403,6 +411,15 @@ export const BrandingPage: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['business-profile-snapshot'] });
       }
 
+      // PDF theme: each changed document type on its own; the failed ones
+      // stay as drafts and are named.
+      const failedPdfScopes = await pdfTheme.save();
+      if (failedPdfScopes.length > 0) {
+        toast.error(t('branding.pdfTheme.saveFailedScopes', 'Could not save the PDF theme for: {{scopes}}', {
+          scopes: failedPdfScopes.map((scope) => t(`branding.pdfTheme.scope.${scope}`, scope)).join(', '),
+        }));
+      }
+
       // Apply theme globally
       setTheme(currentTheme);
 
@@ -420,14 +437,16 @@ export const BrandingPage: React.FC = () => {
   // Everything handleSave writes. The upload endpoints store their URL on
   // the spot, so the upload handlers move the snapshot along with the draft
   // and an upload alone does not read as dirty.
-  const isDirty = JSON.stringify([brandingSettings, currentTheme, currentThemeName, pdfFontFamily])
-    !== JSON.stringify([loadedBranding, loadedTheme, loadedThemeName, loadedPdfFontFamily]);
+  const isDirty = pdfTheme.isDirty
+    || JSON.stringify([brandingSettings, currentTheme, currentThemeName, pdfFontFamily])
+      !== JSON.stringify([loadedBranding, loadedTheme, loadedThemeName, loadedPdfFontFamily]);
 
   const handleDiscard = () => {
     setBrandingSettings(loadedBranding);
     setCurrentTheme(loadedTheme);
     setCurrentThemeName(loadedThemeName);
     setPdfFontFamily(loadedPdfFontFamily);
+    pdfTheme.discard();
     if (isPreviewMode) {
       setTheme(loadedTheme);
     }
@@ -1229,6 +1248,9 @@ export const BrandingPage: React.FC = () => {
                 statusColors={brandingSettings.status_colors || {}}
                 onStatusColorsChange={(next) => handleBrandingChange('status_colors', next)}
                 onColorFocus={handleColorFocus}
+                slotAfterColors={pdfEnabled
+                  ? <PdfThemeCard state={pdfTheme} brandAccent={currentTheme.accentDarkColor} />
+                  : null}
                 // The global CSS template: every gallery without custom
                 // styling renders with it (backend services/galleryTheme).
                 cssTemplates={cssTemplates}
@@ -1276,7 +1298,6 @@ export const BrandingPage: React.FC = () => {
           </div>
         </div>
 
-        {(flags.quotes || flags.bills || flags.taxReport || flags.contracts) && <PdfThemeCard />}
         {(flags.quotes || flags.bills || flags.taxReport || flags.contracts) && <PdfFontsCard />}
 
         {/* Event-Specific Themes Info */}

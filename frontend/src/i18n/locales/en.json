@@ -3865,7 +3865,7 @@
     },
     "pdfTheme": {
       "title": "PDF theme",
-      "description": "Colours, font, footer and page numbers for quotes, invoices and contracts. Empty fields inherit from \"All documents\", then your business profile.",
+      "description": "Colours, font, footer and page numbers for quotes, invoices and contracts. Empty fields inherit from \"All documents\", then Colours above (the filled accent, for headings) and your business profile.",
       "scopeLabel": "Document type",
       "scope": {
         "default": "All documents",
@@ -3881,7 +3881,6 @@
         "subtle": "Footer and page numbers",
         "rule": "Lines"
       },
-      "inherited": "Inherited",
       "inherit": "Inherit ({{value}})",
       "reset": "Reset",
       "titleSize": "Title size",
@@ -3909,12 +3908,9 @@
       "marginsNote": "The top margin is set by the address window and the letterhead. A contract's signature page keeps its fixed layout whatever the margins are, so signatures always land in their boxes.",
       "preview": "Preview PDF",
       "resetScope": "Reset to inherited",
-      "save": "Save theme",
-      "saved": "PDF theme saved",
-      "saveFailed": "Could not save the PDF theme",
       "previewFailed": "Could not render the preview",
       "presets": "Start from a preset",
-      "presetsHint": "A preset fills in the form; nothing is saved until you save the theme.",
+      "presetsHint": "A preset fills in the form; nothing is saved until you save the page.",
       "preset": {
         "classic": "Classic",
         "modern": "Modern",
@@ -3956,7 +3952,14 @@
       },
       "uploadedFonts": "Your fonts",
       "uploadedFont": "Uploaded font",
-      "fontUnavailable": "{{name}} (no longer available)"
+      "fontUnavailable": "{{name}} (no longer available)",
+      "fromAllDocuments": "From All documents",
+      "fromBranding": "From Colours",
+      "builtIn": "Built-in",
+      "followBranding": "Follow Colours",
+      "readOnly": "You can see the PDF theme but not change it.",
+      "invalid": "The PDF theme has a margin or colour that is not valid. Fix it before saving.",
+      "saveFailedScopes": "Could not save the PDF theme for: {{scopes}}"
     },
     "pdfFonts": {
       "title": "Your fonts for PDFs",

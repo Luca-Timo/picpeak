@@ -66,7 +66,7 @@ export const ColorCustomizationCard: React.FC<ColorCustomizationCardProps> = ({
   const warnings = useMemo(() => colorWarnings(effectiveTheme, statusColors), [effectiveTheme, statusColors]);
 
   const warningText = (w: ColorWarning): string => {
-    const ratio = 'ratio' in w ? { ratio: w.ratio, needed: w.needed } : {};
+    const ratio = 'ratio' in w ? { ratio: w.ratio, needed: w.needed } : { ratio: 0, needed: 0 };
     switch (w.code) {
       case 'textOnBackground': return t('branding.colorWarnings.textOnBackground', 'Text is hard to read on the background ({{ratio}}:1, aim for {{needed}}:1).', ratio);
       case 'textOnSurface': return t('branding.colorWarnings.textOnSurface', 'Text is hard to read on cards ({{ratio}}:1, aim for {{needed}}:1).', ratio);
