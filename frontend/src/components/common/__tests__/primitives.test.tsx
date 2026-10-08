@@ -8,6 +8,7 @@ import { Tabs } from '../Tabs';
 import { Switch } from '../Switch';
 import { ErrorState } from '../EmptyState';
 import { DecimalInput } from '../DecimalInput';
+import { Table, TableBody, TableRow, TableCell } from '../Table';
 import { applyStatusColors, normalizeStatusColors } from '../../../utils/statusColors';
 
 vi.mock('react-i18next', () => ({
@@ -122,5 +123,14 @@ describe('DecimalInput', () => {
     fireEvent.blur(input);
     expect(input.value).toBe('8.10');
     expect(onBlur).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TableCell', () => {
+  it('lets a caller colour replace the default body colour', () => {
+    render(<Table><TableBody><TableRow><TableCell className="text-heading">Total</TableCell></TableRow></TableBody></Table>);
+    const cell = screen.getByText('Total');
+    expect(cell.className).toContain('text-heading');
+    expect(cell.className).not.toContain('text-body');
   });
 });
