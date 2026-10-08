@@ -213,7 +213,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
           <h2 className="gallery-sidebar-title text-lg font-semibold text-theme">{t('gallery.filters')}</h2>
           <button
             onClick={onClose}
-            className="gallery-sidebar-close p-2 hover:bg-black/10 rounded-lg transition-colors"
+            className="gallery-sidebar-close p-2 hover-surface rounded-lg transition-colors"
             aria-label={t('common.close')}
           >
             <X className="w-5 h-5 text-muted-theme" />
@@ -445,8 +445,8 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
                   className={`
                     gallery-btn w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between
                     ${selectedCategoryId === null
-                      ? 'bg-accent-dark text-white'
-                      : 'hover:bg-black/10 text-muted-theme'
+                      ? 'bg-accent-dark text-accent-fg'
+                      : 'hover-surface text-muted-theme'
                     }
                   `}
                 >
@@ -468,8 +468,8 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
                       className={`
                         gallery-btn w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between
                         ${isSelected
-                          ? 'bg-accent-dark text-white'
-                          : 'hover:bg-black/10 text-muted-theme'
+                          ? 'bg-accent-dark text-accent-fg'
+                          : 'hover-surface text-muted-theme'
                         }
                       `}
                     >
@@ -552,8 +552,8 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
                       className={`
                         gallery-btn w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center gap-3
                         ${isSelected
-                          ? 'bg-accent-dark text-white'
-                          : 'hover:bg-black/10 text-muted-theme'
+                          ? 'bg-accent-dark text-accent-fg'
+                          : 'hover-surface text-muted-theme'
                         }
                       `}
                     >

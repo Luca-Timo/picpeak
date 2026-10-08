@@ -34,14 +34,14 @@ export const DownloadProgress: React.FC<DownloadProgressProps> = ({
         {onCancel && (
           <button
             onClick={onCancel}
-            className="p-1 hover:bg-black/10 rounded transition-colors"
+            className="p-1 hover-surface rounded transition-colors"
           >
             <X className="w-4 h-4 text-muted-theme" />
           </button>
         )}
       </div>
       
-      <div className="w-full bg-black/10 rounded-full h-2">
+      <div className="w-full bg-border-token rounded-full h-2">
         <div
           className="bg-accent-dark h-2 rounded-full transition-all duration-300"
           style={{ width: `${progress}%` }}

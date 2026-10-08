@@ -109,7 +109,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   lazy = false,
   inViewRootMargin,
   releaseRootMargin,
-  skeletonClassName = 'skeleton w-full h-full rounded-lg',
+  skeletonClassName = 'skeleton bg-border-token w-full h-full rounded-lg',
   fadeInWhenVisible = false,
   overlayBaseClassName,
   actionVariant = 'light',

@@ -362,7 +362,7 @@ const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({
           </div>
         </>
       ) : (
-        <div className="skeleton aspect-square w-full" />
+        <div className="skeleton bg-border-token aspect-square w-full" />
       )}
     </div>
   );

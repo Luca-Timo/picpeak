@@ -95,9 +95,10 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
         {/* Search Bar */}
         <div className="flex-1">
           <Input
+            themed
             type="text"
             placeholder={t('gallery.searchPhotos')}
-            leftIcon={<Search className="w-5 h-5 text-neutral-400" />}
+            leftIcon={<Search className="w-5 h-5 text-muted-theme" />}
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             className="text-sm md:text-base"
@@ -131,8 +132,8 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
                   onSortChange('date');
                   setShowSortMenu(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-black/10 ${
-                  sortBy === 'date' ? 'bg-accent-dark text-white' : 'text-muted-theme'
+                className={`w-full text-left px-4 py-2 text-sm hover-surface ${
+                  sortBy === 'date' ? 'bg-accent-dark text-accent-fg' : 'text-muted-theme'
                 }`}
               >
                 {t('gallery.sortByDate')}
@@ -142,8 +143,8 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
                   onSortChange('capture_date');
                   setShowSortMenu(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-black/10 ${
-                  sortBy === 'capture_date' ? 'bg-accent-dark text-white' : 'text-muted-theme'
+                className={`w-full text-left px-4 py-2 text-sm hover-surface ${
+                  sortBy === 'capture_date' ? 'bg-accent-dark text-accent-fg' : 'text-muted-theme'
                 }`}
               >
                 {t('photoSort.dateTaken', 'Date Taken')}
@@ -153,8 +154,8 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
                   onSortChange('name');
                   setShowSortMenu(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-black/10 ${
-                  sortBy === 'name' ? 'bg-accent-dark text-white' : 'text-muted-theme'
+                className={`w-full text-left px-4 py-2 text-sm hover-surface ${
+                  sortBy === 'name' ? 'bg-accent-dark text-accent-fg' : 'text-muted-theme'
                 }`}
               >
                 {t('gallery.sortByName')}
@@ -164,8 +165,8 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
                   onSortChange('size');
                   setShowSortMenu(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-black/10 ${
-                  sortBy === 'size' ? 'bg-accent-dark text-white' : 'text-muted-theme'
+                className={`w-full text-left px-4 py-2 text-sm hover-surface ${
+                  sortBy === 'size' ? 'bg-accent-dark text-accent-fg' : 'text-muted-theme'
                 }`}
               >
                 {t('gallery.sortBySize')}
@@ -175,8 +176,8 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
                   onSortChange('rating');
                   setShowSortMenu(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-black/10 ${
-                  sortBy === 'rating' ? 'bg-accent-dark text-white' : 'text-muted-theme'
+                className={`w-full text-left px-4 py-2 text-sm hover-surface ${
+                  sortBy === 'rating' ? 'bg-accent-dark text-accent-fg' : 'text-muted-theme'
                 }`}
               >
                 {t('gallery.sortByRating', 'Sort by Rating')}
@@ -190,8 +191,8 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
                       onSortDescChange(false);
                       setShowSortMenu(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-black/10 flex items-center gap-2 ${
-                      !sortDesc ? 'bg-accent-dark text-white' : 'text-muted-theme'
+                    className={`w-full text-left px-4 py-2 text-sm hover-surface flex items-center gap-2 ${
+                      !sortDesc ? 'bg-accent-dark text-accent-fg' : 'text-muted-theme'
                     }`}
                   >
                     <SortAsc className="w-4 h-4" />
@@ -202,8 +203,8 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
                       onSortDescChange(true);
                       setShowSortMenu(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-black/10 flex items-center gap-2 ${
-                      sortDesc ? 'bg-accent-dark text-white' : 'text-muted-theme'
+                    className={`w-full text-left px-4 py-2 text-sm hover-surface flex items-center gap-2 ${
+                      sortDesc ? 'bg-accent-dark text-accent-fg' : 'text-muted-theme'
                     }`}
                   >
                     <SortDesc className="w-4 h-4" />

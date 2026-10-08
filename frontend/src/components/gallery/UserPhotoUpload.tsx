@@ -538,7 +538,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
               <label className="block">
                 <div
                   className={`border-2 border-dashed rounded-lg p-6 sm:p-8 text-center hover:border-accent-dark transition-colors cursor-pointer ${
-                    isDragOver ? 'border-accent-dark bg-accent-dark/10' : 'border-border-token'
+                    isDragOver ? 'border-accent-dark bg-accent-soft' : 'border-border-token'
                   }`}
                   onDragOver={handleDragOver}
                   onDragEnter={handleDragOver}

@@ -119,10 +119,9 @@ export const GalleryDeliveryBanner: React.FC<GalleryDeliveryBannerProps> = ({
           {Array.from({ length: placeholders }, (_, index) => (
             <div
               key={index}
-              className="skeleton aspect-square"
               // The .skeleton class paints a fixed light grey; the gallery
               // theme's border tone keeps it right on dark themes (#358).
-              style={{ backgroundColor: 'var(--color-surface-border)' }}
+              className="skeleton bg-border-token aspect-square"
             />
           ))}
         </div>

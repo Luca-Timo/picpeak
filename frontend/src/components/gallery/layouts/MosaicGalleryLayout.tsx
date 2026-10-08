@@ -84,7 +84,7 @@ const MosaicPhoto: React.FC<MosaicPhotoProps> = ({
         }}
         onDownload={onDownload}
         onToggleSelect={onToggleSelect}
-        className="photo-card relative group cursor-pointer overflow-hidden rounded-lg bg-neutral-100 mb-2"
+        className="photo-card relative group cursor-pointer overflow-hidden rounded-lg bg-elevated mb-2"
         style={{
           breakInside: 'avoid',
           aspectRatio: aspectRatio.toString()

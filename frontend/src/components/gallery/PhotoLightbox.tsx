@@ -1225,7 +1225,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
               >
                 <MessageSquare className="w-5 h-5 text-white" />
                 {((currentPhoto.comment_count ?? 0) > 0 || (currentPhoto.average_rating ?? 0) > 0) && (
-                  <span className="absolute -top-1 -right-1 bg-accent-dark/150 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 bg-accent-dark text-accent-fg text-xs rounded-full w-5 h-5 flex items-center justify-center">
                     {(currentPhoto.comment_count ?? 0) > 0 ? currentPhoto.comment_count ?? 0 : '★'}
                   </span>
                 )}
@@ -1436,13 +1436,14 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
 
       {/* Feedback Panel */}
       {showFeedback && (
-        <div className="absolute right-0 top-0 bottom-0 w-full sm:w-[26rem] bg-surface shadow-xl z-20 overflow-y-auto flex flex-col border-l border-border-token">
+        <div className="absolute right-0 top-0 bottom-0 w-full sm:w-[26rem] bg-surface text-theme shadow-xl z-20 overflow-y-auto flex flex-col border-l border-border-token">
           <div className="sticky top-0 bg-surface border-b border-border-token px-4 py-3 flex items-center justify-between">
-            <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>Photo Feedback</h3>
+            <h3 className="font-semibold text-theme">{t('feedback.panelTitle', 'Photo feedback')}</h3>
             <button
+              type="button"
               onClick={() => setShowFeedback(false)}
-              className="p-1 hover:bg-black/10 rounded transition-colors"
-              aria-label="Close feedback"
+              className="p-1 hover-surface rounded transition-colors"
+              aria-label={t('feedback.closePanel', 'Close feedback')}
             >
               <X className="w-5 h-5" />
             </button>

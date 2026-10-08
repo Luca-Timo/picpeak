@@ -277,7 +277,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
       : 'text-center';
 
   const promoSlot = promoMarkdown ? (
-    <div className="gallery-promo border-t border-border-token bg-surface/50">
+    <div className="gallery-promo border-t border-border-token">
       {/*
        * Inner block uses .container (matches the footer's container
        * width) + the alignment class. We deliberately drop the
@@ -313,7 +313,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   })().trim();
 
   const infoSlot = infoMarkdown ? (
-    <div className="gallery-info-banner border-b border-border-token bg-surface/50">
+    <div className="gallery-info-banner border-b border-border-token">
       <div className="container py-3 sm:py-4 px-4">
         <MarkdownContent
           source={infoMarkdown}
@@ -640,7 +640,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
         <div
           className="gallery-hero relative text-white overflow-hidden"
           style={{
-            backgroundColor: theme.accentColor || '#22c55e',
+            backgroundColor: theme.accentColor || 'var(--color-accent)',
             backgroundImage: theme.backgroundPattern !== 'none' 
               ? `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E")`
               : undefined

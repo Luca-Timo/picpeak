@@ -113,7 +113,7 @@ export const TimelineGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
             {/* Date marker */}
             {showDates && (
               <div className="flex items-center gap-4 mb-6">
-                <div className="hidden lg:flex items-center justify-center w-16 h-16 bg-white border-4 border-accent-dark rounded-full z-10">
+                <div className="hidden lg:flex items-center justify-center w-16 h-16 bg-surface border-4 border-accent-dark rounded-full z-10">
                   <Calendar className="w-6 h-6 text-accent" />
                 </div>
                 <h3 className="text-xl font-semibold text-theme">

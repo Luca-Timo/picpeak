@@ -1514,6 +1514,10 @@
       "withDate": "Your photographer is still working on the remaining images — the complete gallery will be here by {{date}} at the latest.",
       "noDetails": "Your photographer is still working on the remaining images.",
       "progressLabel": "Photos delivered so far"
+    },
+    "preview": {
+      "title": "Theme preview",
+      "description": "This is how your galleries will look with the current theme settings."
     }
   },
   "categories": {
@@ -6127,7 +6131,9 @@
     "decisionType": "your decision",
     "youApproved": "You approved this photo",
     "youRejected": "You rejected this photo",
-    "deleteAction": "Delete feedback"
+    "deleteAction": "Delete feedback",
+    "panelTitle": "Photo feedback",
+    "closePanel": "Close feedback"
   },
   "filter": {
     "feedbackFilters": "Feedback Filters",

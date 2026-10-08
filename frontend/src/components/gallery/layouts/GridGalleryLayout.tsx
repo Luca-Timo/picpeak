@@ -144,7 +144,7 @@ const GridPhoto: React.FC<GridPhotoProps> = ({
        */
       style={{ contentVisibility: 'auto' }}
       fadeInWhenVisible={animationType === 'fade'}
-      skeletonClassName="skeleton aspect-square w-full rounded-lg"
+      skeletonClassName="skeleton bg-border-token aspect-square w-full rounded-lg"
       imageProps={{
         src: photo.thumbnail_url || photo.url,
         alt: photo.filename,

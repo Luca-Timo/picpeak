@@ -2054,6 +2054,10 @@
       "withDate": "Die restlichen Bilder sind noch in Bearbeitung – die vollständige Galerie folgt spätestens am {{date}}.",
       "noDetails": "Die restlichen Bilder sind noch in Bearbeitung.",
       "progressLabel": "Bisher gelieferte Fotos"
+    },
+    "preview": {
+      "title": "Theme-Vorschau",
+      "description": "So sehen Ihre Galerien mit den aktuellen Theme-Einstellungen aus."
     }
   },
   "categories": {
@@ -6072,7 +6076,9 @@
     "decisionType": "deine Entscheidung",
     "youApproved": "Du hast dieses Foto freigegeben",
     "youRejected": "Du hast dieses Foto abgelehnt",
-    "deleteAction": "Feedback löschen"
+    "deleteAction": "Feedback löschen",
+    "panelTitle": "Feedback zum Foto",
+    "closePanel": "Feedback schließen"
   },
   "filter": {
     "feedbackFilters": "Feedback-Filter",

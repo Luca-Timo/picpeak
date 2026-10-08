@@ -140,7 +140,7 @@ const JustifiedPhoto: React.FC<JustifiedPhotoProps> = ({
       // unmounting shifts nothing; same outer band as Grid, see there.
       releaseRootMargin={bands.keep}
       fadeInWhenVisible={animationType === 'fade'}
-      skeletonClassName="skeleton w-full h-full rounded-lg"
+      skeletonClassName="skeleton bg-border-token w-full h-full rounded-lg"
       imageProps={{
         src: photo.thumbnail_url || photo.url,
         alt: photo.filename,
