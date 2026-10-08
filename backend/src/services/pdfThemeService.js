@@ -15,6 +15,18 @@ const { availableFamilies } = require('./pdf/fonts');
 const uploadedFonts = require('./pdf/uploadedFonts');
 const { loadBrandingTheme } = require('./galleryTheme');
 
+/**
+ * The Branding theme a document's accent can follow. Best effort: a document
+ * renders with the built-in look rather than fail on it.
+ */
+async function brandingTheme() {
+  try {
+    return await brandingTheme();
+  } catch (_) {
+    return null;
+  }
+}
+
 /** Bundled families plus the active uploaded ones (`upload-<id>`). */
 async function allFamilies() {
   return [...availableFamilies(), ...(await uploadedFonts.uploadedFamilies()).map((f) => f.family)];
@@ -60,14 +72,14 @@ async function loadRows() {
 async function resolveTheme(scope) {
   const { byScope } = await loadRows();
   const { profile } = await businessProfileService.getProfile();
-  return withFontFiles(themeModel.resolveTheme(scope, byScope, profile, await loadBrandingTheme()));
+  return withFontFiles(themeModel.resolveTheme(scope, byScope, profile, await brandingTheme()));
 }
 
 /** Every scope's stored settings and, for document types, the resolved theme. */
 async function listThemes() {
   const { byScope, updatedAt } = await loadRows();
   const { profile } = await businessProfileService.getProfile();
-  const brandTheme = await loadBrandingTheme();
+  const brandTheme = await brandingTheme();
   return {
     themes: themeModel.SCOPES.map((scope) => {
       const resolved = themeModel.resolveTheme(scope, byScope, profile, brandTheme);
@@ -131,7 +143,7 @@ async function resolveDraftTheme(scope, settings) {
   const rows = { ...byScope, [scope]: clean };
   // Previewing the default scope shows its effect on a quote.
   const docScope = scope === 'default' ? 'quote' : scope;
-  return withFontFiles(themeModel.resolveTheme(docScope, rows, profile, await loadBrandingTheme()));
+  return withFontFiles(themeModel.resolveTheme(docScope, rows, profile, await brandingTheme()));
 }
 
 // ---------------------------------------------------------------------
