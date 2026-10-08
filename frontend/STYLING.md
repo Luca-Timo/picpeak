@@ -183,6 +183,47 @@ Hex values in components are for data only: theme presets, the colour
 labels that match Lightroom, a user-pickable palette, signature ink. Styling
 reads a token, in a `style` too (`var(--chart-1)`).
 
+## Theme tokens: customer portal and public pages
+
+The customer portal, the quote, contract and payment-check pages, the
+invite, legal, transfer and maintenance pages follow the operator's palette.
+They use the theme utilities, never a neutral class or a `dark:` variant:
+
+| Utility | Token | Use for |
+|---|---|---|
+| `bg-background` | `--color-background` | the page floor |
+| `bg-surface` | `--color-surface` | cards, sidebar, header |
+| `bg-elevated` | `--color-elevated` | wells and quiet boxes on a card, hover on a row |
+| `border-border-token`, `divide-border-token` | `--color-surface-border` | card borders, dividers |
+| `text-theme` | `--color-text` | running text, headings |
+| `text-muted-theme` | `--color-muted-text` | secondary text, icons at rest |
+| `text-accent`, `bg-accent-strong text-accent-fg` | accent | links; a filled action that is not a `Button` |
+| `.input-themed`, `<Input themed>` | surface, border, text | every field: input, select, textarea, DecimalInput |
+| `.status-chip` + `.hue-<status>` | status hue over the surface | status pills |
+
+`border-surface` is **not** the border: Tailwind's `surface` colour turns it
+into `--color-surface`, which wins over the class in `index.css`. Use
+`border-border-token`.
+
+Every such page calls **`usePublicDarkMode()`** (the portal through
+`CustomerLayout`). While one is mounted, `<html>` carries `.public-ui`, and
+`tokens.css` maps the UI tokens onto the theme tokens there. That is what lets
+the shared primitives — `Notice`, `EmptyState`, `ErrorState`, `Modal`,
+`useConfirm`, `Card`, `Input`, `Loading` — and the status utilities
+(`bg-danger-soft`, `text-success-text`) sit on the studio's surface, dialogs
+portalled to `<body>` included. The hook also sets `.dark` when the palette
+itself is dark (read from its background colour, after Branding's force-colour
+mode), so the status shades flip with it; both classes come off when the last
+such page unmounts. Never put `.dark` on an element below `<html>`: there the
+`.dark` defaults in `tokens.css` would replace the operator's colours for
+everything inside it.
+
+Paper stays paper: the signature pad and the typed-signature preview are
+white with dark ink in every theme.
+
+The setup wizard is PicPeak's own screen, shown before any branding exists:
+it uses the UI tokens.
+
 ## Rules for admin code
 
 1. **No neutral light/dark pairs.** `text-neutral-500 dark:text-neutral-400`
@@ -216,7 +257,7 @@ component, not re-created next to it.
 | Need | Use | Notes |
 |---|---|---|
 | Button | `Button` (`common`) — `primary` / `secondary` / `outline` / `ghost` / `danger`, `sm` / `md` / `lg` / `icon-sm` / `icon-md`, `leftIcon`, `isLoading` | one `primary` per view; `ghost` for tertiary actions in toolbars and menus; `danger` for destructive actions (confirm first); icon sizes need `aria-label` |
-| Status pill | `Badge` (`common`) — `tone`, `appearance="outline"`, `caps`, `dot` | "Paid", "Draft", "Default"; always a word |
+| Status pill | `Badge` (`common`) — `tone`, `appearance="outline"`, `caps`, `dot` | "Paid", "Draft", "Default"; always a word. Portal and public pages: `.status-chip .hue-<status>` |
 | Notice / banner | `Notice` (`common`) — `tone`, `title`, `action`, `size="sm"` | explains a state; its action shares a wrapping row with the text |
 | Dialog window | `Modal` (`common`) — `title`, `description`, `footer`, `size` | Escape closes, focus stays inside and returns to the opener; a sheet on a phone. A yes/no question is `useConfirm()` |
 | Tab row | `Tabs` (`common`) — `items` with `icon`, `count`, `dirty` | arrow keys move; the divider is an inset shadow |
@@ -226,7 +267,7 @@ component, not re-created next to it.
 | Loading failed | `ErrorState` (`common`) — `onRetry` | never the empty state |
 | Feature state | `FeatureStatusBadge` (`features/featureStatus`), or `feature=` on `SectionPageHeader` | see Feature state below |
 | Card / section box | `Card` (`common`), or `bg-panel border border-line rounded-xl p-5` for a settings section | |
-| Text field | `Input` (`common`) — `label`, `error`, `leftIcon` | |
+| Text field | `Input` (`common`) — `label`, `error`, `leftIcon`, `themed` | `themed` on portal, public and gallery pages: field, label and icons read the theme tokens (`.input-themed`); a raw `<select>` / `<textarea>` there takes `.input-themed` |
 | Date | `LocalizedDateInput` | follows the general date format setting |
 | Time | `TimeField` | |
 | Money / decimals | `DecimalInput` | accepts `1,50` and `1.50`; `type="number"` does not |
