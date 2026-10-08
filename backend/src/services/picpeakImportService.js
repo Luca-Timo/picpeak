@@ -604,6 +604,7 @@ function relocateStoredPaths(table, rows, filesDir) {
 // archive lacks keeps its LOCAL rows across the restore, which is the #1586
 // leak shape this clear exists to close.
 const SEED_ONLY_TABLES = new Set([
+  'public_upload_lock',          // 276 — id=1 serialization singleton, no user data; old archives must not erase it
   'product_usage_state',        // migrations/core/201_product_usage.js — id=1 singleton; UsageService.status() dereferences it unguarded
   'ledger_accounts',             // migrations/core/129_create_ledger_accounts_and_vat_codes.js — Swiss/LI chart of accounts
   'vat_codes',                   // migrations/core/129_create_ledger_accounts_and_vat_codes.js — MWST codes, FK to ledger_accounts
@@ -683,6 +684,11 @@ async function replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot, { c
     // existed would leave local grants on restored photos whose ids happen
     // to match, using up those galleries' quotas.
     if (await trx.schema.hasTable('event_download_grants')) tablesToClear.add('event_download_grants');
+    // Mail ledgers contain installation-specific runtime state, not lookup
+    // seeds. Clear local copies even when a pre-275 archive cannot list them.
+    for (const table of ['mail_intake_state', 'mail_intake_files']) {
+      if (await trx.schema.hasTable(table)) tablesToClear.add(table);
+    }
     for (const table of tablesToClear) {
       if (SEED_ONLY_TABLES.has(table) && !manifestTableSet.has(table)) continue;
       await trx(table).del();
@@ -727,6 +733,10 @@ async function replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot, { c
       // migration 263 rewrote once on this target (issue 1733).
       if (table === 'events') await canonicaliseSqliteExpiresAt(trx);
     }
+
+    // Rebuild only missing legacy accounting from the RESTORED rows in this
+    // same transaction. Modern archives keep their rate/audit reservations.
+    await require('../utils/mailIntakeLedger').backfillMailIntake(trx);
 
     // Restore the constraint the load ran without. Deduping first because the
     // incoming rows may be exactly the duplicates migration 186 removes; the

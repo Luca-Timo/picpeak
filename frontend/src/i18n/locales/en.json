@@ -1,4 +1,16 @@
 {
+  "externalSources": {
+    "title": "External source owners",
+    "info": "Only the SuperAdmin can assign or transfer a source folder. Subfolders belong to the same owner; source folders must not overlap.",
+    "owner": "Source owner",
+    "chooseOwner": "Choose an account",
+    "assign": "Assign selected folder to this owner",
+    "revoke": "Revoke access",
+    "confirmRevoke": "Revoke access to {{path}}? Existing gallery photos will not be deleted.",
+    "unassigned": "SuperAdmin only",
+    "noSources": "No external source folders have been assigned to you. Ask the SuperAdmin to assign a folder.",
+    "error": "The source assignment could not be changed. Check that the folder exists and does not overlap another source."
+  },
   "productUsagePrompt": {
     "title": "Help shape PicPeak?",
     "intro": "Help shape PicPeak with optional product usage reports. Review the pseudonymous data, who can see it and where it is sent before deciding."
@@ -669,6 +681,15 @@
     "creditNameHelp": "Credited on photos this account uploads when the file has no photographer name in its metadata."
   },
   "systemHealth": {
+    "backupAuthentication": {
+      "title": "Backup authenticity",
+      "keyReady": "The external backup signing key is available.",
+      "keyMissing": "The backup signing key is missing or invalid. Authentic recovery is not ready.",
+      "verified": "The latest backup manifest is authenticated with a retained key.",
+      "unverified": "The latest backup manifest is unavailable or unauthenticated. A completed run alone does not establish authenticity.",
+      "legacy": "The latest backup manifest was written before manifests were authenticated. The next backup will be authenticated; until then this one can only be restored with an explicit recovery approval.",
+      "hint": "Keep a copy of the signing key off this host, with whoever keeps the backups: a backup cannot be verified on a replacement host without it. Never obtain it from the backup being restored; remove any one-artifact unauthenticated recovery approval after recovery."
+    },
     "retry": "Retry",
     "dismiss": "Dismiss",
     "retriedToast": "Email re-queued.",
@@ -825,6 +846,30 @@
     "moreActions": "More actions"
   },
   "upload": {
+    "capacity": {
+      "decoded": "This image exceeds the server's image-processing limits.",
+      "imagePixels": "This image is larger than the {{max}} megapixels this server processes.",
+      "imageDimension": "This image is longer than the {{max}} px per side this server processes.",
+      "imageFrames": "This animation has more than the {{max}} frames this server processes.",
+      "imageFileSize": "This image file is larger than the {{max}} MB this server processes.",
+      "imageMemory": "This image needs more memory than the {{max}} MB this server gives to image processing.",
+      "processing": "Image processing could not complete within the server's resource limits. Please contact the owner.",
+      "batch": "This upload exceeds the server's batch limit or remaining allowance. Please send fewer or smaller files, or contact the owner.",
+      "lifetime": "This gallery or file request has reached its upload allowance. Please contact the owner.",
+      "busy": "Other uploads or processing jobs are using the available capacity. Please try again later.",
+      "rate": "The upload data limit for this hour has been reached. Please try again later.",
+      "unavailable": "Upload storage capacity is unavailable. Please contact the owner.",
+      "timeout": "The upload took too long. Please try a smaller batch.",
+      "gone": "This gallery or file request no longer exists."
+    },
+    "adminCapacity": {
+      "batch": "This upload is larger than the server accepts in one request. Lower the upload batch size in the settings.",
+      "busy": "The server stayed busy with other uploads and had no room for these files in time. Upload them again in a moment.",
+      "storage": "The server is short on disk space. Free up space, then upload these files again.",
+      "unavailable": "The server could not reserve room for this upload. Check the server log and ADMIN_UPLOAD_LIMITS_JSON.",
+      "timeout": "The upload took too long and was stopped. Check the connection and upload these files again.",
+      "waiting": "Waiting for upload capacity on the server (retry {{attempt}} of {{total}})…"
+    },
     "photoCategory": "Photo Category",
     "noCategory": "No category",
     "eventSpecific": "(Event specific)",
@@ -5598,12 +5643,13 @@
         "destinationPathPlaceholder": "/app/storage/backups",
         "rsyncHost": "Remote Host",
         "rsyncHostPlaceholder": "backup.example.com",
+        "rsyncPort": "SSH Port",
         "rsyncUser": "SSH User",
         "rsyncUserPlaceholder": "backup-user",
         "rsyncPath": "Remote Path",
         "rsyncPathPlaceholder": "/home/backup/photo-sharing",
         "rsyncSshKey": "SSH key file",
-        "rsyncSshKeyHelp": "Absolute path to a private key file the backend can read, for example under the mounted /app/data. The key itself is not entered here. The file must be readable only by the backend user (chmod 600). Optional; without it ssh uses its default configuration.",
+        "rsyncSshKeyHelp": "Absolute path to a private key file the backend can read, for example under mounted /app/data (chmod 600). Optional; default identities or an SSH agent work without it. Provision an independently verified destination host key in BACKUP_SSH_KNOWN_HOSTS or known_hosts beside the key; without either, pre-approved OpenSSH default trust is used. Unknown or changed keys are refused; for a port other than 22 the known_hosts entry is named [host]:port, as ssh-keyscan -p writes it. SSH configuration aliases and proxies are not used.",
         "rsyncSshKeyPlaceholder": "/app/data/ssh/backup_ed25519",
         "s3Endpoint": "S3 Endpoint",
         "s3EndpointHelp": "S3 API endpoint (e.g., s3.amazonaws.com)",
@@ -5627,7 +5673,9 @@
         "customCronHelp": "Enter a valid cron expression (e.g., 0 3 * * *)",
         "retention": "Retention Period",
         "retentionDays": "Keep backups for",
-        "retentionHelp": "days (older backups will be automatically deleted)"
+        "retentionHelp": "days (older backups will be automatically deleted)",
+        "retentionCount": "Restore points to keep",
+        "retentionCountHelp": "Complete restore points kept at a local or S3 destination. Older ones are deleted after each successful backup. 0 keeps all of them."
       },
       "whatToBackup": {
         "title": "What to Backup",
@@ -5863,6 +5911,11 @@
     },
     "errors": {
       "S3_PRIVATE_ENDPOINT": "The S3 endpoint is on a private or internal network. A Super Admin has to approve this exact endpoint before it can be used.",
+      "RSYNC_CONFIG_INVALID": "The rsync host, port, user, SSH key or known_hosts path is invalid. Use a hostname or public IP, a port from 1 to 65535 and absolute file paths without spaces or shell syntax.",
+      "RSYNC_HOST_FORBIDDEN": "The rsync destination resolves to a private, internal or reserved address. Every DNS answer must be public.",
+      "RSYNC_HOST_UNRESOLVED": "The rsync destination hostname could not be resolved. No connection was started.",
+      "RSYNC_SSH_TRUST_REQUIRED": "Provision a readable known_hosts file with the independently verified destination host key and set BACKUP_SSH_KNOWN_HOSTS, or put it beside the configured SSH key. Read-only trust files are supported.",
+      "RSYNC_SSH_HOST_KEY_UNTRUSTED": "The destination host key is unknown or changed. Verify it independently with the server operator, then provision the approved known_hosts entry. Do not just delete the old entry and retry.",
       "S3_ENDPOINT_FORBIDDEN": "The S3 endpoint points to a link-local, cloud-metadata or reserved address. Such destinations can never be approved.",
       "S3_ENDPOINT_UNRESOLVED": "The S3 endpoint hostname could not be resolved.",
       "S3_ENDPOINT_INVALID": "The S3 endpoint is not a valid URL.",
@@ -8037,6 +8090,7 @@
     "exportCsv": "Export CSV",
     "exportFailed": "Export failed. Please try again.",
     "errorTitle": "Could not load tax report",
+    "completeViewRequired": "This report covers every invoice of the studio. Your account only sees its own documents, so the report is not available to you. Ask a super admin to produce it.",
     "empty": "No invoices in this period.",
     "statusCancelled": "Cancelled",
     "totalsByVatRate": "Totals by VAT rate",

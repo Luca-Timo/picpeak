@@ -1,4 +1,5 @@
-const sharp = require('sharp');
+const sharp = require('./isolatedSharp');
+const { isResourceError, isTransient } = require('./imageResourcePolicy');
 const exifr = require('exifr');
 const path = require('path');
 const fsp = require('fs').promises;
@@ -237,6 +238,7 @@ async function extractRawPreview(rawPath) {
       }
     } catch (err) {
       lastErr = err;
+      if (isResourceError(err)) { await cleanup(); throw err; }
       // exiftool missing is a DEPLOYMENT fault, not a bad file, and it fails
       // identically for every tag — so stop rather than retrying the same
       // spawn twice more and reporting the last one as if it described the
@@ -459,13 +461,15 @@ async function generateThumbnail(imagePath, options = {}) {
 
   try {
     // First, verify the source image is complete and valid
-    const metadata = await sharp(imagePath).metadata();
+    const metadata = await sharp(imagePath, { interactive: options.interactive }).metadata();
 
     if (!metadata.width || !metadata.height) {
       throw new Error('Invalid image metadata - file may be incomplete');
     }
 
     let sharpInstance = sharp(imagePath, {
+      // Set by the on-demand tier routes: refused, not queued, under a flood.
+      interactive: options.interactive,
       limitInputPixels: 268402689, // ~16k x 16k max
       sequentialRead: true,
       failOn: 'none'
@@ -530,6 +534,7 @@ async function generateThumbnail(imagePath, options = {}) {
     return thumbnailRelKey;
   } catch (error) {
     const msg = (error && error.message) ? error.message : String(error);
+    if (isResourceError(error)) throw error;
     logger.error(`Failed to generate thumbnail for ${sourceBasename}: ${msg}`);
 
     // No cleanup delete here either, for the same reason as above (#1129).
@@ -973,6 +978,7 @@ async function generateVideoPlaceholder(originalFilename, options = {}) {
     return thumbnailRelKey;
   } catch (error) {
     logger.error('Failed to generate video placeholder thumbnail:', error.message);
+    if (isResourceError(error)) throw error;
     return null;
   }
 }
@@ -1065,6 +1071,7 @@ async function generateHeroImage(imagePath, options = {}) {
     return heroRelKey;
   } catch (error) {
     const msg = (error && error.message) ? error.message : String(error);
+    if (isResourceError(error)) throw error;
     logger.error(`Failed to generate hero image for ${filename}: ${msg}`);
     return null;
   }
@@ -1266,9 +1273,10 @@ async function generatePreviewImage(imagePath, options = {}) {
   // and the encoding depends on what the source turns out to be.
   let probe;
   try {
-    probe = await sharp(imagePath).metadata();
+    probe = await sharp(imagePath, { interactive: options.interactive }).metadata();
   } catch (error) {
     const msg = (error && error.message) ? error.message : String(error);
+    if (isResourceError(error)) throw error;
     logger.error(`Failed to read metadata for preview of ${filename}: ${msg}`);
     return null;
   }
@@ -1292,6 +1300,8 @@ async function generatePreviewImage(imagePath, options = {}) {
     const quality = options.quality || DEFAULT_PREVIEW_QUALITY;
 
     let sharpInstance = sharp(imagePath, {
+      // Set by the on-demand tier routes: refused, not queued, under a flood.
+      interactive: options.interactive,
       limitInputPixels: 268402689, // ~16k x 16k max
       sequentialRead: true,
       failOn: 'none',
@@ -1346,6 +1356,7 @@ async function generatePreviewImage(imagePath, options = {}) {
     return previewRelKey;
   } catch (error) {
     const msg = (error && error.message) ? error.message : String(error);
+    if (isResourceError(error)) throw error;
     logger.error(`Failed to generate preview image for ${filename}: ${msg}`);
     // A write the storage backend could not take is not a photo that has no
     // preview (issue 1785): null would send the guest to the original and
@@ -1597,7 +1608,7 @@ async function ensureThumbnailTierUnguarded(photo, width, settings, canonicalWid
       // than being repaired on the next view.
       const proc = await withProcessableImage(localPath, photo.external_relpath || photo.filename);
       try {
-        return await generateThumbnail(proc.path, { outputBasename, width, height });
+        return await generateThumbnail(proc.path, { outputBasename, width, height, interactive: true });
       } finally {
         await proc.cleanup();
       }
@@ -1607,13 +1618,16 @@ async function ensureThumbnailTierUnguarded(photo, width, settings, canonicalWid
     return await withLocalCopy(sourceKey, async (localPath) => {
       const proc = await withProcessableImage(localPath, sourceKey);
       try {
-        return await generateThumbnail(proc.path, { outputBasename, width, height });
+        return await generateThumbnail(proc.path, { outputBasename, width, height, interactive: true });
       } finally {
         proc.cleanup();
       }
     });
   } catch (e) {
     logger.warn(`Thumbnail tier w${width} failed for photo ${photo.id}: ${e.message}`);
+    // \"Not now\" goes to the caller (503); an image over the limits falls back
+    // like any other source that cannot be rendered.
+    if (isTransient(e)) throw e;
     return null;
   }
 }
@@ -1658,7 +1672,7 @@ async function ensurePreviewImageAtWidthUnguarded(photo, width) {
     if (isExternal) {
       const localPath = resolvePhotoFilePath(event, photo);
       return await generatePreviewImage(localPath, {
-        regenerate: true, outputBasename, longEdge: width,
+        regenerate: true, outputBasename, longEdge: width, interactive: true,
       });
     }
     const sourceKey = resolvePhotoStorageKey(event, photo);
@@ -1673,6 +1687,7 @@ async function ensurePreviewImageAtWidthUnguarded(photo, width) {
           regenerate: true,
           outputBasename,
           longEdge: width,
+          interactive: true,
         });
       } finally {
         proc.cleanup();
@@ -1680,6 +1695,9 @@ async function ensurePreviewImageAtWidthUnguarded(photo, width) {
     });
   } catch (e) {
     logger.warn(`Preview tier w${width} failed for photo ${photo.id}: ${e.message}`);
+    // \"Not now\" goes to the caller (503); an image over the limits falls back
+    // like any other source that cannot be rendered.
+    if (isTransient(e)) throw e;
     return null;
   }
 }
@@ -1828,8 +1846,10 @@ const RESIZE_PRESERVES_FORMAT = new Set([
  *
  * Takes and returns a Buffer so callers can chain resize → watermark without
  * a tmp file. Returns the input unchanged when `box` is null ('original').
- * Never throws: on a corrupt/undecodable source it logs and returns the input,
- * because failing a download outright is worse than serving the full size.
+ * On a corrupt/undecodable source it logs and returns the input, because
+ * failing a download outright is worse than serving the full size. It throws
+ * only an image-worker refusal (IMAGE_* code): the server's image limits, or
+ * a worker that is busy or unavailable, which the route answers as such.
  */
 async function resizeToBox(inputBuffer, box, options = {}) {
   if (!box || !box.width || !box.height) return inputBuffer;
@@ -1905,6 +1925,9 @@ async function resizeToBox(inputBuffer, box, options = {}) {
     return await pipeline.toBuffer();
   } catch (e) {
     logger.warn(`resizeToBox failed (${box.width}x${box.height}), serving original: ${e.message}`);
+    // \"Not now\" goes to the caller (503); an image over the limits falls back
+    // like any other source that cannot be rendered.
+    if (isTransient(e)) throw e;
     return inputBuffer;
   }
 }

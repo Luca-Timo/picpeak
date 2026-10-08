@@ -123,6 +123,14 @@ The compose stack above is still the right choice for anything busier — SQLite
 
 Both registries get the same digests and the same tags — `stable`/`latest`, a pinned `x.y.z`, and `beta`/`main` for the active development channel — for `linux/amd64` and `linux/arm64`. Keep every image in one install on the **same** tag.
 
+### Rsync/SSH backup destination security
+
+Rsync connection tests and backup runs resolve and vet every DNS answer, then pin SSH to approved public addresses. Private, metadata, reserved and mixed public/private destinations are refused. For multi-address destinations, an application-owned TCP relay can try the next captured literal only before connecting; it never resolves DNS again or retries an established SSH/rsync operation. SSH host-key verification remains bound to the configured hostname, including when its approved address changes. No private-network bypass is provided.
+
+Before use, obtain the destination's SSH host public key and fingerprint through an independent trusted channel with its operator. Provision a `known_hosts` entry for that hostname; do not trust unverified `ssh-keyscan` output or delete a changed-key entry merely to make a test pass. Existing verified entries remain usable. Unknown or changed keys fail instead of being learned automatically.
+
+Pass `BACKUP_SSH_KNOWN_HOSTS` into the backend/AIO process to select an absolute readable trust-file path (without spaces or shell syntax). Otherwise a configured private key uses `known_hosts` in its directory. These selected files may be read-only and are the only host-key trust source. With neither selected, pre-provisioned OpenSSH default user/global trust remains available; default identity files and an SSH agent still work when no key is configured. Mount trust and key files persistently and independently of backup contents. The SSH connection ignores local/system configuration, aliases, proxies and control sockets, connects to the SSH port from the backup settings (22 by default), and does not accept ports or jump hosts from SSH configuration. For a port other than 22 the `known_hosts` entry is named `[host]:port`, as `ssh-keyscan -p` writes it; the host part is always the lower-case name without a trailing dot. When the selected trust file is missing, the backend logs the expected path at startup. Verify intentional server key replacements independently before updating the approved entry.
+
 ## 🌟 Why PicPeak?
 
 Unlike expensive SaaS solutions, PicPeak gives you:
@@ -156,6 +164,60 @@ Unlike expensive SaaS solutions, PicPeak gives you:
 > **CRM & Accounting — examples only, verify locally.** Feature-flagged off by default. Seeded contract blocks are written by the maintainer, **not a lawyer**; QR-bills/SEPA payloads and every tax, VAT and Treuhänder/Banana figure are computed from your input and defaults and are **jurisdiction-specific guidance only**. Have your lawyer review contracts, scan a test QR with your bank's app, and verify all numbers with your accountant / Treuhänder / tax authority before customer-facing use. Read **[the CRM disclaimers](https://docs.picpeak.app/features/crm/disclaimers)** first.
 
 ## 📖 Documentation
+
+### Standard backup authenticity and recovery
+
+Standard JSON/YAML backups use a v3 canonical HMAC-SHA256 manifest. The signature
+binds the full restore description, algorithm and key ID, including dump/file
+digests and stored-path metadata. Normal restores refuse missing keys, unsigned
+manifests, algorithm downgrades and unsafe legacy checksum serialization; `force`
+and the install trigger do not bypass this boundary. This is separate from the
+portable `.picpeak` format.
+
+Retain the **dedicated signing key separately and off-host** before relying on a
+backup. Compose provisions `backup_manifest_key` in the private backend secrets
+volume, not the Postgres/Redis volumes. Native/AIO creates
+`DATA_DIR/backup-manifest.key` (native default: `backend/data`) on first signing,
+outside backed-up storage. An explicit `BACKUP_MANIFEST_KEY` must be 64 hex digits
+from a random 32-byte value (`openssl rand -hex 32`); an explicit
+`BACKUP_MANIFEST_KEY_FILE` must be outside the managed/legacy storage estate.
+Verification never generates a replacement for a lost key. Restore the original
+key on a fresh recovery host, not a key supplied by the backup being verified.
+System Health reports key readiness and latest manifest authenticity separately
+from completion. A missing/invalid key or unverified manifest is not healthy.
+An invalid key (wrong encoding, group/world-writable or symlinked key file) does
+not stop the server: it is logged at boot, shown in System Health, and backups
+fail until it is corrected. A latest manifest that only predates authentication
+is reported as legacy rather than unhealthy; the next backup signs a new one.
+
+Retain previous v3 keys with `BACKUP_MANIFEST_KEYS_OLD` (comma-separated 64-hex
+values) while rotating. Only canonical pre-v3 HMAC manifests can use the explicit
+`BACKUP_MANIFEST_LEGACY_KEY` compatibility setting (the original key string, of
+any length); an earlier passphrase-style `BACKUP_MANIFEST_KEY` left in place
+verifies those manifests the same way but never signs a new one. The old
+under-covering serializer is never accepted as authenticated. Preserve all keys needed by retained backups. Installer
+reconfiguration keeps signing/key-ring settings but clears one-artifact recovery
+approval; key files survive updates independently of application source.
+
+If an old backup is unsigned, uses the unsafe legacy serializer, or its original
+key was lost, it is **unauthenticated**. Recover only on an isolated host after
+independently inspecting/trusting its contents (database dumps may contain SQL
+and client commands). Run the read-only helper:
+
+```sh
+cd backend
+node scripts/backup-manifest-recovery-digest.js /trusted/staged/manifest.json
+```
+
+Set `BACKUP_MANIFEST_RECOVERY_SHA256` to that complete artifact digest and
+`BACKUP_MANIFEST_RECOVERY_REASON` to a meaningful operator reason in trusted host
+configuration, restart the recovery process and restore that one manifest.
+The exception does not prove authenticity; inspection/health still reject it.
+Restores prominently log and retain the unauthenticated outcome and reason.
+Different artifact contents cannot reuse the approval. Missing content digests
+are allowed only in this explicitly approved flow; recorded digests must still
+match. **Remove both recovery variables immediately afterward**, restart, retain
+the audit and create a new authenticated backup with a separately retained key.
 
 Full documentation lives at **[docs.picpeak.app](https://docs.picpeak.app)** — deployment, admin settings, API, branding, and more.
 
@@ -245,6 +307,51 @@ SVG decoding; updating the npm package does not update system libraries.
 We love contributions! PicPeak is built by photographers, for photographers — whether you're fixing bugs, adding features, or improving docs. See the [Contributing Guide](CONTRIBUTING.md) to get started.
 
 Found a security issue? Please open a [security issue](https://github.com/PicPeak/picpeak/issues/new?labels=security). See [SECURITY.md](SECURITY.md) for the policy.
+
+## Standalone backup restore points
+
+New local and S3 scheduled/manual file backups copy every eligible file into
+a unique restore-point directory or object prefix. Their manifests are full
+catalogues marked `standalone-v1`, with no parent dependency; an included,
+verified database dump lives inside the same point. Existing path, feature,
+filename and maximum-file-size exclusions still apply. These backups do not
+cover storage outside the configured backup scope.
+
+Local/S3 `backup_incremental` settings no longer skip unchanged files. Plan
+capacity for a full copy per retained point and temporary space for one S3
+upload file. After each successful run the newest `backup_retention_count`
+points of the current destination are kept (default 7, `0` keeps all) and
+older ones are removed whole with their history entries; deleting a
+standalone run from the history removes its point too. Legacy backup trees
+are never pruned. An earlier point is not overwritten by a later run, a run
+that fails removes its partial copy, and deleting separately retained
+database dumps does not invalidate a standalone point.
+
+Select the point's manifest in the restore wizard. A rescued local mount must
+be under a configured backup location (or `RESTORE_ALLOWED_ROOTS`); its
+default nested `manifests/` layout can move or be renamed without rewriting
+the manifest. A downloaded ZIP's root `manifest.json` also identifies its
+extracted directory as the selected point.
+S3 recovery uses the selected manifest's bucket/prefix and current credentials.
+Keep custom manifests together with their recorded snapshot location.
+
+An empty `RESTORE_ON_INSTALL` trigger still auto-selects the newest local
+manifest, searching both the shared `manifests/` directory and immediate
+`backup-UUID/manifests/` points. For a renamed point or custom manifest location,
+put its explicit manifest path in the trigger file instead.
+Here, newest means the manifest file's modification time across both layouts,
+not its filename or an unverified timestamp inside it. Automatic discovery does
+not follow symlinked point/manifests directories. To recover an older point or
+avoid changed timestamps after copying a rescue mount, name the exact manifest
+in the trigger instead of leaving it empty.
+
+Older ambiguous incremental local/S3 backups cannot prove a complete file set
+and are refused for full/file restores, including forced restores and
+`RESTORE_ON_INSTALL`. A legacy local backup whose manifest is a full catalogue
+(the first run into a destination) still restores. Database-only
+and selective file recovery remain available; they do not establish complete
+recovery. Take and test a new standalone point before relying on it. Existing
+rsync catalogue behavior and portable `.picpeak` exports are unchanged.
 
 ## Analytics integration security
 

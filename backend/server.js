@@ -1188,7 +1188,11 @@ async function stopServer() {
 }
 
 // Initialize services
-async function startServer() {
+function startServer() {
+  return require('./src/database/crmAccess').withTrustedCrmAccess('application bootstrap', startServerInternal);
+}
+
+async function startServerInternal() {
   try {
     // Initialize database
     await initializeDatabase();
@@ -1430,6 +1434,17 @@ async function startServer() {
     // sharp/ffmpeg/EXIF pipeline off the request thread.
     backgroundProcessor.start();
 
+    // Decide now how image work is isolated, so a host that cannot run the
+    // memory-limited image worker says so in the startup log, once.
+    require('./src/services/isolatedSharp').prepare()
+      .catch((err) => logger.warn('Image worker check failed at boot', { error: err.message }));
+
+    // Public upload leases: heartbeat this process's live requests and reap
+    // the ones a dead process left behind, now and every 30 s.
+    const publicUploadQuota = require('./src/services/publicUploadQuota');
+    publicUploadQuota.startMaintenance();
+    publicUploadQuota.cleanupAbandoned().catch((err) => logger.warn('Public upload reaper failed at boot', { error: err.message }));
+
     // Face detection (#1074). Starts alongside the photo processor but stays
     // idle — every worker tick re-checks the `faces` feature flag, which is
     // off by default. It is safe to start unconditionally precisely because
@@ -1446,7 +1461,9 @@ async function startServer() {
     // setting every tick, so nothing runs until an admin switches it on.
     require('./src/services/videoRenditionQueue').start();
 
-    httpServer = app.listen(PORT, LISTEN_HOST, () => {
+    // Bootstrap/cron authority must not become the default authority of an
+    // incoming HTTP request. Its authentication/capability middleware owns it.
+    httpServer = await require('./src/database/crmAccess').withoutCrmContext(() => app.listen(PORT, LISTEN_HOST, () => {
       logger.info(`Server running on ${LISTEN_HOST || 'all interfaces'}:${PORT}`);
       logger.info(`Admin interface: ${process.env.ADMIN_URL || 'http://localhost:3000'}`);
       logger.info(`Frontend: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
@@ -1462,7 +1479,7 @@ async function startServer() {
           : `  One-time setup token:  ${setupToken}\n  (could not write the token file, so it is shown here)`;
         console.log(`\n${line}\n  PicPeak first-run setup — no admin account yet.\n  Open:                  ${url}\n${secretLine}\n${line}\n`);
       }
-    });
+    }));
   } catch (error) {
     logger.error('Failed to start server:', error);
     await stopServer();
