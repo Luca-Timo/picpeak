@@ -458,6 +458,35 @@ describe('gallery team members and upload review (issue 743)', () => {
       expect(await db('events').where({ id: eventId }).first()).toBeTruthy();
     });
 
+    it('keeps setting the gallery password and client PIN with the owner', async () => {
+      const before = await db('events').where({ id: eventId }).first('password_hash', 'client_password_hash', 'client_share_token', 'require_password');
+      const refused = [
+        ['put', `/api/admin/events/${eventId}`, { password: 'hand-picked-1' }],
+        ['put', `/api/admin/events/${eventId}`, { client_password: '654321' }],
+        ['put', `/api/admin/events/${eventId}`, { regenerate_client_token: true }],
+        ['put', `/api/admin/events/${eventId}`, { require_password: !before.require_password }],
+        ['post', `/api/admin/events/${eventId}/publish`, { password: 'hand-picked-1' }],
+        ['post', `/api/admin/events/${eventId}/send-gallery-email`, { password: 'hand-picked-1' }],
+      ];
+      for (const [verb, url, body] of refused) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await as(request(app)[verb](url), 'hand').send(body);
+        expect([url, Object.keys(body)[0], res.status, res.body.code]).toEqual([url, Object.keys(body)[0], 403, 'EVENT_OWNER_REQUIRED']);
+      }
+      expect(await db('events').where({ id: eventId }).first('password_hash', 'client_password_hash', 'client_share_token', 'require_password'))
+        .toEqual(before);
+
+      // The rest of the update stays theirs, with the settings draft's echo
+      // of require_password and its empty password fields.
+      const edit = await as(request(app).put(`/api/admin/events/${eventId}`), 'hand')
+        .send({ welcome_message: 'From the team', require_password: Boolean(before.require_password), password: '', client_password: '' });
+      expect(edit.status).toBe(200);
+      expect((await db('events').where({ id: eventId }).first()).welcome_message).toBe('From the team');
+
+      const owner = await as(request(app).put(`/api/admin/events/${eventId}`), 'owner').send({ client_password: '654321' });
+      expect(owner.status).toBe(200);
+    });
+
     it('answers a non-owner 403 before saying which admin ids are live', async () => {
       const res = await as(request(app).put(`/api/admin/events/${eventId}`), 'hand')
         .send({ assigned_admin_ids: [id.hand, id.team, 987654] });

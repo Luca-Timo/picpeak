@@ -188,7 +188,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
       case 'general':
         return <GeneralSection f={draft.event} set={set} phoneFieldEnabled={phoneFieldEnabled} event={event} />;
       case 'access':
-        return <AccessSection f={draft.event} set={set} />;
+        return <AccessSection f={draft.event} set={set} ownsEvent={ownsEvent} />;
       case 'downloads':
         return (
           <DownloadsSection

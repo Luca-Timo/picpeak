@@ -208,7 +208,9 @@ export const GeneralSection: React.FC<FieldsProps & {
   );
 };
 
-export const AccessSection: React.FC<FieldsProps> = ({ f, set }) => {
+// `ownsEvent` false (a team member, issue 743): password protection and the
+// password itself are shown read-only; the server refuses changing them.
+export const AccessSection: React.FC<FieldsProps & { ownsEvent?: boolean }> = ({ f, set, ownsEvent = true }) => {
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
   const [showPassword, setShowPassword] = useState(false);
@@ -228,6 +230,7 @@ export const AccessSection: React.FC<FieldsProps> = ({ f, set }) => {
             type="checkbox"
             className={`mt-1 ${checkboxClass}`}
             checked={f.require_password}
+            disabled={!ownsEvent}
             onChange={(e) => {
               const checked = e.target.checked;
               set({
@@ -251,7 +254,12 @@ export const AccessSection: React.FC<FieldsProps> = ({ f, set }) => {
           </div>
         )}
       </div>
-      {f.require_password && (
+      {!ownsEvent && (
+        <p className="text-xs text-muted">
+          {t('events.settingsTab.passwordOwnerOnly', 'Only the gallery owner can change the password or turn it off.')}
+        </p>
+      )}
+      {f.require_password && ownsEvent && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>{t('events.newPasswordLabel', 'New Gallery Password')}</label>

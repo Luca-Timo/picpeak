@@ -858,7 +858,8 @@
         "teamMembers_one": "{{count}} membre de l'équipe",
         "teamMembers_other": "{{count}} membres de l'équipe",
         "teamReview": "envois de l'équipe vérifiés"
-      }
+      },
+      "passwordOwnerOnly": "Seul le propriétaire de la galerie peut modifier le mot de passe ou le désactiver."
     },
     "folders": {
       "sectionTitle": "Dossiers",

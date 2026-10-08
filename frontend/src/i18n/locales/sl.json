@@ -1977,7 +1977,8 @@
         "teamMembers_few": "{{count}} člani ekipe",
         "teamMembers_other": "{{count}} članov ekipe",
         "teamReview": "nalaganja ekipe se pregledujejo"
-      }
+      },
+      "passwordOwnerOnly": "Samo lastnik galerije lahko spremeni geslo ali ga izklopi."
     },
     "folders": {
       "sectionTitle": "Mape",

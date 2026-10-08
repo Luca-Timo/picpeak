@@ -2696,7 +2696,8 @@
         "teamReview": "Team-Uploads werden geprüft"
       },
       "undoSection": "Diesen Bereich zurücksetzen",
-      "delivery": "Ordner & Auslieferung"
+      "delivery": "Ordner & Auslieferung",
+      "passwordOwnerOnly": "Nur der Besitzer der Galerie kann das Passwort ändern oder ausschalten."
     },
     "folders": {
       "sectionTitle": "Ordner",

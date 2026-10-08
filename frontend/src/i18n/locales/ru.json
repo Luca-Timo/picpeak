@@ -903,7 +903,8 @@
         "teamMembers_many": "{{count}} участников команды",
         "teamMembers_other": "{{count}} участников команды",
         "teamReview": "загрузки команды проверяются"
-      }
+      },
+      "passwordOwnerOnly": "Только владелец галереи может изменить пароль или отключить его."
     },
     "folders": {
       "sectionTitle": "Папки",

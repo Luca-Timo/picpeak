@@ -37,6 +37,7 @@ jest.mock('../../src/middleware/permissions', () => ({
 jest.mock('../../src/middleware/ownership', () => ({
   requireEventOwnership: (_req, _res, next) => next(),
   requireEventOwner: (_req, _res, next) => next(),
+  ownsEvent: () => true,
 }));
 
 const { bootCrmDb, seedMinimal } = require('./helpers/crmDb');

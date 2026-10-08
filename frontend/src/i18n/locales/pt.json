@@ -973,7 +973,8 @@
         "teamMembers_one": "{{count}} membro da equipe",
         "teamMembers_other": "{{count}} membros da equipe",
         "teamReview": "envios da equipe revisados"
-      }
+      },
+      "passwordOwnerOnly": "Apenas o proprietário da galeria pode alterar a senha ou desativá-la."
     },
     "folders": {
       "sectionTitle": "Pastas",

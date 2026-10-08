@@ -2158,7 +2158,8 @@
         "teamReview": "team uploads reviewed"
       },
       "undoSection": "Undo changes in this section",
-      "delivery": "Folders & delivery"
+      "delivery": "Folders & delivery",
+      "passwordOwnerOnly": "Only the gallery owner can change the password or turn it off."
     },
     "folders": {
       "sectionTitle": "Folders",

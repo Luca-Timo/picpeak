@@ -571,6 +571,11 @@ module.exports = (router) => {
       if (!event) {
         return res.status(404).json({ error: 'Event not found' });
       }
+      // A new gallery password is the owner's to set (issue 743), as reading
+      // and resetting it are; sending or publishing without one stays open.
+      if (password && !ownsEvent(req.admin, event)) {
+        return res.status(403).json({ error: 'Only the gallery owner can change its password', code: 'EVENT_OWNER_REQUIRED' });
+      }
       if (parseBooleanInput(event.is_draft, false)) {
         // A draft has no working gallery link yet, so the email would carry a
         // URL the customer cannot open. Publishing is the action they want.
@@ -702,6 +707,11 @@ module.exports = (router) => {
 
       if (!event) {
         return res.status(404).json({ error: 'Event not found' });
+      }
+      // A new gallery password is the owner's to set (issue 743), as reading
+      // and resetting it are; sending or publishing without one stays open.
+      if (password && !ownsEvent(req.admin, event)) {
+        return res.status(403).json({ error: 'Only the gallery owner can change its password', code: 'EVENT_OWNER_REQUIRED' });
       }
 
       if (!parseBooleanInput(event.is_draft, false)) {
@@ -1292,6 +1302,29 @@ module.exports = (router) => {
         return res.status(400).json({
           error: `Array values are not accepted for: ${arrayValued.join(', ')}`,
         });
+      }
+
+      // The gallery's credentials are the owner's (issue 743): reading and
+      // resetting them is (requireEventOwner), so setting a new password or
+      // client PIN, regenerating the client link, or switching password
+      // protection on or off must be too. A non-owner's echo of the stored
+      // require_password, and empty password fields from the settings draft,
+      // are not changes and pass.
+      const setsPassword = (value) => typeof value === 'string' ? value !== '' : Boolean(value);
+      const touchesCredentials = setsPassword(req.body.password)
+        || setsPassword(req.body.client_password)
+        || parseBooleanInput(req.body.regenerate_client_token, false)
+        || Object.prototype.hasOwnProperty.call(req.body, 'require_password');
+      if (touchesCredentials) {
+        const stored = await db('events').where('id', id).first('id', 'created_by', 'require_password');
+        if (!stored) return res.status(404).json({ error: 'Event not found' });
+        const togglesProtection = Object.prototype.hasOwnProperty.call(req.body, 'require_password')
+          && parseBooleanInput(req.body.require_password, true) !== parseBooleanInput(stored.require_password, true);
+        const changesCredentials = setsPassword(req.body.password) || setsPassword(req.body.client_password)
+          || parseBooleanInput(req.body.regenerate_client_token, false) || togglesProtection;
+        if (changesCredentials && !ownsEvent(req.admin, stored)) {
+          return res.status(403).json({ error: 'Only the gallery owner can change its password', code: 'EVENT_OWNER_REQUIRED' });
+        }
       }
 
       // Who works on the gallery and whether their uploads wait for review

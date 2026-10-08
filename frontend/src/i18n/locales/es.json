@@ -866,7 +866,8 @@
         "teamMembers_one": "{{count}} miembro del equipo",
         "teamMembers_other": "{{count}} miembros del equipo",
         "teamReview": "subidas del equipo revisadas"
-      }
+      },
+      "passwordOwnerOnly": "Solo el propietario de la galería puede cambiar la contraseña o desactivarla."
     },
     "folders": {
       "sectionTitle": "Carpetas",

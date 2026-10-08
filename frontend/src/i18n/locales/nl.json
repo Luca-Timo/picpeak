@@ -847,7 +847,8 @@
         "teamMembers_one": "{{count}} teamlid",
         "teamMembers_other": "{{count}} teamleden",
         "teamReview": "teamuploads worden gecontroleerd"
-      }
+      },
+      "passwordOwnerOnly": "Alleen de eigenaar van de galerij kan het wachtwoord wijzigen of uitschakelen."
     },
     "folders": {
       "sectionTitle": "Mappen",
