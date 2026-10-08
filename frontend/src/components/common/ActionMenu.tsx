@@ -19,6 +19,8 @@ interface ActionMenuProps {
   /** The side the dropdown is anchored to. */
   align?: 'left' | 'right';
   label?: string;
+  /** Match the buttons next to it: `icon-sm` in a row of `sm` buttons. */
+  size?: 'icon-sm' | 'icon-md';
   className?: string;
 }
 
@@ -27,7 +29,7 @@ interface ActionMenuProps {
  * (UX.md § 1). Escape and a click outside close it; an empty menu is not
  * rendered. Destructive items go last, after a divider.
  */
-export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', label, className }) => {
+export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', label, size = 'icon-md', className }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -70,7 +72,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
     <div className={clsx('relative', className)} ref={ref}>
       <Button
         variant="outline"
-        size="icon-md"
+        size={size}
         aria-label={label || t('common.moreActions', 'More actions')}
         aria-haspopup="menu"
         aria-expanded={open}
