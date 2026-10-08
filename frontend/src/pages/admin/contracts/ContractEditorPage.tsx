@@ -444,8 +444,8 @@ export const ContractForm = forwardRef<ContractFormHandle, ContractFormProps>(({
     // `lock` replaces the loaded lockVersion when the admin keeps their
     // version over one saved in between.
     mutationFn: async (lock?: number) => {
-      if (!numericId) return;
-      await contractsService.update(numericId, {
+      if (!numericId) return undefined;
+      return contractsService.update(numericId, {
         title: title || null,
         eventName: eventName || null,
         eventDate: eventDate || null,
@@ -464,13 +464,20 @@ export const ContractForm = forwardRef<ContractFormHandle, ContractFormProps>(({
         attachments: attachments.map((a) => ({ attachmentId: a.attachmentId, delivery: a.delivery })),
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (saved) => {
       toast.success(t('contracts.editor.savedToast', 'Contract saved.') as string);
       // Take the saved copy (its new lock version) back into the form, so the
       // page reads clean and the next save is not a conflict of its own making.
-      const fresh = await contractsService.get(numericId as number);
-      queryClient.setQueryData(['contract', numericId], fresh);
-      hydrate(fresh.contract);
+      // The save already succeeded: a failed reload must not turn into a save
+      // error (and stop a Send), so fall back to the PUT's answer.
+      try {
+        const fresh = await contractsService.get(numericId as number);
+        queryClient.setQueryData(['contract', numericId], fresh);
+        hydrate(fresh.contract);
+      } catch {
+        if (saved?.contract) hydrate(saved.contract);
+        void queryClient.invalidateQueries({ queryKey: ['contract', numericId] });
+      }
     },
     onError: (err: unknown) => {
       const view = describeSaveError(err);

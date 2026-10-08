@@ -1,15 +1,16 @@
 /**
  * Admin → Contract detail page.
  *
- * Read-only view for sent / signed / cancelled contracts. Surfaces:
+ * One page per contract: a draft is edited in place (ContractForm with the
+ * page's save bar); sent / signed / cancelled contracts are read-only.
+ * Surfaces:
  *   - Status + signing evidence (names, IPs, timestamps)
  *   - PDF download + signed-PDF download (when present)
  *   - "Counter-sign" form when customer has signed
  *   - "Upload signed PDF" file picker (admin path)
  *   - "Send" / "Cancel" buttons for drafts
  *
- * The actual editor lives at /:id/edit and refuses to load when the
- * contract is no longer in draft status.
+ * `/:id/edit` redirects here (RedirectToRecord).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -433,7 +434,7 @@ export const ContractDetailPage: React.FC = () => {
           <>
             <ActionMenu items={menu} />
             {c.status === 'draft' ? (
-              <Button variant="outline" onClick={() => { void previewDraft(); }} leftIcon={<Eye className="w-4 h-4" />}>
+              <Button variant="outline" onClick={() => { void previewDraft(); }} disabled={formState.busy} leftIcon={<Eye className="w-4 h-4" />}>
                 {t('contracts.detail.previewPdf', 'Preview PDF')}
               </Button>
             ) : c.pdfPath ? (
