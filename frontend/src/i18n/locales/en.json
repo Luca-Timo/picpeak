@@ -3993,6 +3993,56 @@
         "FONT_BITMAP_ONLY": "This font's licence only allows embedding bitmaps, not the outlines PDFs need."
       },
       "legacyFailed": "The font set before this update could not be moved: {{reason}}"
+    },
+    "colorWarnings": {
+      "textOnBackground": "Text is hard to read on the background ({{ratio}}:1, aim for {{needed}}:1).",
+      "textOnSurface": "Text is hard to read on cards ({{ratio}}:1, aim for {{needed}}:1).",
+      "textOnElevated": "Text on raised panels is hard to read ({{ratio}}:1, aim for {{needed}}:1). On a dark palette, pick a dark colour here.",
+      "mutedOnSurface": "Secondary text is hard to read on cards ({{ratio}}:1, aim for {{needed}}:1).",
+      "borderInvisible": "Borders barely show against cards.",
+      "accentOnBackground": "Links and icons in this colour are hard to see on the background ({{ratio}}:1, aim for {{needed}}:1).",
+      "buttonLabel": "Button labels are hard to read on this colour ({{ratio}}:1, aim for {{needed}}:1).",
+      "statusTooLight": "Too light: labels in this colour wash out on white.",
+      "statusLikeAccent": "Looks like your accent colour, so it may read as a button rather than a status.",
+      "statusLikeStatus": "Hard to tell apart from \"{{other}}\"."
+    },
+    "status": {
+      "success": "Success",
+      "warning": "Warning",
+      "danger": "Danger",
+      "info": "Info",
+      "storno": "Cancelled (Storno)",
+      "successHelp": "Paid, signed, published, done.",
+      "warningHelp": "Due soon, needs attention, not saved yet.",
+      "dangerHelp": "Overdue, failed, delete.",
+      "infoHelp": "Sent, in progress, neutral notices.",
+      "stornoHelp": "Cancelled and credited documents."
+    },
+    "useColorsForDark": "Use these colours for dark",
+    "useColorsForLight": "Use these colours for light",
+    "surfacesReplacedDark": "Dark is forced, but this palette is set up for light, so visitors see the built-in dark surfaces and text instead of the colours below.",
+    "surfacesReplacedLight": "Light is forced, but this palette is set up for dark, so visitors see the built-in light surfaces and text instead of the colours below.",
+    "colorGroupStatus": "Status",
+    "colorGroupStatusHelp": "One colour per meaning, used for badges, notices and status labels in the admin, the customer portal and on public pages. Light and dark shades are worked out from it.",
+    "resetColor": "Default",
+    "colorPreview": {
+      "statusSuccess": "Paid",
+      "statusWarning": "Due soon",
+      "statusDanger": "Overdue",
+      "statusInfo": "Sent",
+      "statusStorno": "Cancelled",
+      "galleryAndPortal": "Gallery and customer portal",
+      "modeForced": "{{mode}}, locked",
+      "galleryTitle": "Anna & Ben, wedding",
+      "galleryMeta": "12 October 2026 · 248 photos",
+      "favourites": "Your favourites (12)",
+      "openGallery": "Open gallery",
+      "share": "Share",
+      "downloadAll": "Download all",
+      "admin": "Admin, light and dark",
+      "save": "Save",
+      "colorsTab": "Colours",
+      "galleryTab": "Gallery"
     }
   },
   "admin": {

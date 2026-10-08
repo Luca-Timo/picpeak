@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Eye, Palette, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Button, Card, Input, ErrorBoundary, Loading, MarkdownContent } from '../../components/common';
+import { Button, Card, Input, ErrorBoundary, Loading, MarkdownContent, Tabs } from '../../components/common';
+import { ThemeColorPreview, type ColorKey } from '../../components/admin/theme-customizer/ThemeColorPreview';
 import { ThemeCustomizerEnhanced, GalleryPreview } from '../../components/admin';
 import { useTheme, type ThemeConfig, GALLERY_THEME_PRESETS } from '../../contexts/ThemeContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -40,6 +41,7 @@ const INITIAL_BRANDING: BrandingSettings = {
   logo_display_mode: 'logo_and_text',
   hide_powered_by: false,
   force_color_mode: null,
+  status_colors: {},
   login_logo_frame_enabled: true,
   login_logo_size: 'medium',
   facebook_url: '',
@@ -184,26 +186,20 @@ export const BrandingPage: React.FC = () => {
     setBrandingSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  /**
-   * Force color mode is the only branding setting that auto-saves on click —
-   * users expect a toggle that takes effect immediately, not a setting they
-   * have to remember to click "Save" for. We keep all other branding fields
-   * on the bulk-save flow because typing in a text input shouldn't trigger
-   * a network round-trip per keystroke. Auto-save here invalidates the
-   * public-settings query so AdminDarkModeContext reapplies live without
-   * waiting for its 30-second poll.
-   */
+  // Force color mode is a setting like the rest: it goes through the draft
+  // and the save bar (UX.md § 2), and the colour preview shows its effect
+  // before it is saved.
   const handleForceColorModeChange = (value: 'dark' | 'light' | null) => {
-    const previous = loadedBranding.force_color_mode;
-    const next = { ...brandingSettings, force_color_mode: value };
-    setBrandingSettings(next);
-    // Instant-save: not a pending change for the save bar. If the request
-    // fails the snapshot goes back to what the server still holds, so the
-    // draft reads dirty and Save offers the retry.
-    setLoadedBranding(prev => ({ ...prev, force_color_mode: value }));
-    brandingMutation.mutate(next, {
-      onError: () => setLoadedBranding(prev => ({ ...prev, force_color_mode: previous })),
-    });
+    handleBrandingChange('force_color_mode', value);
+  };
+
+  // The colour picker being hovered or edited, so the preview can point at
+  // where it lands; focusing one brings the colour preview forward.
+  const [colorFocus, setColorFocus] = useState<ColorKey | null>(null);
+  const [previewTab, setPreviewTab] = useState<'colors' | 'gallery'>('colors');
+  const handleColorFocus = (key: ColorKey | null) => {
+    setColorFocus(key);
+    if (key) setPreviewTab('colors');
   };
 
   const handleThemeChange = (newTheme: ThemeConfig) => {
@@ -1230,6 +1226,9 @@ export const BrandingPage: React.FC = () => {
                 hideActions={true}
                 forceColorMode={brandingSettings.force_color_mode ?? null}
                 onForceColorModeChange={handleForceColorModeChange}
+                statusColors={brandingSettings.status_colors || {}}
+                onStatusColorsChange={(next) => handleBrandingChange('status_colors', next)}
+                onColorFocus={handleColorFocus}
                 // The global CSS template: every gallery without custom
                 // styling renders with it (backend services/galleryTheme).
                 cssTemplates={cssTemplates}
@@ -1243,17 +1242,35 @@ export const BrandingPage: React.FC = () => {
               />
             </div>
 
-            {/* Right side - Gallery Preview */}
+            {/* Right side: the preview, next to the pickers. Colours shows
+                only the palette being edited (and where a hovered colour
+                lands); Gallery renders it as a gallery page. */}
             <div className="lg:sticky lg:top-4 lg:h-fit">
               <Card className="p-4">
-                <h3 className="text-sm font-medium text-body mb-3">
-                  {t('branding.livePreview')}
-                </h3>
-                <GalleryPreview
-                  theme={currentTheme}
-                  branding={{ ...brandingSettings, logo_url_dark: logoDarkUrl }}
-                  className="shadow-lg"
+                <Tabs
+                  aria-label={t('branding.livePreview')}
+                  items={[
+                    { id: 'colors' as const, label: t('branding.colorPreview.colorsTab', 'Colours') },
+                    { id: 'gallery' as const, label: t('branding.colorPreview.galleryTab', 'Gallery') },
+                  ]}
+                  value={previewTab}
+                  onChange={setPreviewTab}
+                  className="mb-4"
                 />
+                {previewTab === 'colors' ? (
+                  <ThemeColorPreview
+                    theme={currentTheme}
+                    statusColors={brandingSettings.status_colors || {}}
+                    forceColorMode={brandingSettings.force_color_mode ?? null}
+                    highlight={colorFocus}
+                  />
+                ) : (
+                  <GalleryPreview
+                    theme={currentTheme}
+                    branding={{ ...brandingSettings, logo_url_dark: logoDarkUrl }}
+                    className="shadow-lg"
+                  />
+                )}
               </Card>
             </div>
           </div>

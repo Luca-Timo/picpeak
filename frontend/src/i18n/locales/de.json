@@ -4462,6 +4462,56 @@
         "FONT_BITMAP_ONLY": "Die Lizenz dieser Schrift erlaubt nur das Einbetten von Bitmaps, nicht der Umrisse, die PDFs benötigen."
       },
       "legacyFailed": "Die vor diesem Update eingestellte Schrift konnte nicht übernommen werden: {{reason}}"
+    },
+    "colorWarnings": {
+      "textOnBackground": "Text ist auf dem Hintergrund schwer lesbar ({{ratio}}:1, Ziel {{needed}}:1).",
+      "textOnSurface": "Text ist auf Karten schwer lesbar ({{ratio}}:1, Ziel {{needed}}:1).",
+      "textOnElevated": "Text auf erhöhten Flächen ist schwer lesbar ({{ratio}}:1, Ziel {{needed}}:1). Bei einer dunklen Palette hier eine dunkle Farbe wählen.",
+      "mutedOnSurface": "Gedämpfter Text ist auf Karten schwer lesbar ({{ratio}}:1, Ziel {{needed}}:1).",
+      "borderInvisible": "Rahmen sind auf Karten kaum zu sehen.",
+      "accentOnBackground": "Links und Symbole in dieser Farbe sind auf dem Hintergrund schwer zu erkennen ({{ratio}}:1, Ziel {{needed}}:1).",
+      "buttonLabel": "Beschriftungen auf Schaltflächen in dieser Farbe sind schwer lesbar ({{ratio}}:1, Ziel {{needed}}:1).",
+      "statusTooLight": "Zu hell: Beschriftungen in dieser Farbe verblassen auf Weiss.",
+      "statusLikeAccent": "Ähnelt Ihrer Akzentfarbe und wirkt deshalb eher wie eine Schaltfläche als wie ein Status.",
+      "statusLikeStatus": "Schwer von „{{other}}“ zu unterscheiden."
+    },
+    "status": {
+      "success": "Erfolg",
+      "warning": "Warnung",
+      "danger": "Fehler",
+      "info": "Info",
+      "storno": "Storniert (Storno)",
+      "successHelp": "Bezahlt, unterschrieben, veröffentlicht, erledigt.",
+      "warningHelp": "Bald fällig, braucht Aufmerksamkeit, noch nicht gespeichert.",
+      "dangerHelp": "Überfällig, fehlgeschlagen, löschen.",
+      "infoHelp": "Gesendet, in Bearbeitung, neutrale Hinweise.",
+      "stornoHelp": "Stornierte und gutgeschriebene Dokumente."
+    },
+    "useColorsForDark": "Diese Farben für Dunkel verwenden",
+    "useColorsForLight": "Diese Farben für Hell verwenden",
+    "surfacesReplacedDark": "Dunkel ist erzwungen, diese Palette ist aber für Hell eingerichtet. Besucher sehen deshalb die eingebauten dunklen Flächen und Textfarben statt der Farben unten.",
+    "surfacesReplacedLight": "Hell ist erzwungen, diese Palette ist aber für Dunkel eingerichtet. Besucher sehen deshalb die eingebauten hellen Flächen und Textfarben statt der Farben unten.",
+    "colorGroupStatus": "Status",
+    "colorGroupStatusHelp": "Eine Farbe pro Bedeutung, für Badges, Hinweise und Statusanzeigen im Admin, im Kundenportal und auf öffentlichen Seiten. Helle und dunkle Abstufungen werden daraus berechnet.",
+    "resetColor": "Standard",
+    "colorPreview": {
+      "statusSuccess": "Bezahlt",
+      "statusWarning": "Bald fällig",
+      "statusDanger": "Überfällig",
+      "statusInfo": "Gesendet",
+      "statusStorno": "Storniert",
+      "galleryAndPortal": "Galerie und Kundenportal",
+      "modeForced": "{{mode}}, erzwungen",
+      "galleryTitle": "Hochzeit Anna & Ben",
+      "galleryMeta": "12. Oktober 2026 · 248 Fotos",
+      "favourites": "Ihre Favoriten (12)",
+      "openGallery": "Galerie öffnen",
+      "share": "Teilen",
+      "downloadAll": "Alle herunterladen",
+      "admin": "Admin, hell und dunkel",
+      "save": "Speichern",
+      "colorsTab": "Farben",
+      "galleryTab": "Galerie"
     }
   },
   "admin": {
