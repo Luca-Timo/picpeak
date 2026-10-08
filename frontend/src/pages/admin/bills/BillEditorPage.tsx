@@ -1,14 +1,21 @@
 /**
- * Invoice editor — create (manual) or edit. Most invoices come from
- * quote conversion; this page is for one-off / ad-hoc invoicing.
- * Smaller surface than the quote editor on purpose.
+ * The invoice form — create (manual) or edit. Most invoices come from
+ * quote conversion; this is for one-off / ad-hoc invoicing. Smaller
+ * surface than the quote form on purpose.
+ *
+ * One page per invoice: `BillForm` is the body of a scheduled invoice's own
+ * page (BillDetailPage, which owns the header, the save bar and Send) and of
+ * /bills/new (BillEditorPage below). Once an invoice is issued it is never
+ * edited again (§ 14 UStG): its page is read-only, Storno and reissue.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, Save as SaveIcon } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { Button, Card, Loading, Input, LocalizedDateInput, TimeField } from '../../../components/common';
+import { DocumentHeader } from '../../../components/admin/DocumentHeader';
+import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '../../../services/bills.service';
 import { quotesService } from '../../../services/quotes.service';
 import { contractsService } from '../../../services/contracts.service';
@@ -32,13 +39,37 @@ function toMinor(amount: number) {
   return Math.round((Number(amount) || 0) * 100);
 }
 
-export const BillEditorPage: React.FC = () => {
+/** What the page can ask of the form. */
+export interface BillFormHandle {
+  /** Writes the invoice; resolves to the (first) saved invoice's id, or null when it did not save. */
+  save: () => Promise<number | null>;
+  /** Puts the fields back to the saved invoice. */
+  discard: () => void;
+  /** Opens the PDF of the fields as they are now, saved or not. */
+  previewUnsaved: () => Promise<void>;
+}
+
+export interface BillFormState {
+  dirty: boolean;
+  busy: boolean;
+  /** The installment split adds up; Save needs it. */
+  valid: boolean;
+  /** Installments: saving creates this many invoices (new invoices only). */
+  spawnCount: number;
+}
+
+interface BillFormProps {
+  /** The invoice to edit; omitted on /bills/new. */
+  invoiceId?: number;
+  onStateChange?: (state: BillFormState) => void;
+}
+
+export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, onStateChange }, ref) => {
   const { t } = useTranslation();
-  const { id } = useParams<{ id?: string }>();
+  const id = invoiceId ? String(invoiceId) : undefined;
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const qc = useQueryClient();
-  const isEdit = id && id !== 'new';
+  const isEdit = !!invoiceId;
 
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerLabel, setCustomerLabel] = useState('');
@@ -127,8 +158,14 @@ export const BillEditorPage: React.FC = () => {
     enabled: !!isEdit,
   });
 
+  // Dirty tracking: once a saved invoice is in the fields, the payload they
+  // build is the snapshot to compare against (taken a render later, when
+  // the state setters below have landed).
+  const snapshotPending = useRef(false);
+  const [snapshot, setSnapshot] = useState<string | null>(null);
   useEffect(() => {
     if (existing) {
+      snapshotPending.current = true;
       const inv = existing.invoice;
       setCustomerId(inv.customerAccountId);
       setCustomerLabel(inv.customer.companyName || inv.customer.displayName || inv.customer.email || '');
@@ -428,15 +465,8 @@ export const BillEditorPage: React.FC = () => {
     lineItems: lineItems.map(toPayloadLineItem),
   });
 
-  const handleSave = async (then?: 'preview') => {
-    if (!customerId) { toast.error(t('bills.errors.customerRequired', 'Pick a customer first.')); return; }
-    // Open the preview tab synchronously so popup blockers don't kill
-    // it (they reject any window.open that runs after an `await`).
-    const previewWindow = then === 'preview' ? window.open('about:blank', '_blank') : null;
-    if (then === 'preview' && !previewWindow) {
-      toast.error(t('bills.errors.popupBlocked', 'Allow pop-ups for this site to preview the PDF.'));
-      return;
-    }
+  const handleSave = async (): Promise<number | null> => {
+    if (!customerId) { toast.error(t('bills.errors.customerRequired', 'Pick a customer first.')); return null; }
     setBusy(true);
     try {
       const payload = buildPayload();
@@ -444,24 +474,21 @@ export const BillEditorPage: React.FC = () => {
         ? await billsService.update(parseInt(id!, 10), payload)
         : await billsService.create(payload);
       qc.invalidateQueries({ queryKey: ['invoices'] });
-      if (then === 'preview') {
-        const url = await billsService.pdfUrl(saved.invoice.id);
-        if (previewWindow) previewWindow.location.href = url;
-      } else if (saved.invoiceIds && saved.invoiceIds.length > 1) {
-        // Multi-installment spawn: backend created N invoices. Toast
-        // the count and redirect to the first sibling.
-        toast.success(t('bills.savedToastMulti',
-          'Created {{n}} invoices.', { n: saved.invoiceIds.length }));
+      if (saved.invoiceIds && saved.invoiceIds.length > 1) {
+        // Multi-installment spawn: the backend created N invoices; the page
+        // opens the first, and the lineage card links the siblings.
+        toast.success(t('bills.savedToastMulti', 'Created {{n}} invoices.', { n: saved.invoiceIds.length }));
       } else {
         toast.success(t('bills.savedToast', 'Invoice saved.'));
       }
-      // Redirect to the first invoice (single case = the only invoice;
-      // multi case = first installment, admin navigates to siblings
-      // via the lineage card).
-      navigate(`/admin/clients/bills/${saved.invoice.id}`);
+      if (isEdit) {
+        // The refetch puts the saved values back into the fields and the snapshot.
+        await qc.invalidateQueries({ queryKey: ['invoice', id] });
+      }
+      return saved.invoice.id;
     } catch (err: any) {
-      if (previewWindow) previewWindow.close();
       toast.error(err?.response?.data?.error || err.message || 'Save failed');
+      return null;
     } finally { setBusy(false); }
   };
 
@@ -481,37 +508,31 @@ export const BillEditorPage: React.FC = () => {
     }
   };
 
+  // Take the snapshot on the render after a load, then compare every render.
+  const current = JSON.stringify(buildPayload());
+  useEffect(() => {
+    if (snapshotPending.current) {
+      snapshotPending.current = false;
+      setSnapshot(current);
+    }
+  });
+  const dirty = !isEdit || (snapshot !== null && current !== snapshot);
+  const spawnCount = !isEdit && installments && installments.length > 1 ? installments.length : 0;
+  useEffect(() => {
+    onStateChange?.({ dirty, busy, valid: installmentsValid, spawnCount });
+  }, [dirty, busy, installmentsValid, spawnCount, onStateChange]);
+
+  useImperativeHandle(ref, () => ({
+    save: handleSave,
+    // Re-running the load effect puts the saved invoice back.
+    discard: () => { if (existing) qc.setQueryData(['invoice', id], { ...existing }); },
+    previewUnsaved: handlePreviewUnsaved,
+  }));
+
   if (isEdit && isLoading) return <Loading />;
 
   return (
     <div className="space-y-4">
-      {/* Wraps: Cancel made this row one button wider, and at 390px the
-          action group ran past the card edge. German labels are wider
-          still. */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-xl font-bold">{isEdit ? `${t('bills.edit', 'Edit invoice')} ${existing?.invoice.invoiceNumber || ''}` : t('bills.new', 'New invoice')}</h2>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {/* The only exit that does not write. These editors have no other
-              cancel, and the sidebar is an off-canvas drawer below lg, so a
-              named control beats relying on browser-back. An edit returns to
-              the record it came from; a new one has no detail page yet. */}
-          <Button variant="outline" onClick={() => navigate(isEdit ? `/admin/clients/bills/${id}` : '/admin/clients/bills')} disabled={busy}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button variant="outline" onClick={handlePreviewUnsaved} disabled={busy}>
-            <Eye className="w-4 h-4 mr-1" />{t('common.preview', 'Preview')}
-          </Button>
-          <Button onClick={() => handleSave()} disabled={busy || !installmentsValid}>
-            <SaveIcon className="w-4 h-4 mr-1" />
-            {installments && installments.length > 1
-              ? t('bills.saveAndSpawn', 'Create {{n}} invoices', { n: installments.length })
-              : t('common.save', 'Save')}
-          </Button>
-        </div>
-      </div>
-
       <Card>
         <h3 className="font-semibold mb-2">{t('bills.section.customer', 'Customer')}</h3>
         <CustomerPicker
@@ -794,6 +815,57 @@ export const BillEditorPage: React.FC = () => {
           )}
         </div>
       </Card>
+    </div>
+  );
+});
+BillForm.displayName = 'BillForm';
+
+/**
+ * /bills/new: the invoice form before the invoice exists. Cancel leaves
+ * without saving; the save bar creates it (or its installments) and opens
+ * its page.
+ */
+export const BillEditorPage: React.FC = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const formRef = useRef<BillFormHandle>(null);
+  const [state, setState] = useState<BillFormState>({ dirty: true, busy: false, valid: true, spawnCount: 0 });
+  const [createdId, setCreatedId] = useState<number | null>(null);
+  useEffect(() => {
+    if (createdId) navigate(`/admin/clients/bills/${createdId}`, { replace: true });
+  }, [createdId, navigate]);
+
+  const create = async () => {
+    const newId = await formRef.current?.save();
+    if (newId) setCreatedId(newId);
+  };
+
+  return (
+    <div>
+      <DocumentHeader
+        title={t('bills.new', 'New invoice')}
+        actions={(
+          <>
+            <Button variant="outline" onClick={() => formRef.current?.previewUnsaved()} disabled={state.busy} leftIcon={<Eye className="w-4 h-4" />}>
+              {t('common.preview', 'Preview')}
+            </Button>
+            <Button variant="ghost" onClick={() => navigate('/admin/clients/bills')} disabled={state.busy}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+          </>
+        )}
+      />
+      <BillForm ref={formRef} onStateChange={setState} />
+      <SettingsSaveBar
+        isDirty={!createdId}
+        isSaving={state.busy}
+        canSave={state.valid}
+        saveLabel={state.spawnCount > 1
+          ? t('bills.saveAndSpawn', 'Create {{n}} invoices', { n: state.spawnCount })
+          : t('bills.createDraft', 'Create invoice')}
+        onSave={() => { void create(); }}
+        onDiscard={() => navigate('/admin/clients/bills')}
+      />
     </div>
   );
 };

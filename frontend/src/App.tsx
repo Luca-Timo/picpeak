@@ -356,7 +356,7 @@ function App() {
                             <Route path="bills" element={<BillsListPage />} />
                             <Route path="bills/new" element={<BillEditorPage />} />
                             <Route path="bills/:id" element={<BillDetailPage />} />
-                            <Route path="bills/:id/edit" element={<BillEditorPage />} />
+                            <Route path="bills/:id/edit" element={<RedirectToRecord base="/admin/clients/bills" />} />
                           </Route>
 
                           {/* Contracts (CRM) — gated by `contracts`. Independent
