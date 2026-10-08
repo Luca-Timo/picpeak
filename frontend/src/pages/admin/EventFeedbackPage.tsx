@@ -132,7 +132,7 @@ export const EventFeedbackPanel: React.FC<{ eventId: string }> = ({ eventId }) =
   }
 
   if (!event) {
-    return <div>{t('events.notFound', 'Event not found')}</div>;
+    return <div>{t('events.notFound', 'Gallery not found')}</div>;
   }
 
   const pagination = feedbackData?.pagination;

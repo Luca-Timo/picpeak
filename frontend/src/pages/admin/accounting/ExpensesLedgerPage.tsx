@@ -276,7 +276,7 @@ export const ExpensesLedgerPage: React.FC = () => {
         feature="expenses"
         icon={Wallet}
         title={t('accounting.subnav.expenses', 'Expenses')}
-        description={t('accounting.ledger.subtitle', 'Internal expenses such as mileage, per diems and cash receipts, booked to an event or the company.')}
+        description={t('accounting.ledger.subtitle', 'Internal expenses such as mileage, per diems and cash receipts, booked to a gallery or the company.')}
       />
       <div className="mb-4 flex flex-wrap gap-3">
         <select value={kind} onChange={(e) => setKind(e.target.value)} className={selectCls} style={{ maxWidth: 200 }}>
@@ -321,7 +321,7 @@ export const ExpensesLedgerPage: React.FC = () => {
                     )}
                   </div>
                   <div className="text-xs text-muted">
-                    {ex.eventId != null ? `${t('accounting.booking.event', 'Event')} #${ex.eventId}` : t('accounting.booking.company', 'Company')}
+                    {ex.eventId != null ? `${t('accounting.booking.event', 'Gallery')} #${ex.eventId}` : t('accounting.booking.company', 'Company')}
                     {cat && <>{' · '}{categoryLabel(cat, t)}</>}
                     {' · '}{format(ex.createdAt)}
                   </div>

@@ -61,7 +61,7 @@ export const ProjectsListPage: React.FC = () => {
         feature="projects"
         icon={FolderKanban}
         title={t('projects.title', 'Project Overview')}
-        description={t('projects.subtitle', 'Group events into projects and see every email, document, gallery and hour in one cockpit.')}
+        description={t('projects.subtitle', 'Group galleries into projects and see every email, document and hour in one cockpit.')}
       />
 
       {/* Inline create */}
@@ -128,7 +128,7 @@ export const ProjectsListPage: React.FC = () => {
             <tr>
               <TableHeaderCell>{t('projects.col.name', 'Project')}</TableHeaderCell>
               <TableHeaderCell>{t('projects.col.customer', 'Customer')}</TableHeaderCell>
-              <TableHeaderCell align="right">{t('projects.col.events', 'Events')}</TableHeaderCell>
+              <TableHeaderCell align="right">{t('projects.col.events', 'Galleries')}</TableHeaderCell>
               <TableHeaderCell align="right">{t('projects.col.value', 'Value')}</TableHeaderCell>
               <TableHeaderCell>{t('projects.col.status', 'Status')}</TableHeaderCell>
               <TableHeaderCell>{t('projects.col.updated', 'Updated')}</TableHeaderCell>

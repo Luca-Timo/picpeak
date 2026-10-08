@@ -296,7 +296,7 @@ export const ReminderTemplatesPage: React.FC = () => {
             <div>
               <p className="font-medium">{t('reminderTemplates.scheduleMoved.title', 'The reminder schedule is now in Workflows')}</p>
               <p className="mt-1 text-soft">
-                {t('reminderTemplates.scheduleMoved.body', 'Whether pre-event reminders are sent, and how many days before the event, is configured in the “Pre-event reminder” workflow. This page edits the email templates; per-event overrides stay on each event’s detail page.')}{' '}
+                {t('reminderTemplates.scheduleMoved.body', 'Whether pre-event reminders are sent, and how many days before the event, is configured in the “Pre-event reminder” workflow. This page edits the email templates; per-gallery overrides stay on each gallery’s detail page.')}{' '}
                 <Link to="/admin/automation/workflows" className="underline font-medium">{t('reminderTemplates.scheduleMoved.link', 'Open Workflows')}</Link>
               </p>
             </div>
@@ -308,7 +308,7 @@ export const ReminderTemplatesPage: React.FC = () => {
             </h3>
             <p className="text-xs text-muted mb-3">
               {t('reminderTemplates.globalHelp',
-                'Off by default — turn on to start sending pre-event reminders. The offset below is the default; each event can override on its detail page.')}
+                'Off by default — turn on to start sending pre-event reminders. The offset below is the default; each gallery can override it on its detail page.')}
             </p>
             <div className="flex items-center gap-6 flex-wrap">
               <label className="inline-flex items-center gap-2 text-sm text-body cursor-pointer">

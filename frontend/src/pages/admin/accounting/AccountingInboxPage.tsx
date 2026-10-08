@@ -297,7 +297,7 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
             <div>
               <label className={labelCls}>{t('accounting.booking.label', 'Book to')}</label>
               <EventBookingSelect value={eventId} onChange={setEventId} className={selectCls} />
-              <p className="mt-1 text-xs text-muted">{t('accounting.booking.inboundHint', 'Which event carries this cost in your reports & tax export (Company = general overhead). This is separate from who you re-bill it to.')}</p>
+              <p className="mt-1 text-xs text-muted">{t('accounting.booking.inboundHint', 'Which gallery carries this cost in your reports & tax export (Company = general overhead). This is separate from who you re-bill it to.')}</p>
             </div>
           )}
 
@@ -318,7 +318,7 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
                     customer-portal one, and the rebill disposition's
                     required field would otherwise render label-only. */}
                 <CustomerAccountPicker portalAssignment={false} value={customer.slice(0, 1)} onChange={(next) => setCustomer(next.slice(-1))} />
-                {disposition === 'durchlaufend' && <p className="mt-1 text-xs text-muted">{t('accounting.inbox.field.passthroughCustomerHint', 'Optional — attach a client to re-bill this passthrough; leave empty to only book it to the event.')}</p>}
+                {disposition === 'durchlaufend' && <p className="mt-1 text-xs text-muted">{t('accounting.inbox.field.passthroughCustomerHint', 'Optional — attach a client to re-bill this passthrough; leave empty to only book it to the gallery.')}</p>}
               </div>
               {/* Markup is a re-bill concept only. A pass-through is invoiced
                   at cost (VAT-neutral), so no markup control here. */}

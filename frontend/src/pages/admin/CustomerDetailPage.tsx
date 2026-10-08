@@ -457,7 +457,7 @@ export const CustomerDetailPage: React.FC = () => {
       <Card padding="lg">
         <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
           <h2 className="text-lg font-semibold text-heading flex items-center gap-2">
-            <Calendar className="w-5 h-5" /> {t('customers.detail.eventsSection', 'Assigned events')}
+            <Calendar className="w-5 h-5" /> {t('customers.detail.eventsSection', 'Assigned galleries')}
           </h2>
           {/* Manage galleries: opens the multi-select dialog that
               replaces the customer's full assignment list. Disabled
@@ -476,7 +476,7 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
         {customer.events.length === 0 ? (
           <p className="text-sm text-muted">
-            {t('customers.detail.noEvents', 'Not assigned to any events yet. Use "Manage galleries" to add some.')}
+            {t('customers.detail.noEvents', 'Not assigned to any galleries yet. Use "Manage galleries" to add some.')}
           </p>
         ) : (
           <ul className="divide-y divide-line">
@@ -1091,7 +1091,7 @@ export const CustomerDetailPage: React.FC = () => {
                   const ok = await confirm({
                     title: t('customers.erase.title', 'Erase customer data?'),
                     message: t('customers.erase.body',
-                      'Removes the customer\'s name, email, phone, address, company and credentials. The account row stays so historical event-access records and audit logs still reference it. This is irreversible — you cannot restore the data afterwards.'),
+                      'Removes the customer\'s name, email, phone, address, company and credentials. The account row stays so historical gallery-access records and audit logs still reference it. This is irreversible — you cannot restore the data afterwards.'),
                     variant: 'danger',
                     confirmLabel: t('customers.erase.confirm', 'Erase permanently'),
                   });

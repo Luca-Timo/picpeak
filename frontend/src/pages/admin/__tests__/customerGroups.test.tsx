@@ -230,7 +230,7 @@ describe('the overview', () => {
     expect(byName('Email')).toBeUndefined();
     expect(byName('Name')?.className).not.toContain('hidden');
     // On a phone only the name cell shows…
-    for (const name of ['Groups', 'Events', 'Status']) {
+    for (const name of ['Groups', 'Galleries', 'Status']) {
       expect(byName(name)?.className).toContain('hidden sm:table-cell');
     }
     // …and below 2xl (1440 leaves the card ~760px) Company and Last login

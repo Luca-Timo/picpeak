@@ -176,14 +176,14 @@ export const ProjectCockpitPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['project-overview', projectId] });
       qc.invalidateQueries({ queryKey: ['projects'] });
       setEventSearch('');
-      toast.success(t('projects.events.attached', 'Event attached') as string);
+      toast.success(t('projects.events.attached', 'Gallery attached') as string);
     },
     onError: (err: any) => {
       if (err?.response?.data?.code === 'PROJECT_CUSTOMER_MISMATCH') {
         toast.error(t('projects.error.customerMismatch', 'That belongs to a different customer than this project.') as string);
         return;
       }
-      toast.error(err?.response?.data?.error || (t('projects.events.attachFailed', 'Could not attach event') as string));
+      toast.error(err?.response?.data?.error || (t('projects.events.attachFailed', 'Could not attach gallery') as string));
     },
   });
 
@@ -287,7 +287,7 @@ export const ProjectCockpitPage: React.FC = () => {
                 </span>
               )}
               {' · '}
-              {t('projects.eventCount', '{{count}} events', { count: data.events.length })}
+              {t('projects.eventCount', '{{count}} galleries', { count: data.events.length })}
               {' · '}
               {t('projects.totalHours', '{{hours}} logged', { hours: minutesToHours(hours.totalMinutes) })}
             </p>
@@ -317,9 +317,9 @@ export const ProjectCockpitPage: React.FC = () => {
 
       {/* Events in this project + attach control */}
       <Card className="mb-4">
-        <h2 className="text-sm font-semibold mb-3 text-body">{t('projects.events.title', 'Events')}</h2>
+        <h2 className="text-sm font-semibold mb-3 text-body">{t('projects.events.title', 'Galleries')}</h2>
         {data.events.length === 0 ? (
-          <p className="text-sm text-muted mb-3">{t('projects.events.none', 'No events grouped under this project yet.')}</p>
+          <p className="text-sm text-muted mb-3">{t('projects.events.none', 'No galleries grouped under this project yet.')}</p>
         ) : (
           <ul className="space-y-1 mb-3">
             {data.events.map((ev) => (
@@ -335,7 +335,7 @@ export const ProjectCockpitPage: React.FC = () => {
           <Input
             value={eventSearch}
             onChange={(e) => setEventSearch(e.target.value)}
-            placeholder={t('projects.events.searchPlaceholder', 'Attach an event — search by name…') as string}
+            placeholder={t('projects.events.searchPlaceholder', 'Attach a gallery — search by name…') as string}
             className="pl-9"
           />
           {eventSearch.trim().length >= 2 && eventResults?.events && eventResults.events.length > 0 && (

@@ -454,7 +454,7 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({
                     className="rounded border-line-strong text-accent focus:ring-accent"
                   />
                   <span className="text-sm text-body">
-                    {t('eventTypes.form.isActive', 'Active (visible in event creation)')}
+                    {t('eventTypes.form.isActive', 'Active (offered when creating a gallery)')}
                   </span>
                 </label>
               )}
@@ -510,7 +510,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             {t('eventTypes.deleteConfirm.message', 'Are you sure you want to delete')} "{eventType.name}"?
           </p>
           <p className="text-sm text-muted">
-            {t('eventTypes.deleteConfirm.warning', 'This action cannot be undone. Make sure no events are using this type.')}
+            {t('eventTypes.deleteConfirm.warning', 'This action cannot be undone. Make sure no galleries use this type.')}
           </p>
         </div>
       </div>

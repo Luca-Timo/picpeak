@@ -536,7 +536,7 @@ export const CustomerManagementPage: React.FC = () => {
                       </th>
                       <th className="hidden 2xl:table-cell px-3 py-2 font-medium">{t('customers.table.company', 'Company')}</th>
                       <th className="hidden sm:table-cell px-3 py-2 font-medium">{t('customers.table.groups', 'Groups')}</th>
-                      <th className="hidden sm:table-cell px-3 py-2 font-medium">{t('customers.table.eventCount', 'Events')}</th>
+                      <th className="hidden sm:table-cell px-3 py-2 font-medium">{t('customers.table.eventCount', 'Galleries')}</th>
                       <th className="hidden 2xl:table-cell px-3 py-2 font-medium">{t('customers.table.lastLogin', 'Last login')}</th>
                       <th className="hidden sm:table-cell px-3 py-2 font-medium">{t('customers.table.status', 'Status')}</th>
                       <th className="hidden sm:table-cell px-3 py-2"></th>
