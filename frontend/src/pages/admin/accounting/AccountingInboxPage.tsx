@@ -369,7 +369,7 @@ export const AccountingInboxPage: React.FC = () => {
       toast.success(t('accounting.incoming.bundledToast', 'Bundled {{count}} re-bill(s) into one invoice.', { count }));
       qc.invalidateQueries({ queryKey: ['accounting-inbound'] });
       qc.invalidateQueries({ queryKey: ['accounting-pending-rebills'] });
-      navigate(`/admin/clients/bills/${invoiceId}/edit`);
+      navigate(`/admin/clients/bills/${invoiceId}`);
     },
     onError: (e: any) => toast.error(e?.response?.data?.error || e.message || 'Failed'),
   });

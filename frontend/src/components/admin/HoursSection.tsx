@@ -197,7 +197,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
     toast.success(msg);
     // Open the new scheduled invoice so the admin can add other line
     // items in addition to the hours before it ships.
-    if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}/edit`);
+    if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}`);
   };
 
   const runBill = async (includeRebills: boolean) => {

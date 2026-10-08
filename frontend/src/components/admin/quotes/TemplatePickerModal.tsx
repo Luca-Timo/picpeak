@@ -56,7 +56,7 @@ export const TemplatePickerModal: React.FC<Props> = ({ open, onClose }) => {
         }));
       }
       onClose();
-      navigate(`/admin/clients/quotes/${result.quoteId}/edit`);
+      navigate(`/admin/clients/quotes/${result.quoteId}`);
     } catch (err: any) {
       toast.error(quoteErrorText(err, t, 'Failed'));
     } finally {

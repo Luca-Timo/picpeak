@@ -290,7 +290,7 @@ const RebillsPanel: React.FC<Props> = ({ customerAccountId }) => {
     qc.invalidateQueries({ queryKey: ['customer-invoices', customerAccountId] });
     qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerAccountId] });
     qc.invalidateQueries({ queryKey: ['customer-open-hours-count', customerAccountId] });
-    if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}/edit`);
+    if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}`);
   };
 
   const runBill = async (includeHours: boolean) => {
