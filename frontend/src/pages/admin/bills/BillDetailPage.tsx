@@ -526,14 +526,24 @@ export const BillDetailPage: React.FC = () => {
           <>
             <Button variant="outline" disabled={sending} onClick={() => setSendDialogOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
             <Button
-              disabled={sending}
-              onClick={() => doSend(sendProofs.filter((p) => p.hasProof && selectedProofIds.has(p.id)).map((p) => p.id))}
+              disabled={sending || formState.busy || (dirty && !formState.valid)}
+              onClick={async () => {
+                // Unsaved edits go out with the invoice: save them first, and
+                // send nothing when that save fails.
+                if (dirty && !(await formRef.current?.save())) return;
+                await doSend(sendProofs.filter((p) => p.hasProof && selectedProofIds.has(p.id)).map((p) => p.id));
+              }}
             >
               {t('bills.send.sendWithCount', 'Send with {{count}} proof(s)', { count: sendProofs.filter((p) => p.hasProof && selectedProofIds.has(p.id)).length })}
             </Button>
           </>
         )}
       >
+        {dirty && (
+          <Notice tone="warning" className="mb-3">
+            {t('bills.saveAndSendMessage', 'Your changes are saved first, then the invoice goes to the customer.')}
+          </Notice>
+        )}
         <p className="text-sm text-soft mb-3">
           {t('bills.send.proofIntro', 'This invoice re-bills captured supplier invoices. Choose which supplier proofs to attach to the email — the invoice PDF is always attached.')}
         </p>

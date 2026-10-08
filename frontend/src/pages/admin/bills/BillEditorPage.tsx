@@ -197,6 +197,8 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
     setEventTimeStart(inv.eventTimeStart || '');
     setEventTimeEnd(inv.eventTimeEnd || '');
     setLineItems(loaded.lineItems.map(toEditableLineItem));
+    // A saved invoice has no pending split; Discard empties the panel too.
+    setInstallments(null);
   };
   useEffect(() => {
     if (existing) hydrate(existing);
