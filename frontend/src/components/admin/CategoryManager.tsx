@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Edit2, Trash2, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { categoriesService, type PhotoCategory } from '../../services/categories.service';
-import { Button, useConfirm } from '../common';
+import { Button, EmptyState, ErrorState, useConfirm } from '../common';
 import { useMutationWithToast, useModal } from '../../hooks';
 
 export const CategoryManager: React.FC = () => {
@@ -15,10 +15,11 @@ export const CategoryManager: React.FC = () => {
   const [editingName, setEditingName] = useState('');
 
   // Fetch global categories (ordered by the global default display_order)
-  const { data: categories = [], isLoading } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['global-categories'],
     queryFn: categoriesService.getGlobalCategories,
   });
+  const categories = useMemo(() => data ?? [], [data]);
 
   // Local copy so the up/down reorder buttons feel instant; resynced when the
   // query data changes.
@@ -173,10 +174,10 @@ export const CategoryManager: React.FC = () => {
 
       {/* Categories list */}
       <div className="space-y-2">
-        {ordered.length === 0 ? (
-          <p className="text-muted text-center py-8">
-            {t('categories.noCategoriesYet')}
-          </p>
+        {isError && !data ? (
+          <ErrorState size="inline" onRetry={() => refetch()} retrying={isFetching} />
+        ) : ordered.length === 0 ? (
+          <EmptyState size="inline" title={t('categories.noCategoriesYet')} />
         ) : (
           ordered.map((category, index) => (
             <div

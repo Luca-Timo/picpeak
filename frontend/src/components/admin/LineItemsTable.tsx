@@ -519,7 +519,7 @@ export const LineItemsTable: React.FC<Props> = ({
               if (discountRow) {
                 const hasComment = !!li.detailsText && li.detailsText.trim().length > 0;
                 return (
-                  <tr key={li.position} className="border-t border-line bg-success">
+                  <tr key={li.position} className="border-t border-line bg-success-soft">
                     <td className="px-2 py-2 align-top text-soft">
                       <div className="flex items-center gap-1">
                         <Tag className="w-3.5 h-3.5 text-muted" aria-hidden />
@@ -584,7 +584,7 @@ export const LineItemsTable: React.FC<Props> = ({
               return (
                 <React.Fragment key={li.position}>
                   <tr className={`border-t border-line ${
-                    sub ? 'bg-neutral-50/60 dark:bg-neutral-900/40' : ''
+                    sub ? 'bg-subtle' : ''
                   }`}>
                     <td className={`px-2 py-2 text-soft align-top ${dim}`}>
                       <div className="flex items-center gap-1">

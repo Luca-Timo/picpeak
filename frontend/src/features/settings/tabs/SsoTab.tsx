@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { PlugZap, Copy, Check, UserCog, ShieldAlert, Plus, Trash2 } from 'lucide-react';
 import type { AxiosError } from 'axios';
 
-import { Button, Card, Input, Loading } from '../../../components/common';
+import { Button, Card, Input, Loading, Notice } from '../../../components/common';
 import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import { ssoService, SsoSettings, UpdateSsoSettings } from '../../../services/sso.service';
 import { usePermissions } from '../../../contexts/PermissionsContext';
@@ -158,10 +158,9 @@ export const SsoTab: React.FC = () => {
             {t('settings.sso.intro', 'Let admins sign in through your identity provider (Keycloak, Authentik, Pocket ID, or any OIDC-compliant IdP). Local email/password login stays available as a fallback.')}
           </p>
           {!isSuperAdmin && (
-            <div className="flex items-start gap-2 rounded-lg border border-line bg-subtle p-3 text-sm text-body">
-              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-muted" aria-hidden="true" />
-              <span>{t('settings.sso.superAdminOnly', 'Only a super admin can change the identity provider (issuer URL and client ID). Everything else on this tab can be edited.')}</span>
-            </div>
+            <Notice tone="neutral" icon={<ShieldAlert className="w-4 h-4" />}>
+              {t('settings.sso.superAdminOnly', 'Only a super admin can change the identity provider (issuer URL and client ID). Everything else on this tab can be edited.')}
+            </Notice>
           )}
 
           {/* Redirect URI for the IdP client registration */}
@@ -170,7 +169,7 @@ export const SsoTab: React.FC = () => {
               {t('settings.sso.redirectUri', 'Redirect URI (register this on your IdP client)')}
             </p>
             <div className="mt-2 flex items-center gap-2">
-              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-100">
+              <code className="flex-1 overflow-x-auto whitespace-nowrap rounded bg-inset px-3 py-2 font-mono text-xs text-heading">
                 {form.redirect_uri}
               </code>
               <button
@@ -432,9 +431,9 @@ export const SsoTab: React.FC = () => {
           </label>
 
           {form.oidc_disable_local_login && (
-            <div className="rounded-lg border border-warning-line bg-warning-soft p-3 text-xs text-warning-text">
+            <Notice tone="warning" size="sm">
               {t('settings.sso.policy.breakGlassHint', 'Locked out because the IdP is down or misconfigured? Set the environment variable OIDC_BREAK_GLASS=true on the backend and restart — password login comes back immediately.')}
-            </div>
+            </Notice>
           )}
 
           {/* Logout-to-IdP (#798 phase 3) */}
@@ -456,7 +455,7 @@ export const SsoTab: React.FC = () => {
           </label>
 
           {form.oidc_logout_from_idp && form.post_logout_redirect_uri && (
-            <div className="rounded-lg bg-neutral-50 dark:bg-neutral-800/60 p-3">
+            <div className="rounded-lg bg-subtle p-3">
               <p className="text-xs font-medium text-body mb-1">
                 {t('settings.sso.policy.postLogoutRedirectUri', 'Post-logout redirect URI (register this on your IdP client, e.g. Keycloak "Valid post logout redirect URIs")')}
               </p>

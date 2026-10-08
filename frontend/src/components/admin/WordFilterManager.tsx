@@ -13,7 +13,7 @@ import {
   Search
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Card, Button, Input, Loading, useConfirm } from '../common';
+import { Card, Button, Input, Loading, useConfirm, Badge, EmptyState, ErrorState, type BadgeTone } from '../common';
 import { feedbackService } from '../../services/feedback.service';
 import { useMutationWithToast } from '../../hooks';
 
@@ -39,10 +39,11 @@ export const WordFilterManager: React.FC = () => {
   const [editSeverity, setEditSeverity] = useState<'low' | 'moderate' | 'high' | 'block'>('moderate');
 
   // Fetch word filters
-  const { data: filters = [], isLoading } = useQuery({
+  const { data: filtersData, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['word-filters'],
     queryFn: () => feedbackService.getWordFilters()
   });
+  const filters = filtersData ?? [];
 
   // Add word filter mutation
   const addMutation = useMutation({
@@ -143,22 +144,22 @@ export const WordFilterManager: React.FC = () => {
       case 'block':
         return <XCircle className="w-4 h-4 text-danger-text" />;
       default:
-        return <Shield className="w-4 h-4 text-gray-500" />;
+        return <Shield className="w-4 h-4 text-muted" />;
     }
   };
 
-  const getSeverityBadgeClass = (severity: string) => {
+  const getSeverityTone = (severity: string): BadgeTone => {
     switch (severity) {
       case 'low':
-        return 'bg-info-soft text-info-text';
+        return 'info';
       case 'moderate':
-        return 'bg-warning-soft text-warning-text';
+        return 'warning';
       case 'high':
-        return 'bg-danger-soft text-danger-text';
+        return 'danger';
       case 'block':
-        return 'bg-danger-soft text-danger-text';
+        return 'danger';
       default:
-        return 'bg-inset text-heading';
+        return 'neutral';
     }
   };
 
@@ -192,7 +193,7 @@ export const WordFilterManager: React.FC = () => {
 
           {/* Add new filter */}
           <div className="mb-6 p-4 bg-subtle rounded-lg">
-            <h3 className="text-sm font-medium text-neutral-900 dark:text-neutral-100 dark:text-neutral-100 mb-3">
+            <h3 className="text-sm font-medium text-heading mb-3">
               {t('settings.moderation.addFilter', 'Add New Filter')}
             </h3>
             <div className="flex gap-3">
@@ -238,13 +239,21 @@ export const WordFilterManager: React.FC = () => {
 
           {/* Filters list */}
           <div className="space-y-2">
-            {filteredFilters.length === 0 ? (
-              <div className="text-center py-8 text-muted">
-                {searchTerm ? 
-                  t('settings.moderation.noMatchingFilters', 'No matching filters found') : 
+            {isError && !filtersData ? (
+              <ErrorState
+                title={t('settings.moderation.loadFailed', 'Could not load the word filters')}
+                onRetry={() => refetch()}
+                retrying={isFetching}
+                size="inline"
+              />
+            ) : filteredFilters.length === 0 ? (
+              <EmptyState
+                title={searchTerm ?
+                  t('settings.moderation.noMatchingFilters', 'No matching filters found') :
                   t('settings.moderation.noFilters', 'No word filters configured yet')
                 }
-              </div>
+                size="inline"
+              />
             ) : (
               filteredFilters.map((filter: WordFilter) => (
                 <div
@@ -303,10 +312,9 @@ export const WordFilterManager: React.FC = () => {
                           className="w-4 h-4 text-accent rounded focus:ring-accent"
                         />
                         <span className="font-medium text-heading">{filter.word}</span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSeverityBadgeClass(filter.severity)}`}>
-                          {getSeverityIcon(filter.severity)}
+                        <Badge tone={getSeverityTone(filter.severity)} icon={getSeverityIcon(filter.severity)}>
                           {filter.severity}
-                        </span>
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button

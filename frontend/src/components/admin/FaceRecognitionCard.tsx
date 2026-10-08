@@ -22,7 +22,7 @@ import { toast } from 'react-toastify';
 import { Users, RefreshCw, Trash2, AlertTriangle, ShieldCheck, SlidersHorizontal, ExternalLink } from 'lucide-react';
 import { PeopleManagerModal } from './PeopleManagerModal';
 
-import { Button, Card, Loading, useConfirm } from '../common';
+import { Button, Card, Loading, Notice, useConfirm } from '../common';
 import { api } from '../../config/api';
 
 interface FacesPayload {
@@ -311,8 +311,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
 
       {/* Consent obligation. Stated plainly and up front, because by the time
           someone has switched this on they have already processed the data. */}
-      <div className="flex gap-2 p-3 mb-4 rounded-lg bg-warning-soft border border-warning-line text-sm text-warning-text">
-        <ShieldCheck size={16} className="flex-shrink-0 mt-0.5" />
+      <Notice tone="warning" className="mb-4" icon={<ShieldCheck size={16} />}>
         <p>
           {t('admin.faces.consentNotice', {
             defaultValue:
@@ -333,7 +332,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
             <ExternalLink size={12} className="inline-block ml-0.5 -mt-0.5" aria-hidden />
           </a>
         </p>
-      </div>
+      </Notice>
 
       <label className="flex items-start gap-3 py-2 cursor-pointer">
         <input
@@ -382,14 +381,11 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
           admin deserves to know that before starting a 2,000-photo backfill
           rather than discovering it in their storage graph. */}
       {data.enabled && (
-        <div className="flex gap-2 p-3 mt-3 rounded-lg bg-subtle text-xs text-soft">
-          <AlertTriangle size={14} className="flex-shrink-0 mt-0.5 text-faint" />
-          <p>
-            {t('admin.faces.previewNotice', {
-              defaultValue: 'Scanning works on the preview-sized copy of each photo. Galleries that have not generated previews yet will create them during the first scan, which uses additional CPU and disk space.',
-            })}
-          </p>
-        </div>
+        <Notice tone="neutral" size="sm" className="mt-3" icon={<AlertTriangle size={14} />}>
+          {t('admin.faces.previewNotice', {
+            defaultValue: 'Scanning works on the preview-sized copy of each photo. Galleries that have not generated previews yet will create them during the first scan, which uses additional CPU and disk space.',
+          })}
+        </Notice>
       )}
 
       {/* Auto-categories (#1074 phase 3). Global, not per-event, which is why

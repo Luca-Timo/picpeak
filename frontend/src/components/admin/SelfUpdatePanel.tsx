@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, XCircle, Zap } from 'lucide-react';
-import { Button, Input } from '../common';
+import { Button, Input, Notice } from '../common';
 import { selfUpdateService, SelfUpdateAgentStatus, SelfUpdateStatus } from '../../services/selfUpdate.service';
 
 // Remembers that this browser started an update, across the reload the new
@@ -195,15 +195,13 @@ export const SelfUpdatePanel: React.FC = () => {
   };
 
   const shell = (children: React.ReactNode) => (
-    <div className="rounded-lg border border-info-line bg-info-soft p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Zap className="w-4 h-4 text-info-text flex-shrink-0" />
-        <h4 className="text-sm font-semibold text-heading">
-          {t('admin.updates.selfUpdate.title', 'Update from here')}
-        </h4>
-      </div>
-      {children}
-    </div>
+    <Notice
+      tone="info"
+      icon={<Zap className="w-4 h-4" />}
+      title={<span className="font-semibold">{t('admin.updates.selfUpdate.title', 'Update from here')}</span>}
+    >
+      <div className="mt-2 space-y-3">{children}</div>
+    </Notice>
   );
 
   const progressLine = (text: string) => (

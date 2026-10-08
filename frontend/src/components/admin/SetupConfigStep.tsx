@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { ShieldAlert } from 'lucide-react';
 
-import { Button, Input } from '../common';
+import { Button, Input, Notice } from '../common';
 import type { FeatureKey } from '../../services/featureFlags.service';
 import { businessProfileService } from '../../services/businessProfile.service';
 import { emailService, type EmailConfig } from '../../services/email.service';
@@ -202,12 +202,9 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
       {showInvoicing && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-heading">{t('setup.config.invoicing', 'Invoicing details')}</h3>
-          <div className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-soft p-3">
-            <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning-text" />
-            <p className="text-xs text-warning-text">
-              {t('setup.config.invoicingDisclaimer', 'Used on your invoices. Bank/IBAN and VAT details are your responsibility — verify them with your bank and Treuhänder/tax advisor.')}
-            </p>
-          </div>
+          <Notice tone="warning" size="sm" icon={<ShieldAlert className="h-4 w-4" />}>
+            {t('setup.config.invoicingDisclaimer', 'Used on your invoices. Bank/IBAN and VAT details are your responsibility — verify them with your bank and Treuhänder/tax advisor.')}
+          </Notice>
           <Input placeholder={t('setup.config.companyName', 'Company / legal name')} value={inv.companyName} onChange={invField('companyName')} />
           <Input placeholder={t('setup.config.addressLine1', 'Street and number')} value={inv.addressLine1} onChange={invField('addressLine1')} />
           <div className="grid grid-cols-3 gap-3">

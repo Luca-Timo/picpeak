@@ -11,7 +11,7 @@ import { uploadsService } from '../../services/uploads.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { getPhotoViewMode, setPhotoViewMode, type PhotoViewMode } from '../../utils/photoViewPrefs';
 import { defaultCategoryLabel, isVideoItem, mediaSplitLabel, selectLabel, splitMediaCount } from '../../utils/mediaCounts';
-import { Button, ColumnMenuHeader, useConfirm } from '../common';
+import { Badge, Button, ColumnMenuHeader, useConfirm } from '../common';
 import type { ColumnMenuOption } from '../common';
 import { PermissionGate } from './PermissionGate';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
@@ -970,7 +970,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                   key={photo.id}
                   data-testid={`admin-photo-row-${photo.id}`}
                   className={`group cursor-pointer transition-colors ${
-                    isSelected ? 'bg-accent-soft' : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/50'
+                    isSelected ? 'bg-accent-soft' : 'hover:bg-hover-soft'
                   } ${isRowDeleting ? 'opacity-50' : ''}`}
                   onClick={() => !isRowDeleting && onPhotoClick(photo, index)}
                 >
@@ -987,7 +987,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                         isSelected
                           ? 'bg-accent-dark border-accent-dark'
-                          : 'border-line-strong group-hover:border-neutral-400'
+                          : 'border-line-strong group-hover:border-faint'
                       }`}>
                         {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
                       </div>
@@ -1064,13 +1064,14 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                             <span className="flex-shrink-0">{reviewBadge(photo, 'soft')}</span>
                           )}
                           {isHidden && !photo.moderation_status && (
-                            <span
-                              className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-danger-soft text-danger-text text-[10px] font-medium"
+                            <Badge
+                              tone="danger"
+                              className="flex-shrink-0"
+                              icon={<EyeOff />}
                               title={t('admin.photos.hiddenTooltip', 'Hidden from guests — this photo is not shown in the client gallery.') as string}
                             >
-                              <EyeOff className="w-3 h-3" />
                               {t('admin.photos.hidden', 'Hidden')}
-                            </span>
+                            </Badge>
                           )}
                         </div>
                         {photo.original_filename && photo.original_filename !== photo.filename && (

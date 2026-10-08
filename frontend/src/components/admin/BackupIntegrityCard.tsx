@@ -13,7 +13,10 @@ import { useMutation } from '@tanstack/react-query';
 // Locale-aware formatters per [[feedback_respect_general_format_settings]].
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
-import { Card, Button } from '../common';
+import {
+  Card, Button, Notice,
+  Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell,
+} from '../common';
 import { adminService, BackupIntegrityReport } from '../../services/admin.service';
 
 /**
@@ -96,11 +99,11 @@ export const BackupIntegrityCard: React.FC = () => {
       </div>
 
       {runCheck.isError && (
-        <div className="mb-4 p-3 rounded-lg bg-danger-soft text-sm text-danger-text">
+        <Notice tone="danger" className="mb-4">
           {t('backup.integrity.error', 'Check failed: {{message}}', {
             message: (runCheck.error as Error)?.message ?? 'unknown error',
           })}
-        </div>
+        </Notice>
       )}
 
       {report && summary && (
@@ -244,44 +247,37 @@ const ResultTable: React.FC<{
 }> = ({ title, caption, rows }) => {
   const { t } = useTranslation();
   return (
-    <div className="mt-4 border border-line rounded-lg overflow-hidden">
-      <div className="p-3 bg-neutral-50 dark:bg-neutral-800/50 border-b border-line">
-        <h4 className="text-sm font-semibold text-heading">{title}</h4>
-        <p className="text-xs text-soft mt-1">{caption}</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 dark:bg-neutral-800/30">
-            <tr className="text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-3 py-2">{t('backup.integrity.results.table', 'Table')}</th>
-              <th className="px-3 py-2">{t('backup.integrity.results.rowId', 'Row id')}</th>
-              <th className="px-3 py-2">{t('backup.integrity.results.column', 'Column')}</th>
-              <th className="px-3 py-2">{t('backup.integrity.results.detail', 'Detail')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr
-                key={`${r.table}-${r.rowId}-${r.column}-${i}`}
-                className="border-t border-line"
-              >
-                <td className="px-3 py-2 font-mono text-xs text-body">
-                  {r.table}
-                </td>
-                <td className="px-3 py-2 tabular-nums text-body">
-                  {r.rowId}
-                </td>
-                <td className="px-3 py-2 font-mono text-xs text-body">
-                  {r.column}
-                </td>
-                <td className="px-3 py-2 font-mono text-xs text-body break-all">
-                  {r.detail}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="mt-4">
+      <h4 className="text-sm font-semibold text-heading">{title}</h4>
+      <p className="text-xs text-soft mt-1 mb-2">{caption}</p>
+      <Table>
+        <TableHead>
+          <tr>
+            <TableHeaderCell>{t('backup.integrity.results.table', 'Table')}</TableHeaderCell>
+            <TableHeaderCell>{t('backup.integrity.results.rowId', 'Row id')}</TableHeaderCell>
+            <TableHeaderCell>{t('backup.integrity.results.column', 'Column')}</TableHeaderCell>
+            <TableHeaderCell>{t('backup.integrity.results.detail', 'Detail')}</TableHeaderCell>
+          </tr>
+        </TableHead>
+        <TableBody>
+          {rows.map((r, i) => (
+            <TableRow key={`${r.table}-${r.rowId}-${r.column}-${i}`}>
+              <TableCell className="font-mono text-xs">
+                {r.table}
+              </TableCell>
+              <TableCell className="tabular-nums">
+                {r.rowId}
+              </TableCell>
+              <TableCell className="font-mono text-xs">
+                {r.column}
+              </TableCell>
+              <TableCell className="font-mono text-xs break-all">
+                {r.detail}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 };

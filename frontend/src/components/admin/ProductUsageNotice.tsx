@@ -65,7 +65,7 @@ export default function ProductUsageNotice() {
       aria-label={t('productUsage.title')}
     >
       <div className="flex items-start gap-3">
-        <Sparkles className="w-5 h-5 flex-shrink-0 mt-0.5 text-accent" />
+        <Sparkles className="w-5 h-5 flex-shrink-0 mt-0.5 text-on-accent-soft" />
         <div className="min-w-0 text-sm text-on-accent-soft">
           <p className="font-medium">{t('productUsage.noticeTitle')}</p>
           <p className="mt-0.5 text-on-accent-soft">
@@ -97,7 +97,7 @@ export default function ProductUsageNotice() {
                 server, not a session flag — so the label says "Ignore" and
                 this line says where to find it again. "Not now" implied the
                 invitation would come back, and it never does. */}
-            <span className="text-accent">
+            <span className="text-on-accent-soft opacity-80">
               {t('productUsage.ignoreHint')}
             </span>
           </div>

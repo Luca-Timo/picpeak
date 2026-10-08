@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Type } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Button, Card, useConfirm } from '../common';
+import { Button, Card, Notice, useConfirm } from '../common';
 import { PermissionGate } from './PermissionGate';
 import { pdfThemesService } from '../../services/pdfThemes.service';
 
@@ -103,11 +103,11 @@ export const PdfFontsCard: React.FC = () => {
       </div>
 
       {data?.legacyMoveFailure && (
-        <p role="status" className="mb-4 p-2 rounded border border-warning-line bg-warning-soft text-sm text-warning-text">
+        <Notice tone="warning" size="sm" className="mb-4">
           {t('branding.pdfFonts.legacyFailed', 'The font set before this update could not be moved: {{reason}}', {
             reason: t(`branding.pdfFonts.errors.${data.legacyMoveFailure.reason}`, data.legacyMoveFailure.reason),
           })}
-        </p>
+        </Notice>
       )}
 
       {fonts.length > 0 && (

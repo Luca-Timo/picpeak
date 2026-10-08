@@ -21,7 +21,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Input, Loading, useConfirm } from '../common';
+import { Badge, Button, Card, EmptyState, ErrorState, Input, Loading, useConfirm } from '../common';
 import { api } from '../../config/api';
 import { useMutationWithToast } from '../../hooks';
 // Per [[feedback_respect_general_format_settings]]: route every displayed
@@ -34,10 +34,10 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { backupErrorCode, backupErrorText } from '../../utils/backupErrors';
 
 const statusIcons = {
-  completed: { icon: CheckCircle, color: 'text-green-500' },
-  failed: { icon: XCircle, color: 'text-red-500' },
-  running: { icon: Loader2, color: 'text-blue-500 animate-spin' },
-  partial: { icon: AlertCircle, color: 'text-amber-500' }
+  completed: { icon: CheckCircle, color: 'text-success' },
+  failed: { icon: XCircle, color: 'text-danger' },
+  running: { icon: Loader2, color: 'text-info animate-spin' },
+  partial: { icon: AlertCircle, color: 'text-warning' }
 };
 
 // Codes DELETE /admin/backup/runs/:id answers with (issue 1711); each has a
@@ -67,7 +67,7 @@ export const BackupHistory = () => {
   const { format, formatTime, formatDistanceToNow } = useLocalizedDate();
 
   // Fetch backup history
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['backup-history', currentPage, searchTerm, filterStatus],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -153,7 +153,7 @@ export const BackupHistory = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-line-strong bg-panel text-heading rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+              className="px-3 py-2 border border-line-strong bg-panel text-heading rounded-md focus:outline-none focus:ring-accent focus:border-accent"
             >
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
@@ -200,24 +200,33 @@ export const BackupHistory = () => {
               </tr>
             </thead>
             <tbody className="bg-panel divide-y divide-line">
-              {backups.length === 0 ? (
+              {isError && !data ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-muted">
-                    <FileArchive className="h-12 w-12 mx-auto mb-3 text-neutral-300 dark:text-neutral-600" />
-                    <p className="text-lg font-medium text-heading">No backups found</p>
-                    <p className="text-sm mt-1">Backups will appear here once created</p>
+                  <td colSpan={6}>
+                    <ErrorState size="inline" onRetry={() => refetch()} retrying={isFetching} />
+                  </td>
+                </tr>
+              ) : backups.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState
+                      size="inline"
+                      icon={<FileArchive />}
+                      title="No backups found"
+                      description="Backups will appear here once created"
+                    />
                   </td>
                 </tr>
               ) : (
                 backups.map((backup) => {
                   const StatusIcon = statusIcons[backup.status]?.icon || AlertCircle;
-                  const statusColor = statusIcons[backup.status]?.color || 'text-gray-500';
+                  const statusColor = statusIcons[backup.status]?.color || 'text-muted';
                   const isExpanded = expandedRows.has(backup.id);
                   const stats = backup.statistics || {};
 
                   return (
                     <React.Fragment key={backup.id}>
-                      <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-700/50">
+                      <tr className="hover:bg-hover-soft">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <StatusIcon className={`h-5 w-5 ${statusColor}`} />
@@ -237,9 +246,9 @@ export const BackupHistory = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 capitalize">
+                          <Badge tone="info" className="capitalize">
                             {backup.backup_type || 'Manual'}
-                          </span>
+                          </Badge>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <p className="text-sm text-heading">
@@ -274,7 +283,7 @@ export const BackupHistory = () => {
                             )}
                             <button
                               onClick={() => handleDelete(backup)}
-                              className="text-faint hover:text-red-600"
+                              className="text-faint hover:text-danger-text"
                               title={t('backup.actions.delete')}
                               disabled={deleteMutation.isPending}
                               aria-label={t('backup.actions.delete')}
@@ -288,7 +297,7 @@ export const BackupHistory = () => {
                       {/* Expanded Details Row */}
                       {isExpanded && (
                         <tr>
-                          <td colSpan={6} className="px-6 py-4 bg-neutral-50 dark:bg-neutral-700/50">
+                          <td colSpan={6} className="px-6 py-4 bg-subtle">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {/* Backup Details */}
                               <div className="space-y-2">
@@ -325,7 +334,7 @@ export const BackupHistory = () => {
                                 <h4 className="font-medium text-heading">{t('backup.history.details.contentBackedUp')}</h4>
                                 <div className="space-y-2">
                                   <div className="flex items-center space-x-2">
-                                    <Database className={`h-4 w-4 ${stats.database_backed_up ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                    <Database className={`h-4 w-4 ${stats.database_backed_up ? 'text-success' : 'text-faint'}`} />
                                     <span className="text-sm text-body">{t('backup.configuration.whatToBackup.database')}</span>
                                   </div>
                                   {(() => {
@@ -347,7 +356,7 @@ export const BackupHistory = () => {
                                         <>
                                           {entries.map(([pathKey, info]) => (
                                             <div key={pathKey} className="flex items-center space-x-2">
-                                              <FileArchive className={`h-4 w-4 ${info.count > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                              <FileArchive className={`h-4 w-4 ${info.count > 0 ? 'text-success' : 'text-faint'}`} />
                                               <span className="text-sm text-body font-mono">
                                                 {pathKey}
                                               </span>
@@ -375,19 +384,19 @@ export const BackupHistory = () => {
                                     return (
                                       <>
                                         <div className="flex items-center space-x-2">
-                                          <Image className={`h-4 w-4 ${stats.photos_backed_up > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <Image className={`h-4 w-4 ${stats.photos_backed_up > 0 ? 'text-success' : 'text-faint'}`} />
                                           <span className="text-sm text-body">
                                             Photos ({stats.photos_backed_up || 0} of {stats.total_photos || 0})
                                           </span>
                                         </div>
                                         <div className="flex items-center space-x-2">
-                                          <FileArchive className={`h-4 w-4 ${stats.archives_backed_up > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <FileArchive className={`h-4 w-4 ${stats.archives_backed_up > 0 ? 'text-success' : 'text-faint'}`} />
                                           <span className="text-sm text-body">
                                             Archives ({stats.archives_backed_up || 0})
                                           </span>
                                         </div>
                                         <div className="flex items-center space-x-2">
-                                          <FileArchive className={`h-4 w-4 ${other > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <FileArchive className={`h-4 w-4 ${other > 0 ? 'text-success' : 'text-faint'}`} />
                                           <span className="text-sm text-body">
                                             {t('backup.history.details.otherFiles', 'Business documents & other')} ({other})
                                           </span>
@@ -406,8 +415,8 @@ export const BackupHistory = () => {
                               {/* Error Information */}
                               {backup.error_message && (
                                 <div className="space-y-2">
-                                  <h4 className="font-medium text-red-900 dark:text-red-200">{t('backup.history.details.errorDetails')}</h4>
-                                  <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 p-2 rounded">
+                                  <h4 className="font-medium text-danger-text">{t('backup.history.details.errorDetails')}</h4>
+                                  <p className="text-sm text-danger-text bg-danger-soft p-2 rounded">
                                     {backupErrorText(backupErrorCode(backup.error_message), t) ?? backup.error_message}
                                   </p>
                                 </div>
@@ -484,7 +493,7 @@ export const BackupHistory = () => {
                           onClick={() => setCurrentPage(pageNum)}
                           className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                             currentPage === pageNum
-                              ? 'z-10 bg-accent-dark/15 border-primary text-primary'
+                              ? 'z-10 bg-accent-soft border-accent text-on-accent-soft'
                               : 'bg-panel border-line-strong text-body hover:bg-hover'
                           }`}
                         >

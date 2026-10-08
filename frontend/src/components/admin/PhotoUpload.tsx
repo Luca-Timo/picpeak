@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Upload, X, Image, Info, FolderUp, FilePlus } from 'lucide-react';
-import { Button } from '../common';
+import { Upload, X, Image, FolderUp, FilePlus } from 'lucide-react';
+import { Button, Notice } from '../common';
 import { clsx } from 'clsx';
 import { toast } from 'react-toastify';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -464,13 +464,9 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
       {/* One session at a time: the bar tracks a single upload, so a second
           one waits until it is through. */}
       {isUploading && (
-        <div
-          role="status"
-          className="flex items-start gap-2 rounded-lg border border-line bg-neutral-50 dark:bg-neutral-800/60 p-3 text-sm text-body"
-        >
-          <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted" />
-          <p>{t('upload.alreadyRunning', 'An upload is already running. It has to finish before the next one can start.')}</p>
-        </div>
+        <Notice tone="neutral">
+          {t('upload.alreadyRunning', 'An upload is already running. It has to finish before the next one can start.')}
+        </Notice>
       )}
 
       {/* Target folder (issue 1786): where files without a folder of their
@@ -657,7 +653,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
                     e.stopPropagation();
                     removeFile(index);
                   }}
-                  className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded"
+                  className="p-1 hover:bg-fill rounded"
                 >
                   <X className="w-4 h-4" />
                 </button>

@@ -21,7 +21,7 @@ import {
   FileText, Send, CheckCircle2, XCircle, Clock,
   Receipt, AlertTriangle, TrendingUp, Wallet,
 } from 'lucide-react';
-import { Card } from '../common';
+import { Card, ErrorState } from '../common';
 import { fetchCrmOverview, type CrmOverviewStats } from '../../services/bills.service';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
@@ -62,7 +62,7 @@ export const CrmOverviewSection: React.FC = () => {
   const quotesBlock     = quotesOn && showQuotes;
   const invoicesBlock   = billsOn && showInvoices;
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['crm-overview'],
     queryFn: () => fetchCrmOverview(),
     enabled: anyCrm,
@@ -88,10 +88,15 @@ export const CrmOverviewSection: React.FC = () => {
         <h2 className="text-xl font-bold text-heading mb-2">
           {t('crmOverview.title', 'CRM overview')}
         </h2>
-        <p className="text-sm text-danger-text">
-          {t('crmOverview.loadError',
-            'Could not load CRM stats. Check that you have bills.view or quotes.view permission and that the backend is on the latest build.')}
-        </p>
+        <Card>
+          <ErrorState
+            size="inline"
+            message={t('crmOverview.loadError',
+              'Could not load CRM stats. Check that you have bills.view or quotes.view permission and that the backend is on the latest build.')}
+            onRetry={() => refetch()}
+            retrying={isFetching}
+          />
+        </Card>
       </section>
     );
   }

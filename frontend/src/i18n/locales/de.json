@@ -3189,7 +3189,8 @@
       "moderateDescription": "Kommentar erfordert manuelle Freigabe, bevor er sichtbar wird",
       "highDescription": "Kommentar wird automatisch ausgeblendet und erfordert Admin-Überprüfung",
       "blockDescription": "Kommentar wird sofort abgelehnt und kann nicht eingereicht werden",
-      "deleteAction": "Filter löschen"
+      "deleteAction": "Filter löschen",
+      "loadFailed": "Die Wortfilter konnten nicht geladen werden"
     },
     "styling": {
       "title": "Benutzerdefiniertes CSS"
@@ -3283,7 +3284,8 @@
       "revoke": "Widerrufen",
       "empty": "Noch keine Tokens. Generieren Sie oben einen, um zu beginnen.",
       "preview": "Vorschau",
-      "revokeAction": "Token widerrufen"
+      "revokeAction": "Token widerrufen",
+      "loadFailed": "Die API-Tokens konnten nicht geladen werden"
     },
     "webhooks": {
       "title": "Webhooks",
@@ -3363,7 +3365,8 @@
           "failed": "fehlgeschlagen"
         }
       },
-      "deleteAction": "Webhook löschen"
+      "deleteAction": "Webhook löschen",
+      "loadFailed": "Die Webhooks konnten nicht geladen werden"
     },
     "sectionLabel": "Einstellungsbereich",
     "navAriaLabel": "Einstellungsnavigation",
@@ -5529,7 +5532,8 @@
         "no_attachment": "Kein Anhang",
         "duplicate": "Duplikat",
         "error": "Fehler"
-      }
+      },
+      "loadFailed": "Empfangene E-Mails konnten nicht geladen werden"
     },
     "sentEmails": {
       "tab": "Gesendete E-Mails",
@@ -5557,7 +5561,8 @@
       "retries_one": "{{count}} Versuch",
       "retries_other": "{{count}} Versuche",
       "pagination_one": "Seite {{page}} von {{total}} · {{count}} E-Mail",
-      "pagination_other": "Seite {{page}} von {{total}} · {{count}} E-Mails"
+      "pagination_other": "Seite {{page}} von {{total}} · {{count}} E-Mails",
+      "loadFailed": "Gesendete E-Mails konnten nicht geladen werden"
     },
     "commonSmtpSettings": "Häufige SMTP-Einstellungen:",
     "editTemplate": "Vorlage bearbeiten",

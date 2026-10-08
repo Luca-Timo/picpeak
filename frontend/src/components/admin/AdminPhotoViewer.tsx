@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminPhoto } from '../../services/photos.service';
 import { photosService } from '../../services/photos.service';
 import { feedbackService, type PhotoFeedback, type FeedbackSummary } from '../../services/feedback.service';
-import { Button, useConfirm } from '../common';
+import { Badge, Button, useConfirm } from '../common';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { AdminAuthenticatedVideo } from './AdminAuthenticatedVideo';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
@@ -654,22 +654,19 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
                                   the status tints come from the dark palette. */}
                               <div className="ui-dark flex items-center gap-1">
                                 {!comment.is_approved && !comment.is_hidden && (
-                                  <span className="text-xs bg-warning-soft text-warning-text px-2 py-1 rounded flex items-center gap-1">
-                                    <AlertCircle className="w-3 h-3" />
+                                  <Badge tone="warning" icon={<AlertCircle />}>
                                     Pending
-                                  </span>
+                                  </Badge>
                                 )}
                                 {comment.is_approved && !comment.is_hidden && (
-                                  <span className="text-xs bg-success-soft text-success-text px-2 py-1 rounded flex items-center gap-1">
-                                    <CheckCircle className="w-3 h-3" />
+                                  <Badge tone="success" icon={<CheckCircle />}>
                                     Approved
-                                  </span>
+                                  </Badge>
                                 )}
                                 {comment.is_hidden && (
-                                  <span className="text-xs bg-danger-soft text-danger-text px-2 py-1 rounded flex items-center gap-1">
-                                    <XCircle className="w-3 h-3" />
+                                  <Badge tone="danger" icon={<XCircle />}>
                                     Hidden
-                                  </span>
+                                  </Badge>
                                 )}
                               </div>
                             </div>

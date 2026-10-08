@@ -9,6 +9,7 @@ import {
   shouldShowUpdateChip,
 } from '../../utils/updateDismissal';
 import { UpdateAvailableModal } from './UpdateAvailableModal';
+import { Badge } from '../common';
 import packageJson from '../../../package.json';
 
 // Frontend version from package.json
@@ -65,9 +66,9 @@ export const VersionInfo: React.FC = () => {
   });
 
   const channelBadge = versionInfo?.channel === 'beta' ? (
-    <span className="ml-1 px-1.5 py-0.5 text-xs bg-warning-soft text-warning-text rounded">
+    <Badge tone="warning" caps className="ml-1">
       {t('admin.updates.beta', 'BETA')}
-    </span>
+    </Badge>
   ) : null;
 
   const latestVersion = updateInfo?.latest?.forChannel;

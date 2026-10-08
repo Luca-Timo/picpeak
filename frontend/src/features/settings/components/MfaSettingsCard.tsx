@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { ShieldCheck, ShieldOff, Copy, Download, Check, KeyRound, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, ShieldOff, Copy, Download, Check, KeyRound } from 'lucide-react';
 
-import { Button, Card, Input, Loading, useConfirm } from '../../../components/common';
+import { Button, Card, Input, Loading, Notice, useConfirm } from '../../../components/common';
 import { mfaService } from '../../../services/mfa.service';
 
 // Per-user admin TOTP MFA management (issue #738). Lives on the admin's own
@@ -47,10 +47,7 @@ const RecoveryCodesPanel: React.FC<RecoveryCodesPanelProps> = ({ codes, onConfir
 
   return (
     <div className="space-y-4">
-      <div className="p-4 rounded-lg bg-warning-soft border border-warning-line flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-warning-text flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-warning-text">{t('settings.mfa.recoveryCodesWarning')}</p>
-      </div>
+      <Notice tone="warning">{t('settings.mfa.recoveryCodesWarning')}</Notice>
 
       <div className="grid grid-cols-2 gap-2 p-4 rounded-lg bg-subtle border border-line font-mono text-sm text-heading">
         {codes.map((code) => (
@@ -189,10 +186,9 @@ export const MfaSettingsCard: React.FC = () => {
       ) : status?.enabled ? (
         /* ---------------- Enrolled ---------------- */
         <div className="space-y-4">
-          <div className="p-3 rounded-lg bg-success-soft border border-success-line flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-success-text flex-shrink-0" />
-            <span className="text-sm text-success-text">{t('settings.mfa.enabledBadge')}</span>
-          </div>
+          <Notice tone="success" icon={<ShieldCheck className="w-5 h-5" />}>
+            {t('settings.mfa.enabledBadge')}
+          </Notice>
 
           <p className="text-sm text-soft">
             {t('settings.mfa.recoveryCodesRemaining', { count: status.recoveryCodesRemaining })}

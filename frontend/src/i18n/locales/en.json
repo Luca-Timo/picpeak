@@ -2583,7 +2583,8 @@
       "moderateDescription": "Comment requires manual approval before being visible",
       "highDescription": "Comment is automatically hidden and requires admin review",
       "blockDescription": "Comment is rejected immediately and cannot be submitted",
-      "deleteAction": "Delete filter"
+      "deleteAction": "Delete filter",
+      "loadFailed": "Could not load the word filters"
     },
     "styling": {
       "title": "Custom CSS"
@@ -2744,7 +2745,8 @@
       "revoke": "Revoke",
       "empty": "No tokens yet. Generate one above to get started.",
       "preview": "Preview",
-      "revokeAction": "Revoke token"
+      "revokeAction": "Revoke token",
+      "loadFailed": "Could not load the API tokens"
     },
     "webhooks": {
       "title": "Webhooks",
@@ -2824,7 +2826,8 @@
           "failed": "failed"
         }
       },
-      "deleteAction": "Delete webhook"
+      "deleteAction": "Delete webhook",
+      "loadFailed": "Could not load the webhooks"
     },
     "sectionLabel": "Settings section",
     "navAriaLabel": "Settings navigation",
@@ -5040,7 +5043,8 @@
         "no_attachment": "No attachment",
         "duplicate": "Duplicate",
         "error": "Error"
-      }
+      },
+      "loadFailed": "Could not load received emails"
     },
     "sentEmails": {
       "tab": "Sent emails",
@@ -5068,7 +5072,8 @@
       "retries_one": "{{count}} retries",
       "retries_other": "{{count}} retries",
       "pagination_one": "Page {{page}} of {{total}} · {{count}} emails",
-      "pagination_other": "Page {{page}} of {{total}} · {{count}} emails"
+      "pagination_other": "Page {{page}} of {{total}} · {{count}} emails",
+      "loadFailed": "Could not load sent emails"
     },
     "commonSmtpSettings": "Common SMTP Settings:",
     "editTemplate": "Edit Template",

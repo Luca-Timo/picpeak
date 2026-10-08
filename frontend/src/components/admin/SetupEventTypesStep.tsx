@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { Plus, X } from 'lucide-react';
 
-import { Button, Input, Loading } from '../common';
+import { Button, Input, Loading, Notice } from '../common';
 import { eventTypesService, EventType } from '../../services/eventTypes.service';
 
 interface Props {
@@ -163,7 +163,7 @@ export const SetupEventTypesStep: React.FC<Props> = ({ onDone }) => {
       // Catalog unreadable — don't trap the user; the defaults stay seeded and
       // remain editable later in Settings → Event Types.
       <div className="space-y-6">
-        <p className="text-sm text-soft">{t('setup.eventTypes.loadFailed')}</p>
+        <Notice tone="warning">{t('setup.eventTypes.loadFailed')}</Notice>
         <Button type="button" variant="primary" size="lg" className="w-full" onClick={onDone}>
           {t('setup.continue')}
         </Button>

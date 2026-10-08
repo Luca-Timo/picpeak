@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Bell, Mail, Send, RefreshCw } from 'lucide-react';
-import { Card, Button, Input } from '../../../components/common';
+import { Card, Button, Input, Notice } from '../../../components/common';
 import { api } from '../../../config/api';
 import { toast } from 'react-toastify';
 
@@ -212,13 +212,11 @@ export const UpdateNotificationSettings: React.FC<UpdateNotificationSettingsProp
 
         {/* Last notified version */}
         {settings?.lastNotifiedVersion && (
-          <div className="p-3 bg-info-soft rounded-lg">
-            <p className="text-sm text-info-text">
-              {t('settings.updateNotifications.lastNotified', 'Last notification sent for version: {{version}}', {
-                version: settings.lastNotifiedVersion
-              })}
-            </p>
-          </div>
+          <Notice tone="info">
+            {t('settings.updateNotifications.lastNotified', 'Last notification sent for version: {{version}}', {
+              version: settings.lastNotifiedVersion
+            })}
+          </Notice>
         )}
 
         {/* Action Buttons */}

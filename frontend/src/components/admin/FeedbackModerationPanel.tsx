@@ -8,7 +8,7 @@ import {
   CheckCircle,
   User
 } from 'lucide-react';
-import { Card, Loading, Button, useConfirm } from '../common';
+import { Badge, Card, ErrorState, Loading, Button, useConfirm } from '../common';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { feedbackService, type FeedbackResponse, type PhotoFeedback } from '../../services/feedback.service';
 import { toast } from 'react-toastify';
@@ -35,7 +35,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
   const showAllModal = useModal();
 
   // Fetch pending feedback
-  const { data: feedbackData, isLoading } = useQuery<FeedbackResponse>({
+  const { data: feedbackData, isLoading, isError, isFetching, refetch } = useQuery<FeedbackResponse>({
     queryKey: ['event-feedback-moderation', eventId],
     queryFn: () => feedbackService.getEventFeedback(eventId.toString(), {
       type: 'comment',
@@ -85,13 +85,15 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
             {t('feedback.pendingModeration', 'Pending Moderation')}
           </h2>
           {hasPending && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-soft text-warning-text">
+            <Badge tone="warning">
               {pendingComments.length} {t('feedback.pending', 'pending')}
-            </span>
+            </Badge>
           )}
         </div>
 
-        {!hasPending ? (
+        {isError && !feedbackData ? (
+          <ErrorState size="inline" onRetry={() => refetch()} retrying={isFetching} />
+        ) : !hasPending ? (
           <div className="text-center py-8">
             <CheckCircle className="w-12 h-12 text-success mx-auto mb-3" />
             <p className="text-body">{t('feedback.noPendingComments', 'No comments pending moderation')}</p>

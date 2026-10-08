@@ -17,7 +17,8 @@ import {
   CheckCircle2, Download, EyeOff, FolderOpen, Link2, Share2, Trash2, Upload, XCircle,
 } from 'lucide-react';
 
-import { Button, Card, Loading, useConfirm } from '../common';
+import { Badge, Button, Card, EmptyState, ErrorState, Loading, useConfirm } from '../common';
+import type { BadgeTone } from '../common';
 import { PermissionGate } from './PermissionGate';
 import { ProjectSelect } from './ProjectSelect';
 import { CustomerDocumentRequests } from './CustomerDocumentRequests';
@@ -35,10 +36,10 @@ import {
 
 const PERMISSION = 'customers.documents.manage';
 
-const STATUS_STYLE: Record<AdminCustomerDocument['status'], string> = {
-  pending: 'bg-warning-soft text-warning-text',
-  clean: 'bg-success-soft text-success-text',
-  rejected: 'bg-danger-soft text-danger-text',
+const STATUS_TONE: Record<AdminCustomerDocument['status'], BadgeTone> = {
+  pending: 'warning',
+  clean: 'success',
+  rejected: 'danger',
 };
 
 const selectClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 h-9 rounded-lg border border-line-strong bg-panel px-2 text-sm text-heading';
@@ -72,7 +73,7 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
     qc.invalidateQueries({ queryKey: ['admin-customer-document-requests', customerId] }),
     qc.invalidateQueries({ queryKey: ['admin-customer-activity', customerId] }),
   ]);
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey,
     queryFn: () => customerDocumentsAdminService.list(customerId),
     enabled: canManage,
@@ -288,14 +289,15 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
         </div>
       </PermissionGate>
 
-      {isLoading ? <Loading /> : isError ? (
-        <p className="text-sm text-danger-text">
-          {t('customers.documents.loadError', 'Could not load documents.')}
-        </p>
+      {isLoading ? <Loading /> : isError && !data ? (
+        <ErrorState
+          size="inline"
+          title={t('customers.documents.loadError', 'Could not load documents.')}
+          onRetry={() => refetch()}
+          retrying={isFetching}
+        />
       ) : documents.length === 0 ? (
-        <p className="text-sm text-muted">
-          {t('customers.documents.empty', 'No documents yet.')}
-        </p>
+        <EmptyState size="inline" title={t('customers.documents.empty', 'No documents yet.')} />
       ) : (
         <ul className="divide-y divide-line">
           {documents.map((doc) => {
@@ -306,14 +308,14 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-heading break-all">{doc.name}</span>
-                      <span className={`text-[11px] px-1.5 py-0.5 rounded font-semibold ${STATUS_STYLE[doc.status]}`}>
+                      <Badge tone={STATUS_TONE[doc.status]}>
                         {statusLabel(doc.status)}
-                      </span>
-                      <span className="text-[11px] px-1.5 py-0.5 rounded font-semibold bg-subtle text-body">
+                      </Badge>
+                      <Badge>
                         {doc.shared
                           ? t('customers.documents.shared', 'Shared')
                           : t('customers.documents.notShared', 'Not shared')}
-                      </span>
+                      </Badge>
                     </div>
                     <p className="text-xs text-muted mt-1">
                       {doc.uploaderType === 'customer'
