@@ -40,3 +40,5 @@ export { Tabs, type TabItem } from './Tabs';
 export { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from './Table';
 export { EmptyState, ErrorState } from './EmptyState';
 export { Switch } from './Switch';
+export { ActionMenu, type ActionMenuItem } from './ActionMenu';
+export { usePrompt, type PromptOptions } from './PromptDialog';

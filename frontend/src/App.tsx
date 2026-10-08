@@ -63,6 +63,7 @@ import { WorkflowApprovalsPage } from './pages/admin/workflows/WorkflowApprovals
 import { WorkflowEditorPage } from './pages/admin/workflows/WorkflowEditorPage';
 import { ContractsListPage } from './pages/admin/contracts/ContractsListPage';
 import { ContractEditorPage } from './pages/admin/contracts/ContractEditorPage';
+import { RedirectToRecord } from './components/admin/RedirectToRecord';
 import { ContractDetailPage } from './pages/admin/contracts/ContractDetailPage';
 import { BlockLibraryPage } from './pages/admin/contracts/BlockLibraryPage';
 import { ContractTemplatesPage } from './pages/admin/contracts/ContractTemplatesPage';
@@ -342,7 +343,7 @@ function App() {
                             <Route path="quotes/catalog/templates/:id" element={<QuoteTemplateEditorPage />} />
                             <Route path="quotes/new" element={<QuoteEditorPage />} />
                             <Route path="quotes/:id" element={<QuoteDetailPage />} />
-                            <Route path="quotes/:id/edit" element={<QuoteEditorPage />} />
+                            <Route path="quotes/:id/edit" element={<RedirectToRecord base="/admin/clients/quotes" />} />
                           </Route>
                           {/* Project Overview (CRM) — admin-only grouping
                               layer above events, gated by `projects`. */}
