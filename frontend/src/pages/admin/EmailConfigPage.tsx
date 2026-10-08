@@ -35,6 +35,7 @@ import { SUPPORTED_LANGUAGES } from "../../components/common/LanguageSelector.ts
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
 import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
 import { emailColorsFromBranding, lowListPanelContrast } from '../../utils/emailBrandingSync';
+import { ColorPickerRow } from '../../components/admin/theme-customizer/ColorPickerRow';
 
 /**
  * Template categorisation (migration 098). Sidebar sections render
@@ -205,7 +206,8 @@ export const EmailConfigPage: React.FC = () => {
   // default to the literals previously hard-coded into emailProcessor.js,
   // which means an admin who never opens this card sees emails render
   // exactly as before. Touching any picker enables full email theming.
-  const [emailPrimaryColor, setEmailPrimaryColor] = useState('#5C8762');
+  // Empty: follows the brand's filled accent (Branding › Colours).
+  const [emailPrimaryColor, setEmailPrimaryColor] = useState('');
   const [emailSecondaryColor, setEmailSecondaryColor] = useState('#f9f9f9');
   const [emailBodyBgColor, setEmailBodyBgColor] = useState('#f5f5f5');
   const [emailContainerBgColor, setEmailContainerBgColor] = useState('#ffffff');
@@ -262,6 +264,9 @@ export const EmailConfigPage: React.FC = () => {
 
   // Server snapshots for the shared save bar: the bar is dirty when a draft
   // differs from these, and Discard puts the draft back.
+  // What an empty Primary follows: the brand's filled accent.
+  const brandAccent: string = (allSettings?.theme_config?.accentDarkColor as string | undefined)
+    || (allSettings?.theme_config?.primaryColor as string | undefined) || '#5C8762';
   const colorsDraft = {
     primary: emailPrimaryColor, secondary: emailSecondaryColor, bodyBg: emailBodyBgColor,
     containerBg: emailContainerBgColor, listBg: emailListBgColor, bodyText: emailBodyTextColor,
@@ -279,7 +284,7 @@ export const EmailConfigPage: React.FC = () => {
   React.useEffect(() => {
     if (allSettings) {
       const next = {
-        primary: allSettings.email_primary_color || '#5C8762',
+        primary: allSettings.email_primary_color || '',
         secondary: allSettings.email_secondary_color || '#f9f9f9',
         bodyBg: allSettings.email_body_bg_color || '#f5f5f5',
         containerBg: allSettings.email_container_bg_color || '#ffffff',
@@ -417,7 +422,8 @@ export const EmailConfigPage: React.FC = () => {
    */
   const handleSyncFromBranding = () => {
     const c = emailColorsFromBranding(allSettings?.theme_config);
-    setEmailPrimaryColor(c.primary);
+    // Primary follows Colours on its own once it is empty.
+    setEmailPrimaryColor('');
     setEmailSecondaryColor(c.secondary);
     setEmailBodyBgColor(c.bodyBg);
     setEmailContainerBgColor(c.containerBg);
@@ -891,8 +897,19 @@ export const EmailConfigPage: React.FC = () => {
                 state is local to this page and saved through a different
                 endpoint, so reuse would be more friction than value). */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <ColorPickerRow
+                label={t('email.primaryColor', 'Primary')}
+                help={t('email.primaryColorHelp', 'Header bar, H2 headings, button background, link colour. Maps to Branding → Accent (filled).')}
+                value={emailPrimaryColor || brandAccent}
+                fallback={brandAccent}
+                onChange={setEmailPrimaryColor}
+                onReset={() => setEmailPrimaryColor('')}
+                resetVisible={!!emailPrimaryColor}
+                resetLabel={t('email.followColors', 'Follow Colours')}
+                hint={emailPrimaryColor ? undefined : t('email.primaryFollowsColors', 'Follows Branding › Colours')}
+              />
               {[
-                { label: t('email.primaryColor', 'Primary'), help: t('email.primaryColorHelp', 'Header bar, H2 headings, button background, link colour. Maps to Branding → Accent (filled).'), value: emailPrimaryColor, setter: setEmailPrimaryColor, fallback: '#5C8762' },
+
                 { label: t('email.secondaryColor', 'Footer background'), help: t('email.secondaryColorHelp', 'Footer bar background. Maps to Branding → Surface.'), value: emailSecondaryColor, setter: setEmailSecondaryColor, fallback: '#f9f9f9' },
                 { label: t('email.bodyBgColor', 'Page background'), help: t('email.bodyBgColorHelp', 'The wrapper around the email card — what the recipient sees behind the email itself. Maps to Branding → Background.'), value: emailBodyBgColor, setter: setEmailBodyBgColor, fallback: '#f5f5f5' },
                 { label: t('email.containerBgColor', 'Email card'), help: t('email.containerBgColorHelp', 'The white card that holds the email content. Maps to Branding → Surface.'), value: emailContainerBgColor, setter: setEmailContainerBgColor, fallback: '#ffffff' },
@@ -901,29 +918,7 @@ export const EmailConfigPage: React.FC = () => {
                 { label: t('email.mutedTextColor', 'Footer text'), help: t('email.mutedTextColorHelp', 'Footer text and copyright line. Maps to Branding → Secondary text.'), value: emailMutedTextColor, setter: setEmailMutedTextColor, fallback: '#666666' },
                 { label: t('email.buttonTextColor', 'Button text'), help: t('email.buttonTextColorHelp', 'Text colour on filled buttons. Should contrast cleanly against the Primary colour. No Branding equivalent — usually white.'), value: emailButtonTextColor, setter: setEmailButtonTextColor, fallback: '#ffffff' },
               ].map(({ label, help, value, setter, fallback }) => (
-                <div key={label}>
-                  <label className="flex items-center gap-1.5 text-sm font-medium text-body mb-2">
-                    {label}
-                    <span className="info-tooltip text-faint" data-tooltip={help} tabIndex={0}>
-                      <Info className="w-3.5 h-3.5" />
-                    </span>
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={value}
-                      onChange={(e) => setter(e.target.value)}
-                      className="w-10 h-10 rounded border border-line-strong cursor-pointer"
-                    />
-                    <Input
-                      type="text"
-                      value={value}
-                      onChange={(e) => setter(e.target.value)}
-                      className="w-32"
-                      placeholder={fallback}
-                    />
-                  </div>
-                </div>
+                <ColorPickerRow key={label} label={label} help={help} value={value} fallback={fallback} onChange={setter} />
               ))}
             </div>
 

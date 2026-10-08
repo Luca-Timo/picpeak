@@ -22,11 +22,16 @@ export const ColorPickerRow: React.FC<{
   /** Offers "Reset" when the value differs from this. */
   defaultValue?: string;
   onReset?: () => void;
+  /** Overrides when the reset shows, and what it says. */
+  resetVisible?: boolean;
+  resetLabel?: string;
+  /** One muted line under the row, e.g. where an unset value comes from. */
+  hint?: string;
   onFocusChange?: (focused: boolean) => void;
-}> = ({ label, help, value, fallback, onChange, warnings = [], defaultValue, onReset, onFocusChange }) => {
+}> = ({ label, help, value, fallback, onChange, warnings = [], defaultValue, onReset, resetVisible, resetLabel, hint, onFocusChange }) => {
   const { t } = useTranslation();
   const inputId = React.useId();
-  const canReset = !!onReset && !!defaultValue && value.toLowerCase() !== defaultValue.toLowerCase();
+  const canReset = !!onReset && (resetVisible ?? (!!defaultValue && value.toLowerCase() !== defaultValue.toLowerCase()));
   return (
     <div
       onMouseEnter={() => onFocusChange?.(true)}
@@ -48,7 +53,7 @@ export const ColorPickerRow: React.FC<{
             className="ml-auto inline-flex items-center gap-1 text-xs text-muted hover:text-body"
           >
             <RotateCcw className="w-3 h-3" />
-            {t('branding.resetColor', 'Default')}
+            {resetLabel || t('branding.resetColor', 'Default')}
           </button>
         )}
       </div>
@@ -68,6 +73,7 @@ export const ColorPickerRow: React.FC<{
           className="flex-1"
         />
       </div>
+      {hint && <p className="mt-1.5 text-xs text-muted">{hint}</p>}
       {warnings.map((warning) => (
         <p key={warning} className="mt-1.5 flex items-start gap-1.5 text-xs text-warning-text">
           <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-px" aria-hidden="true" />

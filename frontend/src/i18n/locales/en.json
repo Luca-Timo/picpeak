@@ -5159,7 +5159,9 @@
     },
     "signatureOn": "Footer signature is on — your business address is appended to automatic emails. Replies you write in Messages are sent as typed.",
     "signatureOff": "Footer signature is off — emails show the logo and company name only.",
-    "signatureEdit": "Edit in Business profile"
+    "signatureEdit": "Edit in Business profile",
+    "followColors": "Follow Colours",
+    "primaryFollowsColors": "Follows Branding › Colours"
   },
   "cms": {
     "title": "CMS Pages",

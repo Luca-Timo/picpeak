@@ -408,6 +408,29 @@ function renderEmailSignatureText(signature, { brandingCompanyName, language } =
 // before it is interpolated into <style>, style="" and bgcolor="".
 const { sanitizeCssColor } = require('../utils/cssSanitizer');
 const { readableTextOn, dividerOn } = require('../utils/colorContrast');
+const { loadBrandingTheme } = require('./galleryTheme');
+
+// The green every seeded template and the old defaults used. A template that
+// still carries it gets the email accent instead (wrapEmailHtml).
+const LEGACY_EMAIL_GREEN = '#5C8762';
+
+/**
+ * The email accent: Settings → Email → Primary when set, else the brand's
+ * filled accent from Branding › Colours, else the legacy green. The button
+ * label is the configured one, else whatever reads on that accent.
+ */
+async function resolveEmailAccent(configuredPrimary, configuredButtonText) {
+  let primary = sanitizeCssColor(configuredPrimary || '') || null;
+  if (!primary) {
+    try {
+      const brand = await loadBrandingTheme();
+      primary = sanitizeCssColor((brand && (brand.accentDarkColor || brand.primaryColor)) || '') || null;
+    } catch (_) { /* fall through to the legacy green */ }
+  }
+  primary = primary || LEGACY_EMAIL_GREEN;
+  const buttonText = sanitizeCssColor(configuredButtonText || '') || readableTextOn(primary, '#ffffff');
+  return { primary, buttonText };
+}
 
 function isUsableLogoUrl(value) {
   if (typeof value !== 'string' || !value.trim()) return false;
@@ -425,14 +448,14 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
   // and default to the previously hard-coded literals when absent.
   let logoUrl = '';
   let companyName = 'PicPeak';
-  let primaryColor = '#5C8762';
+  let primaryColor = null;            // unset: the brand accent (resolveEmailAccent)
   let secondaryColor = '#f9f9f9';
   let bodyBgColor = '#f5f5f5';        // outer wrapper + body background
   let containerBgColor = '#ffffff';    // email card
   let listBgColor = '#f9f9f9';         // <ul> info panel inside content
   let bodyTextColor = '#333333';       // paragraph text + <strong>
   let mutedTextColor = '#666666';      // footer text
-  let buttonTextColor = '#ffffff';     // CTA text on primary button
+  let buttonTextColor = null;          // CTA text on primary button; unset: readable on it
   try {
     const brandingSettings = await db('app_settings')
       .whereIn('setting_key', [
@@ -469,6 +492,12 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
     });
   } catch (error) {
     logger.error('Error fetching branding settings:', error);
+  }
+  ({ primary: primaryColor, buttonText: buttonTextColor } = await resolveEmailAccent(primaryColor, buttonTextColor));
+  // Seeded templates carry the legacy green inline (boxes, links, a few
+  // buttons); it is the email accent, so it follows it.
+  if (primaryColor.toLowerCase() !== LEGACY_EMAIL_GREEN.toLowerCase()) {
+    htmlBody = String(htmlBody).replace(/#5c8762\b/gi, primaryColor);
   }
 
   const hoverColor = darkenColor(primaryColor, 0.15);
@@ -930,23 +959,21 @@ async function processTemplate(template, variables, language = 'en') {
     };
     const ci18n = clientAccessI18n[language] || clientAccessI18n.en;
 
-    // The client-access CTA used to be a hard-coded #5C8762 fill; now it
-    // mirrors the configurable email_primary_color so the brand colour is
-    // consistent across every button in the email. Defaults match the
-    // historical literal so unchanged installs render identically.
-    let cli_primary = '#5C8762';
+    // The client-access CTA uses the email accent like every other button
+    // (resolveEmailAccent: Settings → Email, else Branding › Colours).
+    let cli_primary = LEGACY_EMAIL_GREEN;
     let cli_buttonText = '#ffffff';
     try {
       const rows = await db('app_settings')
         .whereIn('setting_key', ['email_primary_color', 'email_button_text_color'])
         .select('setting_key', 'setting_value');
-      rows.forEach((row) => {
-        if (!row.setting_value) return;
-        let parsed;
-        try { parsed = JSON.parse(row.setting_value); } catch (e) { parsed = row.setting_value; }
-        if (row.setting_key === 'email_primary_color') cli_primary = parsed || cli_primary;
-        if (row.setting_key === 'email_button_text_color') cli_buttonText = parsed || cli_buttonText;
-      });
+      const read = (key) => {
+        const row = rows.find((r) => r.setting_key === key);
+        if (!row || !row.setting_value) return null;
+        try { return JSON.parse(row.setting_value); } catch (e) { return row.setting_value; }
+      };
+      ({ primary: cli_primary, buttonText: cli_buttonText } = await resolveEmailAccent(
+        read('email_primary_color'), read('email_button_text_color')));
     } catch (e) {
       // Non-fatal — fall back to literals so the email still renders.
       logger.warn('Failed to read email colours for client-access block', { error: e.message });
