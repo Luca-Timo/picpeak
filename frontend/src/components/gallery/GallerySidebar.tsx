@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { X, Download, Filter, FolderTree, SortAsc, SortDesc, Search, Calendar, Type, HardDrive, Check, Star, Upload, Camera, ClipboardList } from 'lucide-react';
 import { Button } from '../common';
+import { useEscapeClose } from '../common/useEscapeClose';
 import { PhotoCategory, type Photo } from '../../types';
 import { useTranslation } from 'react-i18next';
 import { GalleryFilter, type FilterType, type FeedbackFilterType } from './GalleryFilter';
@@ -153,6 +154,8 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
   folderTree,
 }) => {
   const { t } = useTranslation();
+  // On a phone the sidebar is a drawer; Escape closes it like any overlay.
+  useEscapeClose(isMobile && isOpen, onClose);
   const downloadQuota = useDownloadQuota();
   const downloadAllOverQuota = !!downloadAllPhotos && !downloadQuota.allows(downloadAllPhotos);
   const sidebarRef = useRef<HTMLDivElement>(null);

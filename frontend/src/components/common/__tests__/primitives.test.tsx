@@ -8,6 +8,7 @@ import { Button } from '../Button';
 import { Input } from '../Input';
 import { Notice } from '../Notice';
 import { Modal } from '../Modal';
+import { useEscapeClose } from '../useEscapeClose';
 import { Tabs } from '../Tabs';
 import { Switch } from '../Switch';
 import { ErrorState } from '../EmptyState';
@@ -192,5 +193,36 @@ describe('Modal under a confirm', () => {
     expect(onClose).not.toHaveBeenCalled();
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useEscapeClose', () => {
+  const Overlay = ({ onClose, enabled = true }: { onClose: () => void; enabled?: boolean }) => {
+    useEscapeClose(true, onClose, { enabled });
+    return <div>drawer</div>;
+  };
+
+  it('closes the overlay on Escape, and waits while a request runs', () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<Overlay onClose={onClose} enabled={false} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    rerender(<Overlay onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the overlay open when a Modal on top takes the Escape', () => {
+    const onDrawer = vi.fn();
+    const onModal = vi.fn();
+    render(
+      <>
+        <Overlay onClose={onDrawer} />
+        <Modal open onClose={onModal} title="On top">x</Modal>
+      </>,
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onModal).toHaveBeenCalledTimes(1);
+    expect(onDrawer).not.toHaveBeenCalled();
   });
 });

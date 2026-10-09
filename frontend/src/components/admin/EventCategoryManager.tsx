@@ -7,6 +7,7 @@ import { folderQueryKey } from '../../services/folders.service';
 import { Button, Card, AuthenticatedImage, useConfirm } from '../common';
 import { useTranslation } from 'react-i18next';
 import { useMutationWithToast, useModal } from '../../hooks';
+import { useEscapeClose } from '../common/useEscapeClose';
 
 interface EventCategoryManagerProps {
   eventId: number;
@@ -18,6 +19,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
   const addingModal = useModal();
   const [newCategoryName, setNewCategoryName] = useState('');
   const [heroPickerCategoryId, setHeroPickerCategoryId] = useState<number | null>(null);
+  useEscapeClose(heroPickerCategoryId !== null, () => setHeroPickerCategoryId(null));
 
   // Fetch this event's categories (globals + event-specific), already resolved
   // to the event's effective order by the backend (#782).

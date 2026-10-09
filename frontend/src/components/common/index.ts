@@ -42,3 +42,4 @@ export { EmptyState, ErrorState } from './EmptyState';
 export { Switch } from './Switch';
 export { ActionMenu, type ActionMenuItem } from './ActionMenu';
 export { usePrompt, type PromptOptions } from './PromptDialog';
+export { useEscapeClose } from './useEscapeClose';

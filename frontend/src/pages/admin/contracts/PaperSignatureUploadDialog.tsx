@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Upload, X } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { contractsService } from '../../../services/contracts.service';
+import { useEscapeClose } from '../../../components/common/useEscapeClose';
 
 /**
  * Uploading a wet-signed contract (#1446).
@@ -36,6 +37,9 @@ export const PaperSignatureUploadDialog: React.FC<PaperSignatureUploadDialogProp
     queryFn: () => contractsService.paperSignatureCoverage(contractId),
     enabled: isOpen,
   });
+
+  // Escape cancels without uploading; it waits while an upload runs.
+  useEscapeClose(isOpen, () => { setFile(null); setTicked([]); onClose(); }, { enabled: !isUploading });
 
   if (!isOpen) return null;
 

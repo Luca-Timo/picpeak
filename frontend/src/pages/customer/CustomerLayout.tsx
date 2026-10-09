@@ -35,6 +35,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useCustomerAuth } from '../../contexts/CustomerAuthContext';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
+import { useEscapeClose } from '../../components/common/useEscapeClose';
 
 interface NavItem {
   to: string;
@@ -67,6 +68,7 @@ export const CustomerLayout: React.FC = () => {
   const { customer, features, branding, isAuthenticated, isLoading, logout } = useCustomerAuth();
   const { data: settingsData } = usePublicSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  useEscapeClose(sidebarOpen, () => setSidebarOpen(false));
 
   const companyName = settingsData?.branding_company_name?.trim() || 'PicPeak';
   // The portal follows the operator's palette (usePublicDarkMode puts the

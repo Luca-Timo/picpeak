@@ -40,6 +40,7 @@ import {
   type CustomerStatusFilter,
 } from '../../services/customerAdmin.service';
 import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
+import { useEscapeClose } from '../../components/common/useEscapeClose';
 
 type TabType = 'customers' | 'invitations' | 'groups';
 const TABS: TabType[] = ['customers', 'invitations', 'groups'];
@@ -126,6 +127,7 @@ export const CustomerManagementPage: React.FC = () => {
   // which trigger they clicked but the form fields stay identical.
   // `null` = closed.
   const [createMode, setCreateMode] = useState<'passive' | 'invite' | null>(null);
+  useEscapeClose(createMode !== null, () => setCreateMode(null));
   const confirm = useConfirm();
 
   const { hasPermission } = usePermissions();

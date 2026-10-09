@@ -14,6 +14,7 @@ import { customerAdminService } from '../../../services/customerAdmin.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 import { SectionPageHeader } from '../../../components/admin/SectionPageHeader';
+import { useEscapeClose } from '../../../components/common/useEscapeClose';
 
 const STATUSES: InvoiceStatus[] = ['scheduled', 'pending_delivery', 'sent', 'paid', 'overdue', 'cancelled', 'skipped'];
 
@@ -239,6 +240,8 @@ const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) =
   const [paidMajor, setPaidMajor] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Escape cancels the import; it waits while the upload runs.
+  useEscapeClose(true, onClose, { enabled: !submitting });
 
   const { data: customerOptions } = useQuery({
     queryKey: ['customer-search', customerSearch],

@@ -259,7 +259,7 @@ component, not re-created next to it.
 | Button | `Button` (`common`) — `primary` / `secondary` / `outline` / `ghost` / `danger`, `sm` / `md` / `lg` / `icon-sm` / `icon-md`, `leftIcon`, `isLoading` | one `primary` per view; `ghost` for tertiary actions in toolbars and menus; `danger` for destructive actions (confirm first); icon sizes need `aria-label` |
 | Status pill | `Badge` (`common`) — `tone`, `appearance="outline"`, `caps`, `dot` | "Paid", "Draft", "Default"; always a word. Portal and public pages: `.status-chip .hue-<status>` |
 | Notice / banner | `Notice` (`common`) — `tone`, `title`, `action`, `size="sm"` | explains a state; its action shares a wrapping row with the text |
-| Dialog window | `Modal` (`common`) — `title`, `description`, `footer`, `size` | Escape closes, focus stays inside and returns to the opener; a sheet on a phone. A yes/no question is `useConfirm()` |
+| Dialog window | `Modal` (`common`) — `title`, `description`, `footer`, `size` | Escape closes without saving (UX.md › Popups and dialogs), focus stays inside and returns to the opener; a sheet on a phone. A yes/no question is `useConfirm()` |
 | Tab row | `Tabs` (`common`) — `items` with `icon`, `count`, `dirty` | arrow keys move; the divider is an inset shadow |
 | List table | `Table`, `TableHead`, `TableBody`, `TableRow`, `TableHeaderCell`, `TableCell` (`common`) | the table scrolls sideways inside its card, never the page; `SortableHeader` goes inside a header cell |
 | On / off | `Switch` (`common`) — `label`, `description` | changes the draft, saves with the save bar |
