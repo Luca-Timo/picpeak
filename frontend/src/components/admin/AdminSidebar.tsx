@@ -553,7 +553,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
           <button
             onClick={onClose}
             className="lg:hidden px-6 text-faint hover:text-body"
-            aria-label="Close sidebar"
+            aria-label={t('navigation.closeMenu', 'Close menu')}
           >
             <X className="w-6 h-6" />
           </button>

@@ -996,7 +996,9 @@
     "accounting": "Accounting",
     "workflows": "Workflows",
     "automation": "Automation",
-    "sharing": "Sharing"
+    "sharing": "Sharing",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "transfers": {
     "title": "PicTransfer",

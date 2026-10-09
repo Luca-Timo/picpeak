@@ -232,7 +232,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick, onOpenSea
               cluster just before the action widgets. */}
           <div className="flex items-center gap-3 min-w-0">
             <button
+              type="button"
               onClick={onMenuClick}
+              aria-label={t('navigation.openMenu', 'Open menu')}
               className="lg:hidden text-muted hover:text-body"
             >
               <Menu className="w-6 h-6" />
