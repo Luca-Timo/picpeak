@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { pushDialogLayer } from '../../common/Modal';
+import { lockBodyScroll } from '../../../utils/scrollLock';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -48,8 +49,7 @@ export function useGalleryDialog({
       first?.focus();
     }
 
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockBodyScroll();
 
     const layer = pushDialogLayer();
     const onKeyDown = (e: KeyboardEvent) => {
@@ -81,7 +81,7 @@ export function useGalleryDialog({
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
       layer.release();
-      document.body.style.overflow = overflow;
+      unlockScroll();
       if (opener && opener !== document.body && document.contains(opener)) opener.focus?.();
     };
   }, [open, panelRef, initialFocusRef]);

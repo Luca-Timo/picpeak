@@ -14,6 +14,7 @@ import type { QuotaPhoto } from '../../utils/downloadLimit';
 import { selectLabel } from '../../utils/mediaCounts';
 import { DownloadQuotaNotice } from './DownloadQuotaNotice';
 import { GallerySidebarFolderTree, type SidebarFolderTreeProps } from './GallerySidebarFolderTree';
+import { lockBodyScroll } from '../../utils/scrollLock';
 
 interface GallerySidebarProps {
   isOpen: boolean;
@@ -177,10 +178,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
   // Prevent body scroll when sidebar is open on mobile
   useEffect(() => {
     if (isMobile && isOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = 'unset';
-      };
+      return lockBodyScroll();
     }
   }, [isMobile, isOpen]);
 
