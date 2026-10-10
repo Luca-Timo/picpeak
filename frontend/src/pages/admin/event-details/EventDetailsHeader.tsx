@@ -131,10 +131,7 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
   if (hasPermission('events.create')) {
     menuItems.push({ key: 'duplicate', label: t('events.duplicateEvent', 'Duplicate gallery'), icon: <Copy className="w-4 h-4" />, onSelect: () => setShowDuplicateDialog(true) });
   }
-  // Invoices link to galleries on the owner rule for CRM data, which the
-  // server applies too: the owner, an ownerless gallery, or a role that
-  // manages every gallery (can_manage_assignments).
-  if (flags.bills && hasPermission('bills.manage') && event.can_manage_assignments !== false) {
+  if (flags.bills && hasPermission('bills.manage')) {
     menuItems.push({
       key: 'invoice',
       label: t('events.createInvoice', 'Create invoice'),
