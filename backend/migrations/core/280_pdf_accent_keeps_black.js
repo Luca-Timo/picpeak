@@ -42,7 +42,7 @@ exports.up = async function (knex) {
   if (settings.colors && settings.colors.accent) return;
 
   const next = { ...settings, colors: { ...(settings.colors || {}), accent: '#000000' } };
-  const now = new Date();
+  const now = new Date().toISOString();
   if (row) {
     await knex('pdf_themes').where({ scope: 'default' }).update({ settings: JSON.stringify(next), updated_at: now });
   } else {

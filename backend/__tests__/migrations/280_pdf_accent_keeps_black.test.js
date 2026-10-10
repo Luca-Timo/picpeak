@@ -53,4 +53,12 @@ describe('migration 280 on SQLite', () => {
     await migration.up(db);
     expect(await defaultSettings()).toEqual({ colors: { accent: '#000000' } });
   });
+
+  it('stores the timestamps as ISO strings', async () => {
+    await db('invoices').insert({});
+    await migration.up(db);
+    const row = await db('pdf_themes').where({ scope: 'default' }).first('created_at', 'updated_at');
+    expect(row.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(row.updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
 });
