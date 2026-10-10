@@ -6,7 +6,9 @@
  *   1. UI tokens (--ui-*)      The admin chrome and every other developer-owned
  *                              surface. Light values on :root, dark values under
  *                              .dark (AdminDarkModeContext toggles that class on
- *                              <html>). Operators cannot change these.
+ *                              <html>). Operators cannot change the neutrals;
+ *                              the status hues and the accent below come from
+ *                              Branding at runtime.
  *                              Tailwind exposes them as bg-panel, text-body,
  *                              border-line, ... (see tailwind.config.js).
  *
@@ -21,7 +23,10 @@
  *
  * Status (--status-*, --ui-<status>-*), accent (--ui-accent*) and data
  * colours (--chart-*) are shared by both families: one success green, one
- * danger red, everywhere. Scale tokens (radius, shadow, fonts) too.
+ * danger red, everywhere. Scale tokens (radius, shadow, fonts) too. The
+ * operator sets the status hues and the accent in Branding › Colours
+ * (applyStatusColors / applyTheme write them inline on <html>); the values
+ * here are the defaults.
  */
 
 :root {

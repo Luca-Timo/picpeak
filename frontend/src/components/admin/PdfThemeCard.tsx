@@ -85,17 +85,20 @@ export function usePdfThemeDrafts(enabled = true) {
     : [];
   const invalidScopes = dirtyScopes.filter((s) => !draftIsValid(drafts[s] as PdfThemeSettings));
 
-  const save = async (): Promise<PdfThemeScope[]> => {
-    const failed: PdfThemeScope[] = [];
+  // Each failed document type with the server's reason, so the error names
+  // both (the failed drafts stay for another try).
+  const save = async (): Promise<Array<{ scope: PdfThemeScope; message?: string }>> => {
+    const failed: Array<{ scope: PdfThemeScope; message?: string }> = [];
     for (const scope of dirtyScopes) {
       try {
         await pdfThemesService.save(scope, drafts[scope] as PdfThemeSettings);
-      } catch {
-        failed.push(scope);
+      } catch (err) {
+        const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        failed.push({ scope, message });
       }
     }
     await queryClient.invalidateQueries({ queryKey: ['pdf-themes'] });
-    setDrafts((d) => Object.fromEntries(failed.map((s) => [s, d[s]])));
+    setDrafts((d) => Object.fromEntries(failed.map(({ scope }) => [scope, d[scope]])));
     return failed;
   };
 

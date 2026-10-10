@@ -199,12 +199,12 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           onClick={() => setRestoreData(prev => ({ ...prev, source: 'local' }))}
           className={`p-6 rounded-lg border-2 transition-all ${
             restoreData.source === 'local'
-              ? 'border-primary bg-accent-dark/15'
+              ? 'border-accent bg-accent-soft'
               : 'border-line hover:border-line-strong'
           }`}
         >
           <HardDrive className={`h-12 w-12 mb-3 mx-auto ${
-            restoreData.source === 'local' ? 'text-primary' : 'text-faint'
+            restoreData.source === 'local' ? 'text-accent' : 'text-faint'
           }`} />
           <h4 className="font-medium text-heading">{t('backup.restore.source.local.name')}</h4>
           <p className="text-xs text-muted mt-1">{t('backup.restore.source.local.description')}</p>
@@ -214,12 +214,12 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           onClick={() => setRestoreData(prev => ({ ...prev, source: 's3' }))}
           className={`p-6 rounded-lg border-2 transition-all ${
             restoreData.source === 's3'
-              ? 'border-primary bg-accent-dark/15'
+              ? 'border-accent bg-accent-soft'
               : 'border-line hover:border-line-strong'
           }`}
         >
           <Cloud className={`h-12 w-12 mb-3 mx-auto ${
-            restoreData.source === 's3' ? 'text-primary' : 'text-faint'
+            restoreData.source === 's3' ? 'text-accent' : 'text-faint'
           }`} />
           <h4 className="font-medium text-heading">{t('backup.restore.source.s3.name')}</h4>
           <p className="text-xs text-muted mt-1">{t('backup.restore.source.s3.description')}</p>
@@ -229,12 +229,12 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
           onClick={() => setRestoreData(prev => ({ ...prev, source: 'upload' }))}
           className={`p-6 rounded-lg border-2 transition-all ${
             restoreData.source === 'upload'
-              ? 'border-primary bg-accent-dark/15'
+              ? 'border-accent bg-accent-soft'
               : 'border-line hover:border-line-strong'
           }`}
         >
           <Upload className={`h-12 w-12 mb-3 mx-auto ${
-            restoreData.source === 'upload' ? 'text-primary' : 'text-faint'
+            restoreData.source === 'upload' ? 'text-accent' : 'text-faint'
           }`} />
           <h4 className="font-medium text-heading">{t('backup.restore.source.upload.name')}</h4>
           <p className="text-xs text-muted mt-1">{t('backup.restore.source.upload.description')}</p>
@@ -292,11 +292,11 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               onClick={() => setRestoreData(prev => ({ ...prev, uploadType: 'picpeak' }))}
               className={`p-6 rounded-lg border-2 transition-all ${
                 restoreData.uploadType === 'picpeak'
-                  ? 'border-primary bg-accent-dark/15'
+                  ? 'border-accent bg-accent-soft'
                   : 'border-line hover:border-line-strong'
               }`}
             >
-              <FileArchive className={`h-10 w-10 mb-2 mx-auto ${restoreData.uploadType === 'picpeak' ? 'text-primary' : 'text-neutral-400'}`} />
+              <FileArchive className={`h-10 w-10 mb-2 mx-auto ${restoreData.uploadType === 'picpeak' ? 'text-accent' : 'text-neutral-400'}`} />
               <h4 className="font-medium text-heading">{t('backup.restore.source.upload.picpeak.name', '.picpeak backup')}</h4>
               <p className="text-xs text-muted mt-1">{t('backup.restore.source.upload.picpeak.description', 'Portable full backup — restores everything (full override, keeps your current account).')}</p>
             </button>
@@ -304,11 +304,11 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               onClick={() => setRestoreData(prev => ({ ...prev, uploadType: 'manifest' }))}
               className={`p-6 rounded-lg border-2 transition-all ${
                 restoreData.uploadType === 'manifest'
-                  ? 'border-primary bg-accent-dark/15'
+                  ? 'border-accent bg-accent-soft'
                   : 'border-line hover:border-line-strong'
               }`}
             >
-              <Upload className={`h-10 w-10 mb-2 mx-auto ${restoreData.uploadType === 'manifest' ? 'text-primary' : 'text-neutral-400'}`} />
+              <Upload className={`h-10 w-10 mb-2 mx-auto ${restoreData.uploadType === 'manifest' ? 'text-accent' : 'text-neutral-400'}`} />
               <h4 className="font-medium text-heading">{t('backup.restore.source.upload.manifest.name', 'Manifest + files')}</h4>
               <p className="text-xs text-muted mt-1">{t('backup.restore.source.upload.manifest.description', 'Upload a manifest and its backup files (legacy format).')}</p>
             </button>
@@ -350,7 +350,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               key={backup.id}
               className={`p-4 cursor-pointer transition-all ${
                 restoreData.selectedBackup?.id === backup.id
-                  ? 'ring-2 ring-primary bg-accent-dark/15'
+                  ? 'ring-2 ring-accent bg-accent-soft'
                   : 'hover:shadow-md'
               }`}
               onClick={() => setRestoreData(prev => ({ ...prev, selectedBackup: backup }))}
@@ -479,13 +479,13 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               onClick={() => setRestoreData(prev => ({ ...prev, restoreType: type.id }))}
               className={`p-4 rounded-lg border-2 text-left transition-all ${
                 restoreData.restoreType === type.id
-                  ? 'border-primary bg-accent-dark/15'
+                  ? 'border-accent bg-accent-soft'
                   : 'border-line hover:border-line-strong'
               }`}
             >
               <div className="flex items-start space-x-3">
                 <Icon className={`h-6 w-6 mt-1 ${
-                  restoreData.restoreType === type.id ? 'text-primary' : 'text-faint'
+                  restoreData.restoreType === type.id ? 'text-accent' : 'text-faint'
                 }`} />
                 <div className="flex-1">
                   <h4 className="font-medium text-heading">{type.name}</h4>
@@ -513,7 +513,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               ...prev,
               skipPreBackup: e.target.checked
             }))}
-            className="mt-1 h-4 w-4 text-primary focus:ring-primary border-line-strong rounded bg-inset"
+            className="mt-1 h-4 w-4 text-accent focus:ring-accent border-line-strong rounded bg-inset"
           />
           <div>
             <p className="text-sm font-medium text-body">{t('backup.restore.options.additionalOptions.skipPreBackup')}</p>
@@ -531,7 +531,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               ...prev,
               force: e.target.checked
             }))}
-            className="mt-1 h-4 w-4 text-primary focus:ring-primary border-line-strong rounded bg-inset"
+            className="mt-1 h-4 w-4 text-accent focus:ring-accent border-line-strong rounded bg-inset"
           />
           <div>
             <p className="text-sm font-medium text-body">{t('backup.restore.options.additionalOptions.force')}</p>
@@ -654,7 +654,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
         </>
       ) : (
         <div className="text-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-accent" />
           <p className="mt-2 text-sm text-soft">{t('backup.restore.confirmation.validation.checking')}</p>
         </div>
       )}
@@ -730,7 +730,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
             </div>
             <div className="w-full bg-fill rounded-full h-3">
               <div
-                className="bg-primary h-3 rounded-full transition-all duration-500"
+                className="bg-accent-strong h-3 rounded-full transition-all duration-500"
                 style={{ width: `${progress.percentage || 0}%` }}
               />
             </div>
@@ -846,22 +846,22 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                   <div className={`
                     relative flex h-8 w-8 items-center justify-center rounded-full
                     ${currentStep > stepIdx
-                      ? 'bg-primary'
+                      ? 'bg-accent-strong'
                       : currentStep === stepIdx
-                      ? 'bg-primary'
+                      ? 'bg-accent-strong'
                       : 'bg-fill-strong'
                     }
                   `}>
                     {currentStep > stepIdx ? (
-                      <CheckCircle className="h-5 w-5 text-white" />
+                      <CheckCircle className="h-5 w-5 text-accent-fg" />
                     ) : (
-                      <span className="text-white text-sm">{stepIdx + 1}</span>
+                      <span className="text-accent-fg text-sm">{stepIdx + 1}</span>
                     )}
                   </div>
                   {stepIdx !== steps.length - 1 && (
                     <div className={`
                       absolute top-4 w-full h-0.5
-                      ${currentStep > stepIdx ? 'bg-primary' : 'bg-fill-strong'}
+                      ${currentStep > stepIdx ? 'bg-accent-strong' : 'bg-fill-strong'}
                     `} style={{ left: '2rem', right: '-2rem' }} />
                   )}
                 </div>

@@ -421,7 +421,9 @@ export const BrandingPage: React.FC = () => {
       const failedPdfScopes = await pdfTheme.save();
       if (failedPdfScopes.length > 0) {
         toast.error(t('branding.pdfTheme.saveFailedScopes', 'Could not save the PDF theme for: {{scopes}}', {
-          scopes: failedPdfScopes.map((scope) => t(`branding.pdfTheme.scope.${scope}`, scope)).join(', '),
+          scopes: failedPdfScopes
+            .map(({ scope, message }) => `${t(`branding.pdfTheme.scope.${scope}`, scope)}${message ? ` (${message})` : ''}`)
+            .join(', '),
         }));
       }
 

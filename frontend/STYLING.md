@@ -101,7 +101,8 @@ Branding. It reaches the admin as these tokens:
 | Utility / class | Token | Use for |
 |---|---|---|
 | `<Button variant="primary">` (`.btn-primary`) | `--ui-accent-strong` + `--ui-accent-fg` | the primary action (one per view) |
-| `text-accent` / `border-accent` / `ring-accent` | `--color-accent` | active tab and nav item, links, focus rings |
+| `text-accent` | `--accent-text` (the accent made readable as text on its surface: `--color-accent-text` on themed pages, `--ui-accent-text-light/-dark` in the admin; written by `applyTheme`) | links, active tab and nav item text |
+| `border-accent` / `ring-accent` | `--color-accent` | active tab underline, focus rings |
 | `.tile-selected` | `--ui-accent-strong` + `--ui-accent-fg` | the chosen option in a picker grid (layout, source, preset) |
 | `bg-accent-soft` + `text-on-accent-soft`, `border-accent-soft` | `--ui-accent-soft`, `--ui-accent-on-soft`, `--ui-accent-line` | soft highlight: a selected list row, an enabled feature icon |
 | `bg-accent-strong`, `text-accent-fg` | `--ui-accent-strong`, `--ui-accent-fg` | a filled accent area that is not a button (a switch that is on) |
