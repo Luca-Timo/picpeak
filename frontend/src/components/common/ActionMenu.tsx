@@ -84,8 +84,10 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
         onClick={() => {
           if (!open && ref.current) {
             const box = ref.current.getBoundingClientRect();
+            // No layout (width 0, e.g. while hidden): keep the requested side.
             const width = Math.min(256, window.innerWidth - 16);
-            if (align === 'right' && box.right - width < 8) setSide('left');
+            if (box.width === 0) setSide(align);
+            else if (align === 'right' && box.right - width < 8) setSide('left');
             else if (align === 'left' && box.left + width > window.innerWidth - 8) setSide('right');
             else setSide(align);
           }

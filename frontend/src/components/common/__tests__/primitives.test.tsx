@@ -242,3 +242,27 @@ describe('ActionMenu', () => {
     expect(onA).not.toHaveBeenCalled();
   });
 });
+
+describe('ConfirmDialog and Enter', () => {
+  const Ask = ({ variant, onAnswer }: { variant?: 'danger'; onAnswer: (v: boolean) => void }) => {
+    const confirm = useConfirm();
+    return <button onClick={async () => onAnswer(await confirm({ message: 'Sure?', variant }))}>Ask</button>;
+  };
+
+  it('Enter on the focused Cancel cancels; a danger confirm never confirms from elsewhere', async () => {
+    const answers: boolean[] = [];
+    render(<ConfirmDialogProvider><Ask variant="danger" onAnswer={(v) => answers.push(v)} /></ConfirmDialogProvider>);
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    await screen.findByText('Sure?');
+    // Focus starts on Cancel; Enter presses it.
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(answers).toEqual([false]));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    await screen.findByText('Sure?');
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(screen.getByText('Sure?')).toBeInTheDocument();
+    expect(answers).toEqual([false]);
+  });
+});

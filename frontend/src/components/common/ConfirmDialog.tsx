@@ -91,6 +91,8 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
     setOptions(null);
   }, []);
 
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
   useEffect(() => {
     if (!options) return;
     cancelButtonRef.current?.focus();
@@ -101,10 +103,13 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
         e.preventDefault();
         settle(false);
       } else if (e.key === 'Enter') {
-        // Don't hijack Enter when the focus is in an editable element — covers
-        // the (unusual) case where a confirm is open over an open input.
+        // Enter on a focused button presses that button (Cancel has the focus
+        // when the dialog opens), and never confirms from an editable field.
+        // A destructive confirm only confirms from its own button: Enter
+        // elsewhere does nothing, so a stray keypress can't delete.
         const tag = (document.activeElement as HTMLElement | null)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (optionsRef.current?.variant === 'danger') return;
         e.preventDefault();
         settle(true);
       }
