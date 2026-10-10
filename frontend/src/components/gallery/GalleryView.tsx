@@ -1198,9 +1198,14 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   }
 
   // Auth failures end the session whenever they happen, background refetch
-  // included. Any other failure replaces the gallery only when nothing has
-  // loaded yet: a failed background refetch keeps the photos on screen
-  // (TanStack keeps `data` and sets `error`), as UX.md › States asks.
+  // included. So does a gallery that is gone or closed to this guest (403,
+  // 404, 410: expired, deleted, access withdrawn): keeping its grid would only
+  // leave thumbnails that fail one by one. Any other failure replaces the
+  // gallery only when nothing has loaded yet: a failed background refetch
+  // keeps the photos on screen (TanStack keeps `data` and sets `error`), as
+  // UX.md › States asks.
+  const errorStatus = (error as { response?: { status?: number } } | null)?.response?.status;
+  const galleryGone = errorStatus === 403 || errorStatus === 404 || errorStatus === 410;
   if (error) {
     // Check if it's an authentication error (401)
     const is401Error = (error as any)?.response?.status === 401;
@@ -1222,7 +1227,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
     }
   }
 
-  if (!data) {
+  if (!data || galleryGone) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
         <div className="text-center" role="alert">

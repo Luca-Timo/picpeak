@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { lockBodyScroll } from '../../utils/scrollLock';
 
 interface ModalProps {
   open: boolean;
@@ -80,8 +81,7 @@ export const Modal: React.FC<ModalProps> = ({
     const first = initialFocusRef?.current ?? panel?.querySelector<HTMLElement>(FOCUSABLE) ?? panel;
     first?.focus();
 
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockBodyScroll();
 
     const layer = pushDialogLayer();
     const onKeyDown = (e: KeyboardEvent) => {
@@ -108,7 +108,7 @@ export const Modal: React.FC<ModalProps> = ({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       layer.release();
-      document.body.style.overflow = overflow;
+      unlockScroll();
       opener?.focus?.();
     };
   }, [open, initialFocusRef]);

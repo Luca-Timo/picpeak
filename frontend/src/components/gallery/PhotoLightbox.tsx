@@ -19,6 +19,7 @@ import { useGuestIdentityOptional } from '../../contexts/GuestIdentityContext';
 import { useDownloadQuota } from '../../contexts/DownloadQuotaContext';
 import { notifyDownloadQuotaChanged, showDownloadLimitReached, videoUnavailableMessage } from '../../utils/downloadLimit';
 import { useFeedbackLimitModal } from '../../hooks/useFeedbackLimitModal';
+import { lockBodyScroll } from '../../utils/scrollLock';
 
 interface PhotoLightboxProps {
   photos: Photo[];
@@ -347,7 +348,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockBodyScroll();
     
     // Add protection class to body for maximum security
     if (protectionLevel === 'maximum') {
@@ -358,7 +359,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      unlockScroll();
       
       // Remove protection classes from body
       document.body.classList.remove('protection-maximum', 'protection-enhanced');

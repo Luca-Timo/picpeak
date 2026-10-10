@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useGalleryDialog } from '../useGalleryDialog';
+import { lockBodyScroll } from '../../../../utils/scrollLock';
 
 const Dialog: React.FC<{ onClose: () => void; dismissible?: boolean }> = ({ onClose, dismissible }) => {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -57,5 +58,28 @@ describe('useGalleryDialog', () => {
     fireEvent.click(screen.getByText('Open'));
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('leaves the page scrollable when the lightbox under a dialog closes first', () => {
+    // The lightbox takes the shared lock; the identity prompt opens over it.
+    document.body.style.overflow = 'auto';
+    const releaseLightbox = lockBodyScroll();
+    const view = render(<Dialog onClose={() => {}} />);
+    expect(document.body.style.overflow).toBe('hidden');
+    // Back closes the lightbox first, then the dialog goes away.
+    releaseLightbox();
+    expect(document.body.style.overflow).toBe('hidden');
+    view.unmount();
+    expect(document.body.style.overflow).toBe('auto');
+  });
+
+  it('leaves the page scrollable when the dialog closes before the lightbox', () => {
+    document.body.style.overflow = 'auto';
+    const releaseLightbox = lockBodyScroll();
+    const view = render(<Dialog onClose={() => {}} />);
+    view.unmount();
+    expect(document.body.style.overflow).toBe('hidden');
+    releaseLightbox();
+    expect(document.body.style.overflow).toBe('auto');
   });
 });
