@@ -58,13 +58,19 @@ cd picpeak
 # (domain, SMTP, storage paths, …) — nothing is required.
 cp .env.example .env
 
-# Start with Docker Compose, using the prebuilt images
-docker compose -f docker-compose.production.yml up -d
+# Use the prebuilt images for this and every later compose command
+# (logs, pull, down, …) — the installer sets the same line
+echo "COMPOSE_FILE=docker-compose.production.yml" >> .env
+
+# Start
+docker compose up -d
 
 # Access at http://localhost:3000
 ```
 
-`docker-compose.production.yml` pulls the prebuilt images from GHCR, so nothing is compiled on your machine. The plain `docker-compose.yml` builds from source and is meant for development — see [CONTRIBUTING.md](CONTRIBUTING.md).
+`docker-compose.production.yml` pulls PicPeak's prebuilt images from GHCR (Postgres and Redis come from Docker Hub), so nothing is compiled on your machine. The plain `docker-compose.yml` builds from source and is meant for development — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+**Already running the old quick start** (plain `docker compose up -d`, built from source)? Add the same `COMPOSE_FILE` line to `.env` and run `docker compose up -d --remove-orphans`. Both files use the same named volumes and the same `./storage`, `./data`, `./logs` and `./backup` folders, so no data moves; `--remove-orphans` removes the development-only `mailhog` container. The production file takes its image tag from `PICPEAK_CHANNEL`, so you move from whatever was checked out to the `stable` channel unless you set `PICPEAK_CHANNEL=beta`.
 
 On first start, open **http://localhost:3000/admin** and follow the in-browser setup to create your admin account. Full details — the one-time setup token, Docker file permissions, and ARM64 notes — are in **[First-run setup](https://docs.picpeak.app/getting-started/first-login)**.
 
@@ -80,7 +86,7 @@ proxy in front of the frontend, set `TRUST_PROXY=2`, `COOKIE_SECURE=true` and
 and configure the outer proxy to append or overwrite forwarding headers using
 the real client address. The installer selects these settings in proxy mode.
 
-> **Updating / release channels:** set `PICPEAK_CHANNEL` (`stable` default, or `beta`) in `.env`, then `docker compose -f docker-compose.production.yml pull && docker compose -f docker-compose.production.yml up -d`. To update from the admin UI instead, enable [in-app updates](docs/self-update.md). See [RELEASING.md](RELEASING.md) for the promotion cadence.
+> **Updating / release channels:** set `PICPEAK_CHANNEL` (`stable` default, or `beta`) in `.env`, then `docker compose pull && docker compose up -d` (with `COMPOSE_FILE` set as above; otherwise add `-f docker-compose.production.yml` to every command). To update from the admin UI instead, enable [in-app updates](docs/self-update.md). See [RELEASING.md](RELEASING.md) for the promotion cadence.
 
 > [!NOTE]
 > **Recommended hardening:** an existing install keeps working without
