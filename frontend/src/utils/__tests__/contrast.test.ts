@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio, getReadableForeground, readableAccentText, relativeLuminance } from '../contrast';
+import { contrastRatio, getReadableForeground, isDarkBackground, readableAccentText, relativeLuminance } from '../contrast';
 
 describe('getReadableForeground', () => {
   describe('against the legacy hardcoded #ffffff fallback', () => {
@@ -99,5 +99,19 @@ describe('readableAccentText', () => {
 
   it('returns unparseable input unchanged', () => {
     expect(readableAccentText('var(--x)', '#FFFFFF')).toBe('var(--x)');
+  });
+});
+
+describe('the black/white crossover (review of PR 1896)', () => {
+  it('moves a failing accent toward black on a mid grey, where black reads better', () => {
+    // #8a9a8a: luminance 0.30 — under 0.5, yet black gives 7.07:1 and white 2.97:1.
+    const text = readableAccentText('#9aaa9a', '#8a9a8a');
+    expect(contrastRatio(text, '#8a9a8a')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('calls a background dark only when white reads better on it', () => {
+    expect(isDarkBackground('#8a9a8a')).toBe(false);
+    expect(isDarkBackground('#1a1a1a')).toBe(true);
+    expect(isDarkBackground('#ffffff')).toBe(false);
   });
 });

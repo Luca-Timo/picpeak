@@ -68,16 +68,27 @@ export function getReadableForeground(hex: string | undefined | null): '#ffffff'
  * The colour to use for accent-coloured TEXT (links, inline actions) on the
  * given background: the accent itself when it already reads (>= `target`,
  * 4.5:1 by default), otherwise the accent mixed toward black or white —
- * whichever direction the background calls for — in 5 % steps until it does.
+ * whichever of the two contrasts more with the background (the crossover is
+ * at a luminance of about 0.18, not 0.5) — in 5 % steps until it does.
  * A pastel brand accent then keeps its hue as a link instead of fading into a
  * white card. Unparseable input comes back unchanged.
  */
+/**
+ * Whether a background is dark in the sense that matters for text on it:
+ * white contrasts more than black. The crossover sits at a luminance of
+ * about 0.18, so a mid grey like #8a9a8a counts as light.
+ */
+export function isDarkBackground(hex: string): boolean {
+  if (!parseHex(hex)) return false;
+  return contrastRatio('#ffffff', hex) > contrastRatio('#000000', hex);
+}
+
 export function readableAccentText(accent: string, background: string, target = 4.5): string {
   const fg = parseHex(accent);
   const bg = parseHex(background);
   if (!fg || !bg) return accent;
   if (contrastRatio(accent, background) >= target) return accent;
-  const toward = relativeLuminance(background) >= 0.5 ? 0 : 255;
+  const toward = contrastRatio('#000000', background) >= contrastRatio('#ffffff', background) ? 0 : 255;
   for (let step = 1; step <= 20; step += 1) {
     const w = step / 20;
     const mix = (c: number) => Math.round(c + (toward - c) * w);

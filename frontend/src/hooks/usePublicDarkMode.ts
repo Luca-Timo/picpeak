@@ -32,7 +32,7 @@ import { usePublicSettings } from './usePublicSettings';
 import { useOptionalTheme } from '../contexts/ThemeContext';
 import type { ThemeConfig } from '../types/theme.types';
 import { applyForceColorMode } from '../utils/themeMigration';
-import { getReadableForeground } from '../utils/contrast';
+import { isDarkBackground } from '../utils/contrast';
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -50,7 +50,7 @@ export function isPaletteDark(
   if (!theme) return forced ? forced === 'dark' : osDark;
   const effective = applyForceColorMode(theme, forced);
   const colour = [effective.backgroundColor, effective.surfaceColor].find((c) => c && HEX.test(c.trim()));
-  if (colour) return getReadableForeground(colour.trim()) === '#ffffff';
+  if (colour) return isDarkBackground(colour.trim());
   if (effective.colorMode === 'dark') return true;
   if (effective.colorMode === 'auto') return osDark;
   return false;
