@@ -147,14 +147,24 @@ export const CMSPage: React.FC = () => {
   };
   const confirm = useConfirm();
 
-  // Load page data when selection changes
+  // Load the page into the form when the selection changes. A refetch of the
+  // same page while it has unsaved edits (the logo upload invalidates the
+  // list) takes only the new logo: the typed text stays, and so does the
+  // save bar. There is no autosave to bound such a loss any more.
+  const hydratedSlug = useRef<string | null>(null);
+  const unsavedRef = useRef(false);
+  unsavedRef.current = hasUnsavedChanges;
   React.useEffect(() => {
     if (pages) {
       const page = pages.find(p => p.slug === selectedPage);
-      if (page) {
-        setEditForm(page);
-        setHasUnsavedChanges(false);
+      if (!page) return;
+      if (hydratedSlug.current === selectedPage && unsavedRef.current) {
+        setEditForm((prev) => ({ ...prev, logo_url: page.logo_url }));
+        return;
       }
+      hydratedSlug.current = selectedPage;
+      setEditForm(page);
+      setHasUnsavedChanges(false);
     }
   }, [pages, selectedPage]);
 

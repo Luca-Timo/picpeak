@@ -8,6 +8,7 @@ import { AdminPhoto } from '../../services/photos.service';
 import { photosService } from '../../services/photos.service';
 import { feedbackService, type PhotoFeedback, type FeedbackSummary } from '../../services/feedback.service';
 import { Badge, Button, useConfirm } from '../common';
+import { pushDialogLayer } from '../common/Modal';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { AdminAuthenticatedVideo } from './AdminAuthenticatedVideo';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
@@ -236,8 +237,20 @@ const AdminPhotoViewerContent: React.FC<ViewerContentProps> = ({
   const markRef = React.useRef({ currentMark, toggleMarkRating, toggleMarkColor, saveMark });
   markRef.current = { currentMark, toggleMarkRating, toggleMarkColor, saveMark };
 
+  // The viewer is a layer of the shared dialog stack: while a confirm (Delete
+  // photo?) or another dialog is open on top, its keys belong to that dialog —
+  // Escape must not close the viewer, the arrows must not page behind it, and
+  // 1-9 must not mark a photo the dialog does not name.
+  const layerRef = React.useRef<ReturnType<typeof pushDialogLayer> | null>(null);
+  React.useEffect(() => {
+    const layer = pushDialogLayer();
+    layerRef.current = layer;
+    return () => { layer.release(); layerRef.current = null; };
+  }, []);
+
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (layerRef.current && !layerRef.current.isTop()) return;
       switch (e.key) {
         case 'Escape':
           onClose();
