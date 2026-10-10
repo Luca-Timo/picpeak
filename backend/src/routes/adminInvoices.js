@@ -38,9 +38,6 @@ const accountingHistory = require('../services/accountingHistory');
 const expenseService = require('../services/expenseService');
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const { db } = require('../database/db');
-const { filterOwnedEventIds } = require('../middleware/ownership');
-const { ensureEventMatchesCustomer } = require('../services/invoice/helpers');
-const { hasColumnCached } = require('../utils/schemaCache');
 
 const router = express.Router();
 // Re-bill proof endpoints (#866) are behind the incoming-invoices flag.
@@ -258,8 +255,6 @@ const INVOICE_BODY_VALIDATORS = [
   body('installmentLabel').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
   body('installmentTrigger').optional({ values: 'falsy' }).isString().isLength({ max: 32 }),
   body('vatRate').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
-  // Migration 130 — the output VAT code the rate came from (null = custom rate).
-  body('vatCode').optional({ nullable: true }).isString().isLength({ max: 16 }),
   body('shippingAmountMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
   body('ccPdfEmail').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
   body('businessBankAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
@@ -326,7 +321,7 @@ function mapPayloadToService(body) {
     installmentTotal: 'installmentTotal',
     installmentLabel: 'installmentLabel',
     installmentTrigger: 'installmentTrigger',
-    vatRate: 'vatRate', vatCode: 'vatCode', shippingAmountMinor: 'shippingAmountMinor',
+    vatRate: 'vatRate', shippingAmountMinor: 'shippingAmountMinor',
     ccPdfEmail: 'ccPdfEmail', businessBankAccountId: 'businessBankAccountId',
     qrFormat: 'qrFormat',
     eventName: 'eventName',
@@ -454,12 +449,6 @@ router.post(
   [body('customerAccountId').isInt({ min: 1 }), ...INVOICE_BODY_VALIDATORS],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const linkedEvent = parseInt(req.body.eventId, 10);
-    // Owner rule for CRM data (the gallery's ⋯ menu offers "Create invoice"
-    // on the same condition, can_manage_assignments / ownsEvent).
-    if (linkedEvent && (await filterOwnedEventIds(req.admin, [linkedEvent], { honourManageAll: true })).denied.length) {
-      return res.status(403).json({ error: 'That event is not yours to link' });
-    }
     // createInvoice always returns `{ invoiceIds: number[] }` —
     // single-installment / standalone case is a one-element array,
     // multi-installment is N (auto-routed through
@@ -651,30 +640,6 @@ router.put(
 
     // Recompute totals if line items are present.
     let updates = { updated_at: new Date() };
-
-    // Linked event and VAT code save with the checks createInvoice makes. The
-    // customer is fixed once the invoice exists: monthly drafts, quote
-    // lineage, installment siblings and re-billed proofs all hang off it, so
-    // moving one invoice to another customer would split them.
-    if (payload.customerAccountId
-        && parseInt(payload.customerAccountId, 10) !== Number(existing.customer_account_id)) {
-      return res.status(409).json({
-        error: 'The customer of an existing invoice cannot be changed. Cancel this invoice and create a new one for the other customer.',
-        code: 'INVOICE_CUSTOMER_LOCKED',
-      });
-    }
-    const nextEventId = Object.prototype.hasOwnProperty.call(payload, 'eventId')
-      ? (parseInt(payload.eventId, 10) || null) : existing.event_id;
-    if (nextEventId !== (existing.event_id ?? null)) {
-      if (nextEventId && (await filterOwnedEventIds(req.admin, [nextEventId], { honourManageAll: true })).denied.length) {
-        return res.status(403).json({ error: 'That event is not yours to link' });
-      }
-      if (nextEventId) await ensureEventMatchesCustomer(nextEventId, existing.customer_account_id);
-      updates.event_id = nextEventId;
-    }
-    if (Object.prototype.hasOwnProperty.call(payload, 'vatCode') && await hasColumnCached('invoices', 'vat_code')) {
-      updates.vat_code = payload.vatCode ? String(payload.vatCode).slice(0, 16) : null;
-    }
     const map = {
       language: 'language', currency: 'currency',
       issueDate: 'issue_date', dueDate: 'due_date',

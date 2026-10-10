@@ -33,6 +33,8 @@ const SIZES = {
 };
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+/** FOCUSABLE scoped to one part of the dialog (no `:is()`: older Safari). */
+const within = (scope: string) => FOCUSABLE.split(', ').map((sel) => `${scope} ${sel}`).join(', ');
 
 /**
  * The one dialog window: backdrop, title, scrolling body, footer. Escape and
@@ -78,7 +80,13 @@ export const Modal: React.FC<ModalProps> = ({
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
     const panel = panelRef.current;
-    const first = initialFocusRef?.current ?? panel?.querySelector<HTMLElement>(FOCUSABLE) ?? panel;
+    // The first field or button of the dialog's content, then its footer; the
+    // header's close X only when the dialog has nothing else to focus.
+    const first = initialFocusRef?.current
+      ?? panel?.querySelector<HTMLElement>(within('[data-modal-body]'))
+      ?? panel?.querySelector<HTMLElement>(within('[data-modal-footer]'))
+      ?? panel?.querySelector<HTMLElement>(FOCUSABLE)
+      ?? panel;
     first?.focus();
 
     const unlockScroll = lockBodyScroll();
@@ -150,9 +158,9 @@ export const Modal: React.FC<ModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">{children}</div>
+        <div data-modal-body className="flex-1 min-h-0 overflow-y-auto px-6 py-4">{children}</div>
         {footer && (
-          <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-line">{footer}</div>
+          <div data-modal-footer className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-line">{footer}</div>
         )}
       </div>
     </div>,

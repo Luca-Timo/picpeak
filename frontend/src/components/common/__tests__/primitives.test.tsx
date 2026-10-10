@@ -266,3 +266,15 @@ describe('ConfirmDialog and Enter', () => {
     expect(answers).toEqual([false]);
   });
 });
+
+describe('Modal initial focus', () => {
+  it('focuses the first field of the content, not the close button', () => {
+    render(<Modal open onClose={vi.fn()} title="Rename"><input aria-label="Name" /></Modal>);
+    expect(document.activeElement).toBe(screen.getByLabelText('Name'));
+  });
+
+  it('falls back to the footer, then to the close button', () => {
+    render(<Modal open onClose={vi.fn()} title="Info" footer={<button>OK</button>}><p>Text only</p></Modal>);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'OK' }));
+  });
+});
