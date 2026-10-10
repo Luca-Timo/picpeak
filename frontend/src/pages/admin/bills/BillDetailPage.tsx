@@ -330,7 +330,7 @@ export const BillDetailPage: React.FC = () => {
       ? 'release'
       : canPay ? 'pay' : null;
   const menu: ActionMenuItem[] = canManage ? [
-    ...(canSend && inv.status !== 'scheduled' ? [{ key: 'resend', icon: <Send />, label: t('bills.resend', 'Resend'), onSelect: () => { void handleSend(); } }] : []),
+    ...(canSend && inv.status !== 'scheduled' ? [{ key: 'resend', icon: <Send />, label: t('bills.resend', 'Resend'), disabled: sending, onSelect: () => { void handleSend(); } }] : []),
     ...(canPay && primary !== 'pay' ? [{ key: 'pay', icon: <CheckCircle />, label: t('bills.markPaid', 'Mark paid'), onSelect: openPay }] : []),
     ...(inv.kind !== 'storno' && (inv.status === 'sent' || inv.status === 'overdue') && inv.reminderLevel < 2
       ? [{ key: 'reminder', icon: <BellRing />, label: t('bills.sendReminder', 'Send reminder'), onSelect: () => { void handleReminder(); } }] : []),

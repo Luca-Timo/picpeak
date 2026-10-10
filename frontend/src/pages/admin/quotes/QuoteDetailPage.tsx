@@ -133,6 +133,7 @@ export const QuoteDetailPage: React.FC = () => {
       message: t('quotes.confirmConvertToInvoice', 'Convert this quote into invoice(s) only? No gallery / event will be created.'),
       confirmLabel: t('quotes.convertToInvoice', 'Convert to invoice only'),
     }))) return;
+    setConverting(true);
     try {
       const result = await quotesService.convertToInvoice(q.id);
       toast.success(t('quotes.convertedToInvoiceToast',
@@ -141,6 +142,8 @@ export const QuoteDetailPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Convert failed');
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -269,8 +272,8 @@ export const QuoteDetailPage: React.FC = () => {
   const customerName = q.customer.companyName || q.customer.displayName || q.customer.email;
   const menu: ActionMenuItem[] = canManage ? [
     ...(editable && formState.canRecalculate ? [{ key: 'rates', icon: <RefreshCw />, label: t('quotes.recalculateRates', 'Recalculate with current rates'), onSelect: () => { void formRef.current?.recalculateRates(); } }] : []),
-    ...(q.status === 'accepted' && flags.bills ? [{ key: 'invoice', icon: <Receipt />, label: t('quotes.convertToInvoice', 'Convert to invoice only'), onSelect: () => { void handleConvertToInvoice(); } }] : []),
-    ...(q.status === 'accepted' && flags.contracts ? [{ key: 'contract', icon: <ScrollText />, label: t('quotes.convertToContract', 'Convert to contract'), onSelect: () => setConvertOpen(true) }] : []),
+    ...(q.status === 'accepted' && flags.bills ? [{ key: 'invoice', icon: <Receipt />, label: t('quotes.convertToInvoice', 'Convert to invoice only'), disabled: converting, onSelect: () => { void handleConvertToInvoice(); } }] : []),
+    ...(q.status === 'accepted' && flags.contracts ? [{ key: 'contract', icon: <ScrollText />, label: t('quotes.convertToContract', 'Convert to contract'), disabled: converting, onSelect: () => setConvertOpen(true) }] : []),
     ...(['draft', 'sent', 'expired'].includes(q.status) ? [{ key: 'accept', icon: <CheckCircle2 />, label: t('quotes.acceptOnBehalf', 'Accept on behalf'), onSelect: () => { void handleAcceptOnBehalf(); } }] : []),
     ...((['draft', 'sent', 'expired'].includes(q.status) || canReissue) ? [{ key: 'decline', icon: <XCircle />, label: t('quotes.declineOnBehalf', 'Decline on behalf'), onSelect: () => { void handleDeclineOnBehalf(); } }] : []),
     ...(canReissue ? [{ key: 'reissue', icon: <FilePlus />, label: t('quotes.reissue', 'Reissue'), onSelect: () => { void handleReissue(); } }] : []),

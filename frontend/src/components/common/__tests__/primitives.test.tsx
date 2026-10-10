@@ -8,6 +8,7 @@ import { Button } from '../Button';
 import { Input } from '../Input';
 import { Notice } from '../Notice';
 import { Modal } from '../Modal';
+import { ActionMenu } from '../ActionMenu';
 import { useEscapeClose } from '../useEscapeClose';
 import { Tabs } from '../Tabs';
 import { Switch } from '../Switch';
@@ -224,5 +225,20 @@ describe('useEscapeClose', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onModal).toHaveBeenCalledTimes(1);
     expect(onDrawer).not.toHaveBeenCalled();
+  });
+});
+
+describe('ActionMenu', () => {
+  it('opens to the right when a right-anchored dropdown would leave the viewport, and skips disabled items', () => {
+    const onA = vi.fn();
+    render(<ActionMenu items={[{ key: 'a', label: 'Convert', disabled: true, onSelect: onA }, { key: 'b', label: 'Duplicate', onSelect: vi.fn() }]} />);
+    const button = screen.getByRole('button', { name: 'More actions' });
+    // A menu button at the far left of a 390 px phone.
+    button.parentElement!.getBoundingClientRect = () => ({ left: 16, right: 56, top: 0, bottom: 40, width: 40, height: 40, x: 16, y: 0, toJSON: () => ({}) });
+    fireEvent.click(button);
+    const menu = screen.getByRole('menu');
+    expect(menu).toHaveClass('left-0');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Convert' }));
+    expect(onA).not.toHaveBeenCalled();
   });
 });

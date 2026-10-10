@@ -32,6 +32,11 @@ interface ActionMenuProps {
 export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', label, size = 'icon-md', className }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  // The side the dropdown opens to, settled when it opens: `align` unless the
+  // dropdown would leave the viewport on that side (on a phone the menu is
+  // often the first item of a left-aligned row, so right-anchoring it would
+  // push the dropdown off the left edge).
+  const [side, setSide] = useState<'left' | 'right'>(align);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,7 +81,16 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
         aria-label={label || t('common.moreActions', 'More actions')}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open && ref.current) {
+            const box = ref.current.getBoundingClientRect();
+            const width = Math.min(256, window.innerWidth - 16);
+            if (align === 'right' && box.right - width < 8) setSide('left');
+            else if (align === 'left' && box.left + width > window.innerWidth - 8) setSide('right');
+            else setSide(align);
+          }
+          setOpen((o) => !o);
+        }}
       >
         <MoreHorizontal className="w-4 h-4" />
       </Button>
@@ -84,8 +98,8 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
         <div
           role="menu"
           className={clsx(
-            'absolute top-full mt-1 z-30 w-64 rounded-lg border border-line bg-panel shadow-lg p-1',
-            align === 'right' ? 'right-0' : 'left-0',
+            'absolute top-full mt-1 z-30 w-64 max-w-[calc(100vw-1rem)] rounded-lg border border-line bg-panel shadow-lg p-1',
+            side === 'right' ? 'right-0' : 'left-0',
           )}
         >
           {regular.map(row)}
