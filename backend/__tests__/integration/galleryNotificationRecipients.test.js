@@ -655,6 +655,17 @@ describe('a CRM customer never gets the direct gallery link', () => {
     expect((await linkOf('gallery_link_updated')).new_gallery_link).toMatch(/\/customer\/events\/crm-renamed$/);
   });
 
+  it('a passive CRM customer (no portal login) gets the gallery email with the share link and password', async () => {
+    const id = await seedEvent({ slug: 'crm-passive-send', customerEmail: 'ben@recipients.test' });
+    await assign(id, await seedAccount('ben@recipients.test', 'Ben Beispiel', { passive: true }));
+
+    expect((await request(app).post(`/admin/events/${id}/send-gallery-email`).send({ password: 'Sunrise-Lake-42' })).status).toBe(200);
+    expect(await queued('customer_gallery_assigned')).toHaveLength(0);
+    const data = await linkOf('gallery_created');
+    expect(data.gallery_link).toContain('crm-passive-send-token');
+    expect(data.gallery_password).toBe('Sunrise-Lake-42');
+  });
+
   it('keeps the share link for anyone else — another address, a passive account, the portal off', async () => {
     const other = await seedEvent({ slug: 'crm-other', customerEmail: 'client@recipients.test' });
     await assign(other, await seedAccount('anna@recipients.test', 'Anna Muster'));
