@@ -18,6 +18,7 @@ import type { FeedbackSettings as FeedbackSettingsType } from '../../../../servi
 import { ExternalFolderPicker } from '../ExternalFolderPicker';
 import { useExternalImport } from '../useExternalImport';
 import { emailNeedsPassword, type EventFields } from './draft';
+import { radioGroupKeyDown } from '../../../../utils/ariaKeyboard';
 
 export interface FieldsProps {
   f: EventFields;
@@ -456,11 +457,12 @@ export const SourceSection: React.FC<FieldsProps & { event: Event; canEdit?: boo
     <SectionCard
       description={t('events.sourceModeHelp', 'Use managed mode for direct uploads or point to a mounted /external-media folder when using local storage.')}
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label={t('events.sourceMode', 'Source Mode')}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label={t('events.sourceMode', 'Source Mode')} onKeyDown={radioGroupKeyDown}>
         <button
           type="button"
           role="radio"
           aria-checked={f.source_mode === 'managed'}
+          tabIndex={f.source_mode === 'managed' ? 0 : -1}
           className={option(f.source_mode === 'managed')}
           onClick={() => set({ source_mode: 'managed', external_path: '' })}
         >
@@ -471,6 +473,7 @@ export const SourceSection: React.FC<FieldsProps & { event: Event; canEdit?: boo
           type="button"
           role="radio"
           aria-checked={f.source_mode === 'reference'}
+          tabIndex={f.source_mode === 'reference' ? 0 : -1}
           className={option(f.source_mode === 'reference')}
           onClick={() => set({ source_mode: 'reference', external_path: f.external_path || event.external_path || '' })}
         >
