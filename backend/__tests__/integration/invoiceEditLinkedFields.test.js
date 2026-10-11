@@ -59,14 +59,14 @@ beforeAll(async () => {
   // another admin's — the CRM owner rule (canLinkCrmToEvent).
   const editorId = id(await db('admin_users').insert({
     username: 'editor', email: 'editor@example.com', password_hash: 'x',
-    must_change_password: false, created_at: new Date(),
+    must_change_password: false, created_at: new Date().toISOString(),
   }).returning('id'));
   await assignAdminRole(db, editorId, 'admin');
   editorToken = mintAdminToken(editorId);
 
   otherCustomerId = id(await db('customer_accounts').insert({
     email: 'second@example.com', display_name: 'Second Customer', password_hash: 'x',
-    preferred_language: 'de', is_active: 1, created_at: new Date(),
+    preferred_language: 'de', is_active: 1, created_at: new Date().toISOString(),
   }).returning('id'));
 
   ownEventId = await insertEvent('editor-own', editorId);
