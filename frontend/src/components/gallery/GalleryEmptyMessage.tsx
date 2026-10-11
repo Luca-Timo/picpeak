@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 
 /**
  * The line under an empty photo grid. A search or filter that leaves nothing
- * on screen says so, and points at the way back; only a scope with no photos
- * at all says the gallery is empty.
+ * on screen says so, so the guest knows to clear it; only a scope with no
+ * photos at all says the gallery is empty.
  */
 export const GalleryEmptyMessage: React.FC<{ filtered?: boolean }> = ({ filtered = false }) => {
   const { t } = useTranslation();

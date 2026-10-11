@@ -33,6 +33,8 @@ interface LocalizedDateInputProps {
   min?: string;
   max?: string;
   disabled?: boolean;
+  /** Accessible name when the visible label sits outside the component. */
+  ariaLabel?: string;
 }
 
 export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
@@ -44,6 +46,7 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
   min,
   max,
   disabled,
+  ariaLabel,
 }) => {
   const { t } = useTranslation();
   const { dateFormat, locale } = useLocalizedDate();
@@ -169,6 +172,16 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
     };
   }, [open, place]);
 
+  const commitText = () => {
+    const iso = toIso(text);
+    if (iso) {
+      onChange(iso);
+      setText(toDisplay(iso));
+    } else if (!text.trim()) {
+      onChange('');
+    }
+  };
+
   const pick = (iso: string) => {
     onChange(iso);
     setText(toDisplay(iso));
@@ -205,15 +218,13 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
             const iso = isComplete(next) ? toIso(next) : '';
             if (iso) onChange(iso);
           }}
-          onBlur={() => {
-            const iso = toIso(text);
-            if (iso) {
-              onChange(iso);
-              setText(toDisplay(iso));
-            } else if (!text.trim()) {
-              onChange('');
-            }
+          onKeyDown={(e) => {
+            // Enter submits the surrounding form without a blur: commit a
+            // short date ("1.8.2026") first, or the form saves the old value.
+            if (e.key === 'Enter') commitText();
           }}
+          onBlur={commitText}
+          aria-label={label ? undefined : ariaLabel}
           className={clsx('input pr-10', error && 'border-danger focus-visible:ring-accent')}
           aria-invalid={error ? 'true' : 'false'}
           aria-describedby={
@@ -235,6 +246,14 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
         {open && createPortal(
           <div
             ref={popoverRef}
+            // Tab out of the calendar closes it: a portalled popover would
+            // otherwise stay open behind the focus, and inside a Modal it
+            // would hold the top layer and switch off the Modal's Tab trap.
+            onBlur={(e) => {
+              const next = e.relatedTarget as Node | null;
+              if (next && (popoverRef.current?.contains(next) || fieldRef.current?.contains(next))) return;
+              if (next) setOpen(false);
+            }}
             role="dialog"
             aria-label={label || t('common.chooseDate', 'Choose date')}
             style={position}

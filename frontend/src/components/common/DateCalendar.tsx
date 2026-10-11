@@ -49,8 +49,15 @@ export const DateCalendar: React.FC<DateCalendarProps> = ({ value, onSelect, loc
   const minDate = fromIso(min);
   const maxDate = fromIso(max);
   const today = new Date();
-  const [focusDay, setFocusDay] = React.useState<Date>(() => selected || today);
-  const [month, setMonth] = React.useState<Date>(() => startOfMonth(selected || today));
+  // Start on the selected day (or today), moved into [min, max]: a disabled
+  // day cannot take focus, and the grid would have no keyboard entry.
+  const [focusDay, setFocusDay] = React.useState<Date>(() => {
+    const start = selected || today;
+    if (minDate && start < minDate) return minDate;
+    if (maxDate && start > maxDate) return maxDate;
+    return start;
+  });
+  const [month, setMonth] = React.useState<Date>(() => startOfMonth(focusDay));
   const gridRef = React.useRef<HTMLDivElement>(null);
   // Focus follows the active day: on open (so the arrow keys work at once)
   // and after each keyboard step, not after a click on the month arrows.
@@ -143,7 +150,7 @@ export const DateCalendar: React.FC<DateCalendarProps> = ({ value, onSelect, loc
                       'w-full h-9 rounded-md text-sm tabular-nums disabled:opacity-40 disabled:pointer-events-none',
                       isSelected
                         ? 'bg-accent-strong text-accent-fg font-medium'
-                        : clsx('hover:bg-hover', inMonth ? 'text-body' : 'text-faint'),
+                        : clsx('hover:bg-hover', inMonth ? 'text-body' : 'text-muted'),
                       !isSelected && isSameDay(d, today) && 'ring-1 ring-inset ring-line-strong font-medium',
                     )}
                   >

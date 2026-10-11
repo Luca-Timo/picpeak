@@ -10,7 +10,7 @@ const folders = [
   { id: 3, name: 'Party', parent_id: null },
 ];
 
-const row = (name: string) => screen.getByRole('button', { name });
+const row = (name: string) => screen.getByRole('treeitem', { name });
 
 describe('treeKeyDown (FolderTreePicker)', () => {
   it('moves with Up / Down, opens with Right, enters the child, goes back with Left', () => {
@@ -20,9 +20,11 @@ describe('treeKeyDown (FolderTreePicker)', () => {
     expect(document.activeElement).toBe(row('Ceremony'));
 
     // Closed: Right opens it, focus stays.
-    expect(screen.queryByRole('button', { name: 'Vows' })).toBeNull();
+    expect(screen.queryByRole('treeitem', { name: 'Vows' })).toBeNull();
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
     expect(row('Vows')).toBeInTheDocument();
+    expect(row('Ceremony')).toHaveAttribute('aria-expanded', 'true');
+    expect(row('Vows')).toHaveAttribute('aria-level', '3');
     expect(document.activeElement).toBe(row('Ceremony'));
     // Open: Right moves into the first child.
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
@@ -31,7 +33,11 @@ describe('treeKeyDown (FolderTreePicker)', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
     expect(document.activeElement).toBe(row('Ceremony'));
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
-    expect(screen.queryByRole('button', { name: 'Vows' })).toBeNull();
+    expect(screen.queryByRole('treeitem', { name: 'Vows' })).toBeNull();
+    // A top-level folder sits under "Gallery root".
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(row('Gallery root'));
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
 
     fireEvent.keyDown(document.activeElement!, { key: 'End' });
     expect(document.activeElement).toBe(row('Party'));
@@ -41,7 +47,9 @@ describe('treeKeyDown (FolderTreePicker)', () => {
 
   it('keeps the expand chevrons out of the Tab order', () => {
     render(<FolderTreePicker folders={folders} value={undefined} onChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'Expand' })).toHaveAttribute('tabindex', '-1');
+    const chevron = screen.getByLabelText('Expand');
+    expect(chevron).toHaveAttribute('tabindex', '-1');
+    expect(chevron).toHaveAttribute('aria-hidden', 'true');
   });
 });
 

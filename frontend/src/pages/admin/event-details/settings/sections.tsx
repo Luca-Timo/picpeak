@@ -363,6 +363,7 @@ export const GuestsSection: React.FC<FieldsProps & {
               <div className="flex flex-wrap gap-2">
                 <div className="w-44">
                   <LocalizedDateInput
+                    ariaLabel={t('events.revealAt', 'Scheduled reveal (optional)')}
                     value={f.reveal_at.slice(0, 10)}
                     onChange={(date) => set({ reveal_at: date ? `${date}T${f.reveal_at.slice(11, 16) || '00:00'}` : '' })}
                   />

@@ -71,7 +71,8 @@ export const GallerySidebarFolderTree: React.FC<SidebarFolderTreeProps> = ({
 
   const renderNodes = (list: FolderTreeNode[], depth: number, parent: string): React.ReactNode => (
     <ul
-      role={depth === 0 ? 'tree' : 'group'}
+      // Levels come from aria-level on the rows, so the nested lists are plain.
+      role={depth === 0 ? 'tree' : 'none'}
       className="space-y-0.5"
       onKeyDown={depth === 0
         ? (e) => treeKeyDown(e, { expand: (key) => setOpen(key, true), collapse: (key) => setOpen(key, false) })
@@ -84,14 +85,16 @@ export const GallerySidebarFolderTree: React.FC<SidebarFolderTreeProps> = ({
         const isOpen = openId === id;
         const Icon = isOpen ? FolderOpen : Folder;
         return (
-          <li key={id} role="treeitem" aria-expanded={hasChildren ? isExpanded : undefined} aria-selected={isOpen}>
+          <li key={id} role="none">
             <div className="flex items-center" style={{ paddingLeft: `${depth * 0.75}rem` }}>
               {hasChildren ? (
                 <button
                   type="button"
                   onClick={() => toggle(id)}
-                  // The arrow keys open and close the row; one Tab stop per row.
+                  // The arrow keys open and close the row; one Tab stop per row,
+                  // and the row itself announces whether it is open.
                   tabIndex={-1}
+                  aria-hidden="true"
                   aria-label={isExpanded
                     ? t('gallery.collapseFolder', 'Collapse {{name}}', { name: node.category.name })
                     : t('gallery.expandFolder', 'Expand {{name}}', { name: node.category.name })}
@@ -106,6 +109,10 @@ export const GallerySidebarFolderTree: React.FC<SidebarFolderTreeProps> = ({
                 type="button"
                 onClick={() => onOpenFolder(folderKey(node.category))}
                 className={itemClass(isOpen)}
+                role="treeitem"
+                aria-level={depth + 1}
+                aria-expanded={hasChildren ? isExpanded : undefined}
+                aria-selected={isOpen}
                 data-tree-item
                 data-key={id}
                 data-parent={parent}

@@ -26,6 +26,9 @@
  *
  * The sweep groups by the index's own expression, so whatever the index would
  * reject is exactly what gets renamed.
+ *
+ * Raw SQL with a per-engine boolean literal on purpose: the knex builder
+ * cannot express an index on expressions with a WHERE clause.
  */
 
 const INDEX_NAME = 'photo_categories_folder_sibling_name_uq';

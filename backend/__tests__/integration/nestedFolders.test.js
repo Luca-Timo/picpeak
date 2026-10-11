@@ -20,6 +20,7 @@ const request = require('supertest');
 describe('nested folders', () => {
   let tmpDir; let db; let cleanup; let app; let eventId; let tree;
   let canManage = true;
+  let canAccess = true;
 
   const idOf = (r) => Number(r[0]?.id ?? r[0]);
 
@@ -44,7 +45,7 @@ describe('nested folders', () => {
     }));
     jest.doMock('../../src/middleware/ownership', () => ({
       requireEventOwnership: (_req, _res, next) => next(),
-      canAccessEvent: () => true,
+      canAccessEvent: () => canAccess,
     }));
 
     ({ db, cleanup } = await require('./helpers/crmDb').bootCrmDb());
@@ -375,6 +376,41 @@ describe('nested folders', () => {
       expect(flipped.status).toBe(409);
       expect(flipped.body.code).toBe('FOLDER_EXISTS');
       expect(Boolean((await db('photo_categories').where('id', filter).first()).is_folder)).toBe(false);
+    });
+
+    it('the categories API spells a folder name by the tree\'s rules', async () => {
+      const categoriesApp = express();
+      categoriesApp.use(express.json());
+      categoriesApp.use('/api/admin/categories', require('../../src/routes/adminCategories'));
+      await tree.ensurePath(eventId, ['Getting ready']);
+      // A trailing space or a decomposed umlaut is the same folder.
+      const spaced = await request(categoriesApp).post('/api/admin/categories')
+        .send({ name: 'Getting ready ', is_global: false, event_id: eventId, is_folder: true });
+      expect(spaced.status).toBe(409);
+      const nfd = 'A\u0308rger';
+      const first = await request(categoriesApp).post('/api/admin/categories')
+        .send({ name: nfd, is_global: false, event_id: eventId, is_folder: true });
+      expect(first.status).toBeLessThan(300);
+      expect((await db('photo_categories').where({ event_id: eventId, is_folder: true }).whereRaw('lower(name) = lower(?)', ['\u00c4rger']).first())).toBeTruthy();
+      // A path character is refused, as on the folder route.
+      const slashed = await request(categoriesApp).post('/api/admin/categories')
+        .send({ name: 'a/b', is_global: false, event_id: eventId, is_folder: true });
+      expect(slashed.status).toBe(400);
+    });
+
+    it('reads is_global "false" as false', async () => {
+      const categoriesApp = express();
+      categoriesApp.use(express.json());
+      categoriesApp.use('/api/admin/categories', require('../../src/routes/adminCategories'));
+      canAccess = false;
+      try {
+        const res = await request(categoriesApp).post('/api/admin/categories')
+          .send({ name: 'Elsewhere', is_global: 'false', event_id: eventId, is_folder: 'true' });
+        expect(res.status).toBe(403);
+        expect(await db('photo_categories').where({ name: 'Elsewhere' }).first()).toBeUndefined();
+      } finally {
+        canAccess = true;
+      }
     });
 
     it('caps the folders of one event with a stable 409', async () => {

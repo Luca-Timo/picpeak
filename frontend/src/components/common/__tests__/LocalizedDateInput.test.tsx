@@ -106,4 +106,42 @@ describe('LocalizedDateInput', () => {
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  it('commits a short date on Enter, before the form submits', () => {
+    let submitted = '';
+    const Form = () => {
+      const [v, setV] = React.useState('2026-07-07');
+      return (
+        <form onSubmit={(e) => { e.preventDefault(); submitted = v; }}>
+          <LocalizedDateInput label="Date" value={v} onChange={setV} />
+          <button type="submit">Save</button>
+        </form>
+      );
+    };
+    render(<Form />);
+    const input = screen.getByRole('textbox', { name: 'Date' });
+    fireEvent.change(input, { target: { value: '1.8.2026' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.submit(input.closest('form')!);
+    expect(submitted).toBe('2026-08-01');
+  });
+
+  it('starts the calendar on a day inside min / max', () => {
+    render(<LocalizedDateInput label="Expires" value="2026-01-10" min="2026-03-01" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date' }));
+    expect(document.activeElement).toBe(document.querySelector('[data-day="2026-03-01"]'));
+  });
+
+  it('closes when Tab leaves the calendar', () => {
+    render(
+      <>
+        <LocalizedDateInput label="Due" value="2026-09-10" onChange={vi.fn()} />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date' }));
+    const day = document.activeElement as HTMLElement;
+    fireEvent.blur(day, { relatedTarget: screen.getByRole('button', { name: 'Elsewhere' }) });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });

@@ -53,14 +53,16 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
       const selected = value === folder.id;
       const disabled = !!isDisabled?.(folder.id);
       return (
-        <div key={folder.id} role="treeitem" aria-expanded={hasChildren ? open : undefined} aria-selected={selected}>
+        <div key={folder.id} role="none">
           <div className={rowClass(selected, disabled)} style={{ paddingLeft: depth * 16 + 4 }}>
             {hasChildren ? (
               <button
                 type="button"
                 onClick={() => toggle(folder.id)}
-                // The arrow keys open and close the row; one Tab stop per row.
+                // The arrow keys open and close the row; one Tab stop per row,
+                // and the row itself announces whether it is open.
                 tabIndex={-1}
+                aria-hidden="true"
                 className="p-0.5 text-muted hover:text-body"
                 aria-label={open ? t('common.collapse', 'Collapse') : t('common.expand', 'Expand')}
               >
@@ -73,9 +75,15 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
               type="button"
               disabled={disabled}
               onClick={() => onChange(folder.id)}
+              role="treeitem"
+              aria-level={depth + 1}
+              aria-expanded={hasChildren ? open : undefined}
+              aria-selected={selected}
               data-tree-item
               data-key={folder.id}
-              data-parent={parentId ?? ''}
+              // Under "Gallery root" when it is shown: indented as its
+              // children, so Left goes back up to it.
+              data-parent={parentId ?? (allowRoot ? 'root' : '')}
               data-expanded={hasChildren ? String(open) : undefined}
               className={
                 'flex items-center gap-1.5 flex-1 min-w-0 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40 ' +
@@ -110,6 +118,9 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
           <button
             type="button"
             onClick={() => onChange(null)}
+            role="treeitem"
+            aria-level={1}
+            aria-selected={value === null}
             data-tree-item
             data-key="root"
             data-parent=""

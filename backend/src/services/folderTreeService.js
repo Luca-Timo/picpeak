@@ -31,8 +31,9 @@ const DEFAULT_FIRST_LOOK_KEYWORDS = ['FirstLook', 'Sneak Peek'];
  * Per-event caps (PR 1826 follow-up). Far above anything a studio builds by
  * hand or exports from Lightroom (a large wedding runs to a few dozen
  * folders); they exist so a scripted client cannot grow one event's tree or
- * request list without bound. Both are checked before the insert, so two
- * racing writers can overshoot by one each: a ceiling, not an exact count.
+ * request list without bound. Both are checked before the insert, so N
+ * writers racing at the limit can overshoot it by up to N-1; every later
+ * write is refused. A ceiling, not an exact count.
  */
 const FOLDER_LIMITS = Object.freeze({
   MAX_FOLDERS_PER_EVENT: 1000,

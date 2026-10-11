@@ -136,8 +136,10 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
       return res.status(400).json({ errors: safeValidationErrors(errors) });
     }
     
-    const { name, slug, is_global = true, event_id = null, is_folder = false } = req.body;
-    if (!is_global && await refuseForeignCategoryEvent(req, res, event_id)) return;
+    const { slug, is_global = true, event_id = null, is_folder = false } = req.body;
+    let { name } = req.body;
+    // parseBooleanInput, like the other flags: the string "false" is truthy.
+    if (!parseBooleanInput(is_global, true) && await refuseForeignCategoryEvent(req, res, event_id)) return;
     if (parseBooleanInput(is_folder, false)) {
       // Folders belong to one gallery (issue 1160, option b); a global folder
       // would restructure every gallery at once.
@@ -145,6 +147,10 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
         return res.status(400).json({ error: 'Folders belong to one gallery; create them on the event' });
       }
       if (await refuseWithoutFolderPermission(req, res)) return;
+      // The same name rules as the folder tree (NFC, trimmed, no path
+      // characters), so the sibling check and the index see one spelling.
+      name = folderTree.normalizeSegment(name);
+      if (!name) return res.status(400).json({ error: 'Folder name is invalid' });
       if (await refuseNewTopLevelFolder(res, event_id, name)) return;
     }
     
@@ -242,7 +248,8 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
     }
 
     const { id } = req.params;
-    const { name, hero_photo_id } = req.body;
+    const { hero_photo_id } = req.body;
+    let { name } = req.body;
 
     const category = await db('photo_categories').where('id', id).first();
     if (!category) {
@@ -262,8 +269,13 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
         return res.status(400).json({ error: 'Move or delete the subfolders first; a filter category cannot contain folders' });
       }
     }
-    // Filter → folder: it becomes a top-level folder under its (new) name.
-    if (togglesFolder && !wasFolder && await refuseNewTopLevelFolder(res, category.event_id, name, category.id)) return;
+    // Filter → folder: it becomes a top-level folder under its (new) name,
+    // spelled by the folder tree's rules.
+    if (togglesFolder && !wasFolder) {
+      name = folderTree.normalizeSegment(name);
+      if (!name) return res.status(400).json({ error: 'Folder name is invalid' });
+      if (await refuseNewTopLevelFolder(res, category.event_id, name, category.id)) return;
+    }
 
     // A folder (issue 1786) renames through the tree service: sibling-name
     // clash as 409, path-joined slug. The generic slug below would collide
