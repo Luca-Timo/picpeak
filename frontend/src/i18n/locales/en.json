@@ -843,7 +843,11 @@
     "hidePassword": "Hide password",
     "showPassword": "Show password",
     "loadFailed": "Could not load this",
-    "moreActions": "More actions"
+    "moreActions": "More actions",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today",
+    "chooseDate": "Choose date"
   },
   "upload": {
     "capacity": {
@@ -1346,6 +1350,8 @@
     "favorites": "Favorites",
     "needHelp": "Need help? Contact us at",
     "noPhotosFound": "No photos found",
+    "noPhotosMatch": "No photos match your search or filters.",
+    "noPhotosYet": "There are no photos here yet.",
     "failedToLoad": "Failed to load photos",
     "tryAgain": "Try Again",
     "passwordChangeRequired": "Change your password in the admin area before previewing this gallery.",
@@ -1613,6 +1619,7 @@
     "revealMode": "Reveal mode (hide gallery until reveal)",
     "revealModeHelp": "Guests can upload but see no photos until you reveal the gallery — manually or at the scheduled time. Slideshow and client access keep working.",
     "revealAt": "Scheduled reveal (optional)",
+    "revealAtTime": "Reveal time",
     "revealAtHelp": "Leave empty to reveal manually with the \"Reveal now\" button.",
     "revealModeStatus": "Reveal mode",
     "revealed": "Revealed",

@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, Lock, RefreshCw } from 'lucide-react';
 import type { Event } from '../../../../types';
-import { Button, Input, LocalizedDateInput, PasswordGenerator, Notice } from '../../../../components/common';
+import { Button, Input, LocalizedDateInput, PasswordGenerator, Notice, TimeField } from '../../../../components/common';
 import { FeedbackSettings } from '../../../../components/admin';
 import { CustomerAccountPicker } from '../../../../components/admin/CustomerAccountPicker';
 import { TeamMemberPicker } from '../../../../components/admin/TeamMemberPicker';
@@ -356,12 +356,24 @@ export const GuestsSection: React.FC<FieldsProps & {
           {f.reveal_mode && (
             <div className="mt-2 ml-6">
               <label className={labelClass}>{t('events.revealAt', 'Scheduled reveal (optional)')}</label>
-              <input
-                type="datetime-local"
-                value={f.reveal_at}
-                onChange={(e) => set({ reveal_at: e.target.value })}
-                className="px-3 py-2 border border-line-strong bg-panel text-heading rounded-lg focus:ring-2 focus:ring-accent"
-              />
+              {/* Date and time fields instead of a native datetime-local:
+                  those follow the general date and time formats. reveal_at
+                  stays the local "yyyy-MM-ddTHH:mm" string. */}
+              <div className="flex flex-wrap gap-2">
+                <div className="w-44">
+                  <LocalizedDateInput
+                    value={f.reveal_at.slice(0, 10)}
+                    onChange={(date) => set({ reveal_at: date ? `${date}T${f.reveal_at.slice(11, 16) || '00:00'}` : '' })}
+                  />
+                </div>
+                <TimeField
+                  className="w-28"
+                  ariaLabel={t('events.revealAtTime', 'Reveal time')}
+                  value={f.reveal_at.slice(11, 16)}
+                  disabled={!f.reveal_at}
+                  onChange={(time) => f.reveal_at && set({ reveal_at: `${f.reveal_at.slice(0, 10)}T${time}` })}
+                />
+              </div>
               <p className="text-xs text-muted mt-1">
                 {t('events.revealAtHelp', 'Leave empty to reveal manually with the "Reveal now" button.')}
               </p>

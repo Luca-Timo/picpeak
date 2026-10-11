@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { Inbox, Send, XCircle } from 'lucide-react';
 
-import { Badge, Button, EmptyState, ErrorState } from '../common';
+import { Badge, Button, EmptyState, ErrorState, LocalizedDateInput } from '../common';
 import type { BadgeTone } from '../common';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import {
@@ -117,7 +117,7 @@ export const CustomerDocumentRequests: React.FC<{ customerId: number; canManage:
         </label>
         <label className="text-xs text-soft">
           <span className="block mb-1">{t('customers.documents.requests.dueLabel', 'Needed by (optional)')}</span>
-          <input type="date" className={inputClass} value={due} onChange={(e) => setDue(e.target.value)} disabled={busy} />
+          <LocalizedDateInput value={due} onChange={setDue} disabled={busy} />
         </label>
         <Button
           type="button" variant="primary" size="sm" onClick={create} disabled={busy || !title.trim()}

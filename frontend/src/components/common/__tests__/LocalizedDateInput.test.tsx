@@ -37,28 +37,73 @@ describe('LocalizedDateInput', () => {
     expect(onChange).toHaveBeenCalledWith('2026-08-15');
   });
 
-  it('focuses the native date input when opening the calendar, so leaving it closes the calendar', () => {
-    const focusedWhenOpened: Array<Element | null> = [];
-    const showPicker = vi.fn(function (this: HTMLInputElement) { focusedWhenOpened.push(document.activeElement); });
-    Object.defineProperty(HTMLInputElement.prototype, 'showPicker', { value: showPicker, configurable: true });
-    const { container } = render(<LocalizedDateInput label="Valid until" value="" onChange={vi.fn()} />);
-    const native = container.querySelector('input[type="date"]') as HTMLInputElement;
-
-    fireEvent.click(screen.getByRole('button', { name: 'Valid until' }));
-    expect(showPicker).toHaveBeenCalledTimes(1);
-    // Browsers close the calendar when this input loses focus; it has to hold
-    // focus while the calendar is open.
-    expect(focusedWhenOpened[0]).toBe(native);
-    delete (HTMLInputElement.prototype as Partial<HTMLInputElement>).showPicker;
+  it('keeps the text and caret while a date is edited in place (regression: deleting a digit reformatted the field)', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<LocalizedDateInput value="2026-08-15" onChange={onChange} />);
+    const input = screen.getByDisplayValue('15.08.2026') as HTMLInputElement;
+    // Deleting the "5" leaves "1.08.2026": a valid date, but not the one meant.
+    fireEvent.change(input, { target: { value: '1.08.2026' } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input.value).toBe('1.08.2026');
+    // Typing the new digit commits the full date; the value coming back from
+    // the parent leaves the text as typed.
+    fireEvent.change(input, { target: { value: '18.08.2026' } });
+    expect(onChange).toHaveBeenLastCalledWith('2026-08-18');
+    rerender(<LocalizedDateInput value="2026-08-18" onChange={onChange} />);
+    expect(input.value).toBe('18.08.2026');
   });
 
-  it('returns focus to the visible field once a date is picked', () => {
+  it('still accepts a short date on blur', () => {
+    const { input, onChange } = renderInput();
+    fireEvent.change(input, { target: { value: '1.8.2026' } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenCalledWith('2026-08-01');
+  });
+
+  it('follows a value set from outside', () => {
+    const { rerender } = render(<LocalizedDateInput value="2026-08-15" onChange={vi.fn()} />);
+    rerender(<LocalizedDateInput value="2026-09-01" onChange={vi.fn()} />);
+    expect(screen.getByDisplayValue('01.09.2026')).toBeInTheDocument();
+  });
+
+  it('opens its own calendar (no native picker) and picks a day', () => {
     const onChange = vi.fn();
-    const { container } = render(<LocalizedDateInput label="Valid until" value="" onChange={onChange} />);
-    const native = container.querySelector('input[type="date"]') as HTMLInputElement;
-    native.focus();
-    fireEvent.change(native, { target: { value: '2026-09-16' } });
-    expect(onChange).toHaveBeenCalledWith('2026-09-16');
+    render(<LocalizedDateInput label="Valid until" value="2026-09-10" onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date' }));
+    const dialog = screen.getByRole('dialog', { name: 'Valid until' });
+    expect(dialog.querySelector('input[type="date"]')).toBeNull();
+    // The selected day holds focus, so the arrow keys work at once.
+    const selected = screen.getByRole('gridcell', { selected: true }).querySelector('button')!;
+    expect(document.activeElement).toBe(selected);
+    fireEvent.keyDown(selected, { key: 'ArrowRight' });
+    fireEvent.click(document.activeElement as HTMLElement);
+    expect(onChange).toHaveBeenCalledWith('2026-09-11');
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Valid until' }));
+  });
+
+  it('moves to the next month with Page Down and respects min / max', () => {
+    render(<LocalizedDateInput label="Due" value="2026-09-10" min="2026-09-05" max="2026-10-05" onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date' }));
+    const day = (iso: string) => document.querySelector(`[data-day="${iso}"]`) as HTMLButtonElement;
+    expect(day('2026-09-04').disabled).toBe(true);
+    expect(day('2026-09-05').disabled).toBe(false);
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'PageDown' });
+    expect(document.activeElement).toBe(day('2026-10-10'));
+    expect(day('2026-10-10').disabled).toBe(true);
+  });
+
+  it('closes the calendar on Escape and on a click outside', () => {
+    render(<LocalizedDateInput label="Due" value="" onChange={vi.fn()} />);
+    const toggle = screen.getByRole('button', { name: 'Choose date' });
+    fireEvent.click(toggle);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Focus was on a day inside the calendar; it goes back to the button,
+    // not to <body> (the next Tab would start at the top of the page).
+    expect(document.activeElement).toBe(toggle);
+    fireEvent.click(toggle);
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

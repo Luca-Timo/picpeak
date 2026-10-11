@@ -43,6 +43,7 @@ import { usePermission } from '../../hooks/usePermission';
 import { ExternalFolderPicker } from './event-details/ExternalFolderPicker';
 import { ThemeDisplay } from '../../components/admin';
 import { Code } from 'lucide-react';
+import { todayIsoDate } from '../../utils/localDate';
 
 interface FormData {
   event_type: string;
@@ -149,7 +150,7 @@ export const CreateEventPage: React.FC = () => {
   const [formData, setFormData] = useState<FormData>({
     event_type: 'wedding',
     event_name: '',
-    event_date: new Date().toISOString().split('T')[0], // Initialize with ISO date format
+    event_date: todayIsoDate(),
     event_time_start: '',
     event_time_end: '',
     is_full_day: true,
