@@ -117,8 +117,9 @@ async function galleryLinkFor(event, email, shareUrl) {
  * governs assigning accounts also governs mailing them, on every path.
  *
  * `fallbackFor` names the account the inline address was folded into, so the
- * notifier can still send the standard email when that account's notice is
+ * notifier can still send the gallery email when that account's notice is
  * skipped (draft, expired, archived) — the person is told once, not never.
+ * That gallery email links to the portal too (galleryLinkFor).
  *
  * @returns {Promise<{ inlineEmail: string|null, accounts: object[], fallbackFor?: object }>}
  */
@@ -209,7 +210,8 @@ async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients
   }
 
   // The inline address was folded into an account whose notice was skipped:
-  // send the standard email instead, so the person is still told.
+  // send the gallery email instead (still with the portal link), so the
+  // person is still told.
   if (fallbackFor && allowFallback && !notified.includes(fallbackFor.account)) {
     inlineQueued = await queueInline(fallbackFor.email);
   }
@@ -237,7 +239,8 @@ function accountsAnnounceable(event, now = new Date()) {
  * Accounts get the same `gallery_completed` mail, linked to the gallery in
  * their customer portal, which opens it without the password. One person in
  * both fields gets that account version (resolveGalleryRecipients). If that
- * account's mail is not queued, the person gets the standard version instead.
+ * account's mail is not queued, the person gets the inline version instead —
+ * the gallery's language and customer name, still with the portal link.
  * Accounts are not told about a draft, archived or expired gallery
  * (accountsAnnounceable).
  *
@@ -285,7 +288,8 @@ async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }
   }
 
   // The inline address was folded into an account whose mail was not queued:
-  // send the standard version, so the person is still told.
+  // send the inline version (portal link all the same), so the person is
+  // still told.
   if (fallbackFor && !notified.includes(fallbackFor.account)) {
     inlineQueued = await queueInline(fallbackFor.email);
   }

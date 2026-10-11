@@ -541,7 +541,7 @@ describe('"your complete gallery is ready" reaches the same people (issue 1562)'
     expect(byTo['client@recipients.test'].__language).toBeUndefined();
   });
 
-  it('falls back to the standard mail when the folded-in account could not be queued', async () => {
+  it('falls back to the inline mail, still with the portal link, when the folded-in account could not be queued', async () => {
     const id = await partial('complete-fallback', { customerEmail: 'anna@recipients.test' });
     await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
     mockRefuseQueueFor = 'anna@recipients.test';

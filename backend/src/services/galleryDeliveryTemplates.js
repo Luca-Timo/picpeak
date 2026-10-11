@@ -16,6 +16,8 @@
  * Plain HTML so wrapEmailHtml's palette styles it.
  */
 
+const { upgradeUneditedTemplates } = require('./emailTemplateUpgrade');
+
 const TEMPLATES = {
   gallery_completed: {
     variables: ['host_name', 'customer_name', 'event_name', 'event_date', 'gallery_link', 'photo_count', 'expiry_date'],
@@ -90,37 +92,6 @@ const PREVIOUS_DEFAULTS = {
 
 let _seeded = false;
 
-async function upgradeUneditedTemplates(db, cols, hasTranslations, logger) {
-  for (const [templateKey, previous] of Object.entries(PREVIOUS_DEFAULTS)) {
-    const def = TEMPLATES[templateKey];
-    const row = await db('email_templates').where({ template_key: templateKey }).first();
-    if (!row) continue;
-    let upgraded = false;
-    if (hasTranslations) {
-      for (const language of ['en', 'de']) {
-        const old = previous[language];
-        const next = def[language];
-        const updated = await db('email_template_translations')
-          .where({ template_id: row.id, language, subject: old.subject, body_html: old.body_html, body_text: old.body_text })
-          .update({ subject: next.subject, body_html: next.body_html, body_text: next.body_text, updated_at: new Date().toISOString() });
-        if (updated) upgraded = true;
-      }
-    }
-    const legacy = {};
-    for (const field of ['subject', 'body_html', 'body_text']) {
-      for (const col of Object.keys(cols)) {
-        if ((col === field || col === `${field}_en`) && row[col] === previous.en[field]) legacy[col] = def.en[field];
-        if (col === `${field}_de` && row[col] === previous.de[field]) legacy[col] = def.de[field];
-      }
-    }
-    if (Object.keys(legacy).length) {
-      await db('email_templates').where({ id: row.id }).update(legacy);
-      upgraded = true;
-    }
-    if (upgraded && logger) logger.info(`Updated the unedited default email template: ${templateKey}`);
-  }
-}
-
 async function ensureGalleryDeliveryTemplatesSeeded(db, logger) {
   if (_seeded) return [];
   if (!(await db.schema.hasTable('email_templates'))) return [];
@@ -171,7 +142,9 @@ async function ensureGalleryDeliveryTemplatesSeeded(db, logger) {
     }
   }
   try {
-    await upgradeUneditedTemplates(db, cols, hasTranslations, logger);
+    await upgradeUneditedTemplates(db, {
+      templates: TEMPLATES, previousDefaults: PREVIOUS_DEFAULTS, cols, hasTranslationsTable: hasTranslations, logger,
+    });
   } catch (err) {
     if (logger) logger.error('Failed to update unedited gallery delivery templates', { message: err.message });
     return touched;
