@@ -36,21 +36,18 @@ describe('accountsAnnounceable', () => {
   });
 });
 
-describe('eventNotice for the complete-gallery mail', () => {
-  it('folds one person in both fields into the portal version, even with a welcome message', () => {
-    const notice = eventNotice(gallery({ welcome_message: 'Hallo!' }), reach, { preferPortal: true });
-    expect(notice).toMatchObject({ inlineEmail: null, accountCount: 2 });
-    expect(notice.accountNames).toEqual(['Anna Muster', 'Ben Beispiel']);
-  });
-
-  it('…where the gallery email keeps her by default (the welcome message)', () => {
-    const notice = eventNotice(gallery({ welcome_message: 'Hallo!' }), reach);
-    expect(notice).toMatchObject({ inlineEmail: 'anna@example.test', accountCount: 1 });
+describe('eventNotice', () => {
+  it('folds one person in both fields into the portal version, even with a welcome message or client access', () => {
+    for (const g of [gallery({ welcome_message: 'Hallo!' }), gallery({ client_access_enabled: true })]) {
+      const notice = eventNotice(g, reach);
+      expect(notice).toMatchObject({ inlineEmail: null, accountCount: 2 });
+      expect(notice.accountNames).toEqual(['Anna Muster', 'Ben Beispiel']);
+    }
   });
 
   it('lists only the customer email, unfolded, when no account is mailed', () => {
     for (const g of [gallery({ is_draft: true }), gallery({ is_archived: true }), gallery({ expires_at: past })]) {
-      expect(eventNotice(g, reach, { preferPortal: true, accountsAnnounced: accountsAnnounceable(g) }))
+      expect(eventNotice(g, reach, { accountsAnnounced: accountsAnnounceable(g) }))
         .toEqual({ inlineEmail: 'anna@example.test', accountNames: [], accountCount: 0, skippedAccountCount: 0 });
     }
   });

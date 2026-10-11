@@ -656,6 +656,7 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     try {
       const announced = {
         id: eventId,
+        slug,
         customer_email: customerEmail,
         host_email: customerEmail,
         welcome_message,

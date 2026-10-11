@@ -90,12 +90,6 @@ export function accountsAnnounceable(event: Event, now: Date = new Date()): bool
 }
 
 export interface EventNoticeOptions {
-  /**
-   * One person in both fields always gets the portal version, whatever the
-   * gallery email would carry (the "complete gallery" mail: preferPortal on
-   * the server).
-   */
-  preferPortal?: boolean;
   /** False when the mail reaches no account (accountsAnnounceable). */
   accountsAnnounced?: boolean;
 }
@@ -105,16 +99,13 @@ export interface EventNoticeOptions {
  * it is computed here and names the accounts; without it, from the server's
  * permission-safe `gallery_notice` counts.
  */
-export function eventNotice(event: Event, reach: AccountReach, { preferPortal = false, accountsAnnounced = true }: EventNoticeOptions = {}): EventNotice {
+export function eventNotice(event: Event, reach: AccountReach, { accountsAnnounced = true }: EventNoticeOptions = {}): EventNotice {
   const contact = event.customer_email?.trim() || null;
   // No account is mailed: the customer email gets the mail, unfolded.
   if (!accountsAnnounced) return { inlineEmail: contact, accountNames: [], accountCount: 0, skippedAccountCount: 0 };
   const listed = assignedAccounts(event);
   const server = (event as { gallery_notice?: GalleryNoticeCounts | null }).gallery_notice;
-  const options = {
-    portalEnabled: reach.portalEnabled,
-    prefersGalleryEmail: !preferPortal && (!!event.welcome_message?.trim() || toBoolean(event.client_access_enabled, false)),
-  };
+  const options = { portalEnabled: reach.portalEnabled };
   if (listed.length > 0 || !server) {
     const local = galleryRecipients(contact, listed, { ...options, includeAccounts: reach.canAnnounceToAccounts });
     const reachable = galleryRecipients(contact, listed, { ...options, includeAccounts: true }).accounts.length;

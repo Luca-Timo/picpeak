@@ -25,8 +25,8 @@ const TEMPLATES = {
 <p>Dear {{host_name}},</p>
 <p>All photos of "{{event_name}}" are now in your gallery: {{photo_count}} photos, including the first look you already received.</p>
 <p><a href="{{gallery_link}}">Open your gallery</a></p>
-<p>The gallery is available until {{expiry_date}}.</p>`,
-      body_text: 'Your complete gallery is ready\n\nDear {{host_name}},\n\nAll photos of "{{event_name}}" are now in your gallery: {{photo_count}} photos, including the first look you already received.\n\nOpen your gallery: {{gallery_link}}\n\nThe gallery is available until {{expiry_date}}.',
+{{#if expiry_date}}<p>The gallery is available until {{expiry_date}}.</p>{{/if}}`,
+      body_text: 'Your complete gallery is ready\n\nDear {{host_name}},\n\nAll photos of "{{event_name}}" are now in your gallery: {{photo_count}} photos, including the first look you already received.\n\nOpen your gallery: {{gallery_link}}{{#if expiry_date}}\n\nThe gallery is available until {{expiry_date}}.{{/if}}',
     },
     de: {
       subject: 'Ihre vollständige Galerie ist da: {{event_name}}',
@@ -34,8 +34,8 @@ const TEMPLATES = {
 <p>Guten Tag {{host_name}},</p>
 <p>Alle Fotos von „{{event_name}}“ sind jetzt in Ihrer Galerie: {{photo_count}} Fotos, inklusive der ersten Auswahl, die Sie bereits erhalten haben.</p>
 <p><a href="{{gallery_link}}">Galerie öffnen</a></p>
-<p>Die Galerie ist bis zum {{expiry_date}} verfügbar.</p>`,
-      body_text: 'Ihre vollständige Galerie ist da\n\nGuten Tag {{host_name}},\n\nAlle Fotos von „{{event_name}}“ sind jetzt in Ihrer Galerie: {{photo_count}} Fotos, inklusive der ersten Auswahl, die Sie bereits erhalten haben.\n\nGalerie öffnen: {{gallery_link}}\n\nDie Galerie ist bis zum {{expiry_date}} verfügbar.',
+{{#if expiry_date}}<p>Die Galerie ist bis zum {{expiry_date}} verfügbar.</p>{{/if}}`,
+      body_text: 'Ihre vollständige Galerie ist da\n\nGuten Tag {{host_name}},\n\nAlle Fotos von „{{event_name}}“ sind jetzt in Ihrer Galerie: {{photo_count}} Fotos, inklusive der ersten Auswahl, die Sie bereits erhalten haben.\n\nGalerie öffnen: {{gallery_link}}{{#if expiry_date}}\n\nDie Galerie ist bis zum {{expiry_date}} verfügbar.{{/if}}',
     },
   },
   delivery_due_reminder: {
@@ -61,7 +61,65 @@ const TEMPLATES = {
   },
 };
 
+// Defaults whose text changed. A stored template still identical to its
+// previous default is brought up to date; one an admin has edited is left as
+// it is. gallery_completed printed the expiry line unconditionally, so a
+// gallery without an expiry date read "available until null".
+const PREVIOUS_DEFAULTS = {
+  gallery_completed: {
+    en: {
+      subject: 'Your complete gallery is ready: {{event_name}}',
+      body_html: `<h2>Your complete gallery is ready</h2>
+<p>Dear {{host_name}},</p>
+<p>All photos of "{{event_name}}" are now in your gallery: {{photo_count}} photos, including the first look you already received.</p>
+<p><a href="{{gallery_link}}">Open your gallery</a></p>
+<p>The gallery is available until {{expiry_date}}.</p>`,
+      body_text: 'Your complete gallery is ready\n\nDear {{host_name}},\n\nAll photos of "{{event_name}}" are now in your gallery: {{photo_count}} photos, including the first look you already received.\n\nOpen your gallery: {{gallery_link}}\n\nThe gallery is available until {{expiry_date}}.',
+    },
+    de: {
+      subject: 'Ihre vollständige Galerie ist da: {{event_name}}',
+      body_html: `<h2>Ihre vollständige Galerie ist da</h2>
+<p>Guten Tag {{host_name}},</p>
+<p>Alle Fotos von „{{event_name}}“ sind jetzt in Ihrer Galerie: {{photo_count}} Fotos, inklusive der ersten Auswahl, die Sie bereits erhalten haben.</p>
+<p><a href="{{gallery_link}}">Galerie öffnen</a></p>
+<p>Die Galerie ist bis zum {{expiry_date}} verfügbar.</p>`,
+      body_text: 'Ihre vollständige Galerie ist da\n\nGuten Tag {{host_name}},\n\nAlle Fotos von „{{event_name}}“ sind jetzt in Ihrer Galerie: {{photo_count}} Fotos, inklusive der ersten Auswahl, die Sie bereits erhalten haben.\n\nGalerie öffnen: {{gallery_link}}\n\nDie Galerie ist bis zum {{expiry_date}} verfügbar.',
+    },
+  },
+};
+
 let _seeded = false;
+
+async function upgradeUneditedTemplates(db, cols, hasTranslations, logger) {
+  for (const [templateKey, previous] of Object.entries(PREVIOUS_DEFAULTS)) {
+    const def = TEMPLATES[templateKey];
+    const row = await db('email_templates').where({ template_key: templateKey }).first();
+    if (!row) continue;
+    let upgraded = false;
+    if (hasTranslations) {
+      for (const language of ['en', 'de']) {
+        const old = previous[language];
+        const next = def[language];
+        const updated = await db('email_template_translations')
+          .where({ template_id: row.id, language, subject: old.subject, body_html: old.body_html, body_text: old.body_text })
+          .update({ subject: next.subject, body_html: next.body_html, body_text: next.body_text, updated_at: new Date().toISOString() });
+        if (updated) upgraded = true;
+      }
+    }
+    const legacy = {};
+    for (const field of ['subject', 'body_html', 'body_text']) {
+      for (const col of Object.keys(cols)) {
+        if ((col === field || col === `${field}_en`) && row[col] === previous.en[field]) legacy[col] = def.en[field];
+        if (col === `${field}_de` && row[col] === previous.de[field]) legacy[col] = def.de[field];
+      }
+    }
+    if (Object.keys(legacy).length) {
+      await db('email_templates').where({ id: row.id }).update(legacy);
+      upgraded = true;
+    }
+    if (upgraded && logger) logger.info(`Updated the unedited default email template: ${templateKey}`);
+  }
+}
 
 async function ensureGalleryDeliveryTemplatesSeeded(db, logger) {
   if (_seeded) return [];
@@ -112,8 +170,14 @@ async function ensureGalleryDeliveryTemplatesSeeded(db, logger) {
       return touched;
     }
   }
+  try {
+    await upgradeUneditedTemplates(db, cols, hasTranslations, logger);
+  } catch (err) {
+    if (logger) logger.error('Failed to update unedited gallery delivery templates', { message: err.message });
+    return touched;
+  }
   _seeded = true;
   return touched;
 }
 
-module.exports = { GALLERY_DELIVERY_TEMPLATES: TEMPLATES, ensureGalleryDeliveryTemplatesSeeded };
+module.exports = { GALLERY_DELIVERY_TEMPLATES: TEMPLATES, PREVIOUS_DEFAULTS, ensureGalleryDeliveryTemplatesSeeded };

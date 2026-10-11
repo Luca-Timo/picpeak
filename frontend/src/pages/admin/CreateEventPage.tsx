@@ -307,7 +307,6 @@ export const CreateEventPage: React.FC = () => {
   const recipients = galleryRecipients(formData.customer_email, formData.customer_accounts, {
     portalEnabled,
     includeAccounts: canAnnounceToAccounts,
-    prefersGalleryEmail: !!formData.welcome_message?.trim() || formData.client_access_enabled,
   });
   const picksAccounts = recipients.accounts.length > 0;
   const requireCustomerEmail = publicSettings?.event_require_customer_email !== false && !picksAccounts;
