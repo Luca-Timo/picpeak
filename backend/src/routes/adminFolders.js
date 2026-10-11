@@ -37,7 +37,7 @@ const eventIdOf = (req) => parseInt(req.params.eventId, 10);
 
 function sendFolderError(res, err, fallback) {
   if (err instanceof tree.FolderError) {
-    return res.status(err.status).json({ error: err.message, code: err.code });
+    return res.status(err.status).json({ error: err.message, code: err.code, ...(err.details || {}) });
   }
   return errorResponse(res, err, 500, fallback);
 }
