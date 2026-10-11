@@ -5,12 +5,14 @@
  * render only once their parent is expanded, and the branch leading to the
  * open folder is expanded automatically so the guest always sees where they
  * are. "All photos" sits on top as the view switch's sidebar equivalent.
+ * Arrow keys move through the rows (utils/ariaKeyboard).
  */
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, Folder, FolderOpen, Home, LayoutGrid } from 'lucide-react';
 
 import { folderKey, type FolderTreeNode, type GalleryViewMode } from './folders';
+import { treeKeyDown } from '../../utils/ariaKeyboard';
 
 export interface SidebarFolderTreeProps {
   nodes: FolderTreeNode[];
@@ -57,17 +59,24 @@ export const GallerySidebarFolderTree: React.FC<SidebarFolderTreeProps> = ({
 
   const openId = view === 'folders' && openPath.length > 0 ? String(openPath[openPath.length - 1]) : null;
 
-  const toggle = (id: string) => {
+  const setOpen = (id: string, open: boolean) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (open) next.add(id);
+      else next.delete(id);
       return next;
     });
   };
+  const toggle = (id: string) => setOpen(id, !expanded.has(id));
 
-  const renderNodes = (list: FolderTreeNode[], depth: number): React.ReactNode => (
-    <ul role={depth === 0 ? 'tree' : 'group'} className="space-y-0.5">
+  const renderNodes = (list: FolderTreeNode[], depth: number, parent: string): React.ReactNode => (
+    <ul
+      role={depth === 0 ? 'tree' : 'group'}
+      className="space-y-0.5"
+      onKeyDown={depth === 0
+        ? (e) => treeKeyDown(e, { expand: (key) => setOpen(key, true), collapse: (key) => setOpen(key, false) })
+        : undefined}
+    >
       {list.map((node) => {
         const id = String(node.category.id);
         const hasChildren = node.children.length > 0;
@@ -81,6 +90,8 @@ export const GallerySidebarFolderTree: React.FC<SidebarFolderTreeProps> = ({
                 <button
                   type="button"
                   onClick={() => toggle(id)}
+                  // The arrow keys open and close the row; one Tab stop per row.
+                  tabIndex={-1}
                   aria-label={isExpanded
                     ? t('gallery.collapseFolder', 'Collapse {{name}}', { name: node.category.name })
                     : t('gallery.expandFolder', 'Expand {{name}}', { name: node.category.name })}
@@ -95,13 +106,17 @@ export const GallerySidebarFolderTree: React.FC<SidebarFolderTreeProps> = ({
                 type="button"
                 onClick={() => onOpenFolder(folderKey(node.category))}
                 className={itemClass(isOpen)}
+                data-tree-item
+                data-key={id}
+                data-parent={parent}
+                data-expanded={hasChildren ? String(isExpanded) : undefined}
               >
                 <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span className="truncate flex-1">{node.category.name}</span>
                 <span className={`text-sm ${isOpen ? '' : 'text-muted-theme'}`}>{node.count}</span>
               </button>
             </div>
-            {hasChildren && isExpanded && renderNodes(node.children, depth + 1)}
+            {hasChildren && isExpanded && renderNodes(node.children, depth + 1, id)}
           </li>
         );
       })}
@@ -124,7 +139,7 @@ export const GallerySidebarFolderTree: React.FC<SidebarFolderTreeProps> = ({
         <span className="truncate flex-1">{t('gallery.folderRoot', 'Gallery')}</span>
         <span className={`text-sm ${view === 'folders' && openPath.length === 0 ? '' : 'text-muted-theme'}`}>{rootCount}</span>
       </button>
-      {renderNodes(nodes, 0)}
+      {renderNodes(nodes, 0, '')}
     </div>
   );
 };
