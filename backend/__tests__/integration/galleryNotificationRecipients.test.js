@@ -40,6 +40,12 @@ jest.mock('../../src/services/emailProcessor', () => {
       : actual.queueEmail(eventId, to, ...rest)),
   };
 });
+// WhatsApp messages queued, as [eventId, phone, type, data].
+const mockWhatsapp = [];
+jest.mock('../../src/services/whatsappProcessor', () => ({
+  getWhatsAppConfig: async () => ({ enabled: true }),
+  queueWhatsapp: async (...args) => { mockWhatsapp.push(args); return true; },
+}));
 jest.mock('../../src/middleware/permissions', () => ({
   requirePermission: () => (_req, _res, next) => next(),
   userHasAnyPermission: async (_id, perms) => {
@@ -194,17 +200,25 @@ describe('publish and send later reach every recipient', () => {
     expect(row.password_hash).toBe('original-hash');
   });
 
-  it('…even when the gallery has a welcome message: an account never gets the direct gallery link', async () => {
+  it('…but by the gallery email when it carries a welcome message or client access — linked to her portal', async () => {
     const id = await seedEvent({ slug: 'same-person-welcome', customerEmail: 'anna@recipients.test', welcome: 'Willkommen!' });
     await assign(id,
       await seedAccount('anna@recipients.test', 'Anna Muster'),
       await seedAccount('ben@recipients.test', 'Ben Beispiel'));
+    const client = await seedEvent({ slug: 'same-person-client', customerEmail: 'anna@recipients.test' });
+    await db('events').where({ id: client }).update({ client_access_enabled: 1 });
+    await assign(client, await db('customer_accounts').where({ email: 'anna@recipients.test' }).first().then((r) => r.id));
 
-    const res = await request(app).post(`/admin/events/${id}/send-gallery-email`).send({ password: 'Sunrise-Lake-42' });
-    expect(res.status).toBe(200);
-    expect(await queued('gallery_created')).toHaveLength(0);
-    expect((await recipientsOf('customer_gallery_assigned')).sort())
-      .toEqual(['anna@recipients.test', 'ben@recipients.test']);
+    for (const eventId of [id, client]) {
+      const res = await request(app).post(`/admin/events/${eventId}/send-gallery-email`).send({ password: 'Sunrise-Lake-42' });
+      expect(res.status).toBe(200);
+    }
+    const rows = await queued('gallery_created');
+    expect(rows.map((r) => r.recipient_email)).toEqual(['anna@recipients.test', 'anna@recipients.test']);
+    const links = rows.map((r) => (typeof r.email_data === 'string' ? JSON.parse(r.email_data) : r.email_data).gallery_link).sort();
+    expect(links[0]).toMatch(/\/customer\/events\/same-person-client$/);
+    expect(links[1]).toMatch(/\/customer\/events\/same-person-welcome$/);
+    expect(await recipientsOf('customer_gallery_assigned')).toEqual(['ben@recipients.test']);
   });
 
   it('mails accounts only for an admin with customers.events — on publish and send alike', async () => {
@@ -664,6 +678,17 @@ describe('a CRM customer never gets the direct gallery link', () => {
     const data = await linkOf('gallery_created');
     expect(data.gallery_link).toContain('crm-passive-send-token');
     expect(data.gallery_password).toBe('Sunrise-Lake-42');
+  });
+
+  it('the WhatsApp message on publish links to the portal', async () => {
+    mockWhatsapp.length = 0;
+    const id = await seedEvent({ slug: 'crm-whatsapp', customerEmail: 'anna@recipients.test', isDraft: true });
+    await db('events').where({ id }).update({ customer_phone: '+41790000000' });
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+
+    expect((await request(app).post(`/admin/events/${id}/publish`).send({ password: 'Sunrise-Lake-42' })).status).toBe(200);
+    expect(mockWhatsapp).toHaveLength(1);
+    expect(mockWhatsapp[0][3].gallery_link).toMatch(/\/customer\/events\/crm-whatsapp$/);
   });
 
   it('keeps the share link for anyone else — another address, a passive account, the portal off', async () => {

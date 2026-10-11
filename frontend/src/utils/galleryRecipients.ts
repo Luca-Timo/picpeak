@@ -5,9 +5,9 @@
  * The inline customer email gets the standard gallery email (link +
  * password); each assigned customer account gets its portal email (no
  * password — the portal opens the gallery without one). One person entered in
- * both places is told once, always by the portal email: a customer with a
- * portal login never gets the direct gallery link. The two sides have to
- * agree, or a dialog asks for a password nobody will receive.
+ * both places is told once: by the gallery email when it carries a welcome
+ * message or client access, otherwise by the portal email. The two sides have
+ * to agree, or a dialog asks for a password nobody will receive.
  */
 import { toBoolean } from './parsers';
 
@@ -51,17 +51,23 @@ export interface RecipientOptions {
   portalEnabled: boolean;
   /** customers.events — governs mailing accounts as well as assigning them. */
   includeAccounts?: boolean;
+  /**
+   * The gallery email carries something the portal email does not (welcome
+   * message, client access): one person in both fields then gets that one.
+   */
+  prefersGalleryEmail?: boolean;
 }
 
 export function galleryRecipients(
   customerEmail: string | null | undefined,
   accounts: RecipientAccount[] | null | undefined,
-  { portalEnabled, includeAccounts = true }: RecipientOptions,
+  { portalEnabled, includeAccounts = true, prefersGalleryEmail = false }: RecipientOptions,
 ): GalleryRecipients {
   const reachable = portalEnabled && includeAccounts ? (accounts || []).filter(canReceiveGalleryNotice) : [];
   const contact = customerEmail?.trim() || null;
   const samePerson = contact ? reachable.find((a) => sameAddress(a.email, contact)) : undefined;
   if (!samePerson) return { inlineEmail: contact, accounts: reachable };
+  if (prefersGalleryEmail) return { inlineEmail: contact, accounts: reachable.filter((a) => a !== samePerson) };
   return { inlineEmail: null, accounts: reachable };
 }
 

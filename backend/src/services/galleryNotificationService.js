@@ -106,12 +106,25 @@ async function galleryLinkFor(event, email, shareUrl) {
 }
 
 /**
+ * Whether the standard gallery email carries something the portal email does
+ * not: the welcome message, or the client-access link and PIN (#172).
+ */
+function hasGalleryEmailOnlyContent(event) {
+  const welcome = typeof event.welcome_message === 'string' && event.welcome_message.trim() !== '';
+  const clientAccess = event.client_access_enabled === true || event.client_access_enabled === 1
+    || event.client_access_enabled === '1' || event.client_access_enabled === 'true';
+  return welcome || clientAccess;
+}
+
+/**
  * Who a gallery notice for this event goes to.
  *
  * One person entered both as the inline address and as an assigned account is
- * told once, always through the portal: a customer with a portal login is sent
- * to their portal, never the direct gallery link — even when the gallery has
- * a welcome message or client access the portal email does not carry.
+ * told once. The content decides which mail: the standard gallery email when
+ * it carries something the portal email does not (welcome message, client
+ * access — a portal session is guest level, so the PIN is the only way to
+ * client level), otherwise the portal email. Either way the link is the one
+ * into their portal (galleryLinkFor), never the direct gallery link.
  *
  * `includeAccounts` is the caller's customers.events — the permission that
  * governs assigning accounts also governs mailing them, on every path.
@@ -121,13 +134,20 @@ async function galleryLinkFor(event, email, shareUrl) {
  * skipped (draft, expired, archived) — the person is told once, not never.
  * That gallery email links to the portal too (galleryLinkFor).
  *
+ * `preferPortal`: a mail with nothing the portal version lacks (the
+ * "complete gallery" mail carries no welcome message or client access)
+ * always folds one person into the account version.
+ *
  * @returns {Promise<{ inlineEmail: string|null, accounts: object[], fallbackFor?: object }>}
  */
-async function resolveGalleryRecipients(event, { includeAccounts = true } = {}) {
+async function resolveGalleryRecipients(event, { includeAccounts = true, preferPortal = false } = {}) {
   const reachable = includeAccounts ? await reachableAccountsForEvent(event.id) : [];
   const contact = event.customer_email || event.host_email || null;
   const samePerson = contact ? reachable.find((a) => sameAddress(a.email, contact)) : null;
   if (!samePerson) return { inlineEmail: contact, accounts: reachable };
+  if (!preferPortal && hasGalleryEmailOnlyContent(event)) {
+    return { inlineEmail: contact, accounts: reachable.filter((a) => a !== samePerson) };
+  }
   return { inlineEmail: null, accounts: reachable, fallbackFor: { account: samePerson, email: contact } };
 }
 
@@ -238,9 +258,11 @@ function accountsAnnounceable(event, now = new Date()) {
  *
  * Accounts get the same `gallery_completed` mail, linked to the gallery in
  * their customer portal, which opens it without the password. One person in
- * both fields gets that account version (resolveGalleryRecipients). If that
- * account's mail is not queued, the person gets the inline version instead —
- * the gallery's language and customer name, still with the portal link.
+ * both fields gets that account version (resolveGalleryRecipients with
+ * `preferPortal`); this mail carries no welcome message or client access, so
+ * there is nothing the account version would drop. If that account's mail is
+ * not queued, the person gets the inline version instead — the gallery's
+ * language and customer name, still with the portal link.
  * Accounts are not told about a draft, archived or expired gallery
  * (accountsAnnounceable).
  *
@@ -258,6 +280,7 @@ function accountsAnnounceable(event, now = new Date()) {
 async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }) {
   const { inlineEmail, accounts, fallbackFor } = await resolveGalleryRecipients(event, {
     includeAccounts: includeAccounts && accountsAnnounceable(event),
+    preferPortal: true,
   });
 
   const queue = async (email, data) => {
@@ -336,6 +359,7 @@ module.exports = {
   canReceiveGalleryNotice,
   reachableAccountsByIds,
   resolveGalleryRecipients,
+  hasGalleryEmailOnlyContent,
   galleryCreatedEmailData,
   galleryLinkFor,
   notifyGalleryRecipients,

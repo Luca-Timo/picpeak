@@ -38,7 +38,7 @@ export const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({ 
   // account for a draft, archived or expired gallery, and one person in both
   // fields gets the portal version.
   const reach = useAccountReach();
-  const notice = eventNotice(event, reach, { accountsAnnounced: accountsAnnounceable(event) });
+  const notice = eventNotice(event, reach, { preferPortal: true, accountsAnnounced: accountsAnnounceable(event) });
   const queryClient = useQueryClient();
   const canDelete = usePermission('photos.delete');
   const [sendEmail, setSendEmail] = useState(true);

@@ -20,6 +20,12 @@ describe('galleryRecipients', () => {
     expect(galleryRecipients('ANNA@example.com ', [anna], { portalEnabled: true }).inlineEmail).toBeNull();
   });
 
+  it('…by the gallery email instead when it carries a welcome message or client access', () => {
+    const r = galleryRecipients('anna@example.com', [anna, ben], { portalEnabled: true, prefersGalleryEmail: true });
+    expect(r.inlineEmail).toBe('anna@example.com');
+    expect(r.accounts.map(accountName)).toEqual(['Ben Beispiel']);
+  });
+
   it('reaches no account without customers.events', () => {
     expect(galleryRecipients('client@example.com', [anna], { portalEnabled: true, includeAccounts: false }))
       .toEqual({ inlineEmail: 'client@example.com', accounts: [] });
