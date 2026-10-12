@@ -6654,7 +6654,7 @@
         "notFound": "Dieser Ordner existiert nicht mehr. Laden Sie die Seite neu.",
         "cycle": "Ein Ordner kann nicht in sich selbst oder einen seiner Unterordner verschoben werden.",
         "limitReached": "Diese Galerie hat die Höchstzahl von {{limit}} Ordnern erreicht.",
-        "requestLimitReached": "Diese Galerie hat die Höchstzahl von {{limit}} offenen Ordneranfragen erreicht. Genehmigen oder lehnen Sie zuerst einige ab.",
+        "requestLimitReached": "Diese Galerie hat die Höchstzahl von {{limit}} offenen Ordneranfragen erreicht. Bitten Sie eine Administratorin oder einen Administrator, zuerst einige zu genehmigen oder abzulehnen.",
         "requestNotFound": "Über diese Ordneranfrage wurde bereits entschieden, oder sie existiert nicht mehr."
       }
     },

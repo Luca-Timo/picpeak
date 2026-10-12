@@ -438,6 +438,8 @@ describe('nested folders', () => {
         current: tree.FOLDER_LIMITS.MAX_FOLDERS_PER_EVENT, adding: 2,
       });
       expect((await resolve({ paths: ['Bulk 3'], dry_run: true })).body.limit).toBeNull();
+      // Case variants of one new folder count once, as ensurePath creates one.
+      expect((await resolve({ paths: ['New/A', 'new/B'], dry_run: true })).body.limit.adding).toBe(3);
     }, 60000);
 
     it('apply-external-structure folds into the closest folder at the cap', async () => {

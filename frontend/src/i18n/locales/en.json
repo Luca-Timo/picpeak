@@ -6689,7 +6689,7 @@
         "notFound": "This folder no longer exists. Reload the page.",
         "cycle": "A folder cannot be moved into itself or one of its subfolders.",
         "limitReached": "This gallery has reached its limit of {{limit}} folders.",
-        "requestLimitReached": "This gallery has reached its limit of {{limit}} open folder requests. Approve or reject some first.",
+        "requestLimitReached": "This gallery has reached its limit of {{limit}} open folder requests. Ask an administrator to approve or reject some first.",
         "requestNotFound": "This folder request was already decided or no longer exists."
       }
     },

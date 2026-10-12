@@ -10,7 +10,7 @@ describe('folderErrorMessage', () => {
     expect(folderErrorMessage(reply({ error: 'x', code: 'FOLDER_LIMIT_REACHED', limit: 1000 }), t))
       .toBe('photos.folders.errors.limitReached|This gallery has reached its limit of 1000 folders.');
     expect(folderErrorMessage(reply({ error: 'x', code: 'FOLDER_REQUEST_LIMIT_REACHED', limit: 200 }), t))
-      .toContain('photos.folders.errors.requestLimitReached|This gallery has reached its limit of 200 open folder requests.');
+      .toContain('photos.folders.errors.requestLimitReached|This gallery has reached its limit of 200 open folder requests. Ask an administrator');
     expect(folderErrorMessage(reply({ error: 'x', code: 'FOLDER_TOO_DEEP', limit: 3 }), t))
       .toBe('photos.folders.errors.tooDeep|Folders can be nested at most 3 levels deep.');
     expect(folderErrorMessage(reply({ error: 'x', code: 'FOLDER_EXISTS' }), t)).toContain('photos.folders.errors.exists');

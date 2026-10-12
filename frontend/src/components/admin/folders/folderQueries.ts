@@ -33,7 +33,7 @@ export function folderErrorMessage(error: unknown, t: Translate): string | undef
     case 'FOLDER_NOT_FOUND': return t('photos.folders.errors.notFound', 'This folder no longer exists. Reload the page.');
     case 'FOLDER_CYCLE': return t('photos.folders.errors.cycle', 'A folder cannot be moved into itself or one of its subfolders.');
     case 'FOLDER_LIMIT_REACHED': return t('photos.folders.errors.limitReached', 'This gallery has reached its limit of {{limit}} folders.', { limit });
-    case 'FOLDER_REQUEST_LIMIT_REACHED': return t('photos.folders.errors.requestLimitReached', 'This gallery has reached its limit of {{limit}} open folder requests. Approve or reject some first.', { limit });
+    case 'FOLDER_REQUEST_LIMIT_REACHED': return t('photos.folders.errors.requestLimitReached', 'This gallery has reached its limit of {{limit}} open folder requests. Ask an administrator to approve or reject some first.', { limit });
     case 'FOLDER_REQUEST_NOT_FOUND': return t('photos.folders.errors.requestNotFound', 'This folder request was already decided or no longer exists.');
     default: return data?.error;
   }

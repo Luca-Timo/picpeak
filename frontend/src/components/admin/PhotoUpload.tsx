@@ -344,6 +344,9 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   // The upload would go past the folder or request limit: the real resolve
   // would create what fits and then refuse, so say it now and hold the button.
   const overLimit = keepStructure ? resolved?.limit ?? null : null;
+  // While a new preview loads the previous answer is still shown; it may be
+  // for another selection or toggle, so the button waits for the new one.
+  const limitUnknown = withFolders && keepStructure && previewQuery.isPlaceholderData;
   const preview = useMemo(
     () => (resolved ? buildUploadPreview(selectedFiles, resolved, { skipOuter, keepStructure }) : null),
     [resolved, selectedFiles, skipOuter, keepStructure]
@@ -626,7 +629,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
           looseTargetLabel={looseTargetLabel}
         />
       )}
-      {withFolders && overLimit && (
+      {withFolders && overLimit && !limitUnknown && (
         <Notice tone="warning">
           {overLimit.code === 'FOLDER_REQUEST_LIMIT_REACHED'
             ? t('upload.structure.overRequestLimit', 'This upload would open {{adding}} folder requests, but the gallery already has {{current}} of at most {{limit}} open. Ask an administrator to approve or reject some first, or turn off “Keep folder structure”.', { adding: overLimit.adding, current: overLimit.current, limit: overLimit.limit })
@@ -678,7 +681,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
         <Button
           variant="primary"
           onClick={handleUpload}
-          disabled={selectedFiles.length === 0 || isUploading || pendingWalks > 0 || resolving || !!overLimit}
+          disabled={selectedFiles.length === 0 || isUploading || pendingWalks > 0 || resolving || !!overLimit || limitUnknown}
           isLoading={pendingWalks > 0 || resolving}
           leftIcon={<Upload className="w-4 h-4" />}
         >

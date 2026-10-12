@@ -218,7 +218,9 @@ router.post('/events/:eventId/folders/resolve', adminAuth, requirePermission('ph
           } else if (dryRun) {
             entry = { folder_id: r.folderId, status: canCreate ? 'new' : 'needs_admin' };
             if (canCreate) {
-              for (let i = r.missingFrom + 1; i <= segments.length; i += 1) newFolders.add(tree.pathKey(segments.slice(0, i)));
+              // Lower-cased: ensurePath matches a sibling case-insensitively,
+              // so "Foo/A" and "foo/B" create one "Foo", not two.
+              for (let i = r.missingFrom + 1; i <= segments.length; i += 1) newFolders.add(tree.pathKey(segments.slice(0, i)).toLowerCase());
             } else {
               newRequests.add(key);
             }
