@@ -429,6 +429,31 @@ describe('nested folders', () => {
       const bulk3 = (await tree.eventFolders(eventId)).find((f) => f.name === 'Bulk 3');
       expect(folded).toMatchObject({ folderId: Number(bulk3.id), limited: true, missingFrom: -1 });
       expect(await folderCount()).toBe(tree.FOLDER_LIMITS.MAX_FOLDERS_PER_EVENT);
+
+      // The preview says so before anything is sent; a path that exists does not count.
+      const preview = await resolve({ paths: ['Brand new/Deeper', 'Bulk 3'], dry_run: true });
+      expect(preview.status).toBe(200);
+      expect(preview.body.limit).toEqual({
+        code: 'FOLDER_LIMIT_REACHED', limit: tree.FOLDER_LIMITS.MAX_FOLDERS_PER_EVENT,
+        current: tree.FOLDER_LIMITS.MAX_FOLDERS_PER_EVENT, adding: 2,
+      });
+      expect((await resolve({ paths: ['Bulk 3'], dry_run: true })).body.limit).toBeNull();
+    }, 60000);
+
+    it('apply-external-structure folds into the closest folder at the cap', async () => {
+      await db('events').where('id', eventId).update({ source_mode: 'reference', external_path: 'shoot' });
+      try {
+        await fillFolders(tree.FOLDER_LIMITS.MAX_FOLDERS_PER_EVENT);
+        const photo = await addPhoto('x.jpg', { source_origin: 'external', external_relpath: 'shoot/Bulk 3/Deeper/x.jpg' });
+        const res = await request(app).post(`/api/admin/events/${eventId}/folders/apply-external-structure`).send({});
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ moved: 1, limited: true });
+        const bulk3 = (await tree.eventFolders(eventId)).find((f) => f.name === 'Bulk 3');
+        expect(Number((await db('photos').where('id', photo).first()).folder_id)).toBe(Number(bulk3.id));
+        expect(await folderCount()).toBe(tree.FOLDER_LIMITS.MAX_FOLDERS_PER_EVENT);
+      } finally {
+        await db('events').where('id', eventId).update({ source_mode: 'managed', external_path: null });
+      }
     }, 60000);
 
     it('caps the open folder requests of one event; joining an open request still works', async () => {
@@ -441,6 +466,10 @@ describe('nested folders', () => {
       const res = await resolve({ paths: ['Yet another'] });
       expect(res.status).toBe(409);
       expect(res.body).toMatchObject({ code: 'FOLDER_REQUEST_LIMIT_REACHED', limit });
+      // Preview: a new path is over the cap, joining an open one is not.
+      expect((await resolve({ paths: ['Yet another', 'Req 7'], dry_run: true })).body.limit)
+        .toEqual({ code: 'FOLDER_REQUEST_LIMIT_REACHED', limit, current: limit, adding: 1 });
+      expect((await resolve({ paths: ['Req 7'], dry_run: true })).body.limit).toBeNull();
       const join = await resolve({ paths: ['Req 7'] });
       expect(join.status).toBe(200);
       expect(join.body.results['Req 7'].status).toBe('requested');

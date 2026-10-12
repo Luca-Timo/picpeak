@@ -22,6 +22,7 @@ import { FolderPickerModal } from './folders/FolderPickerModal';
 import { invalidateFolderViews } from './folders/folderQueries';
 import type { GalleryFolder } from '../../services/folders.service';
 import { folderPathLabel } from '../../utils/folderTree';
+import { folderErrorMessage } from './folders/folderQueries';
 
 interface CategoryOption {
   id: number;
@@ -358,8 +359,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
       invalidateFolderViews(queryClient, eventId);
       onPhotosDeleted(); // Refresh the photo list
     } catch (error: unknown) {
-      const e = error as { response?: { data?: { error?: string } } };
-      toast.error(e.response?.data?.error || t('photos.folders.moveFailed', 'The photos could not be moved'));
+      toast.error(folderErrorMessage(error, t) || t('photos.folders.moveFailed', 'The photos could not be moved'));
     } finally {
       setIsMovingToFolder(false);
     }

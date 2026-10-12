@@ -977,7 +977,9 @@
       "firstLookCallout_other": "First-look-Ordner gefunden: „{{name}}“. Seine {{count}} Fotos werden als „First look“ markiert, und die Galerie wechselt zur zweistufigen Auslieferung: Gäste sehen, dass weitere Fotos unterwegs sind, bis Sie die vollständige Galerie als fertig markieren.",
       "firstLookSettings": "Fälligkeit und Badge: Einstellungen dieser Galerie → Ordner & Auslieferung. Stichwörter: Einstellungen → Events.",
       "nothingToUpload": "Keine der ausgewählten Dateien kann hochgeladen werden: Alle liegen in versteckten oder übersprungenen Ordnern.",
-      "keptForNext": "Dateien, die während der Vorbereitung der Ordner hinzukamen, sind noch ausgewählt: {{count}}."
+      "keptForNext": "Dateien, die während der Vorbereitung der Ordner hinzukamen, sind noch ausgewählt: {{count}}.",
+      "overFolderLimit": "Dieser Upload würde {{adding}} Ordner anlegen, die Galerie hat aber schon {{current}} von höchstens {{limit}}. Schalten Sie „Ordnerstruktur übernehmen“ aus oder entfernen Sie zuerst Ordner.",
+      "overRequestLimit": "Dieser Upload würde {{adding}} Ordneranfragen stellen, die Galerie hat aber schon {{current}} von höchstens {{limit}} offenen. Bitten Sie eine Administratorin oder einen Administrator, zuerst einige zu genehmigen oder abzulehnen, oder schalten Sie „Ordnerstruktur übernehmen“ aus."
     },
     "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch.",
     "removeFile": "{{name}} entfernen"
@@ -2718,7 +2720,8 @@
       "structureApplied_one": "{{count}} Foto in Ordner verschoben",
       "structureApplied_other": "{{count}} Fotos in Ordner verschoben",
       "structureNothing": "Alle Fotos aus Unterordnern liegen bereits in einem Ordner",
-      "structureFailed": "Die Ordnerstruktur konnte nicht übernommen werden"
+      "structureFailed": "Die Ordnerstruktur konnte nicht übernommen werden",
+      "structureLimited": "Die Galerie hat ihre Höchstzahl an Ordnern erreicht: Einige Fotos liegen im nächstgelegenen vorhandenen Ordner."
     },
     "header": {
       "moreActions": "Weitere Aktionen"
@@ -6629,7 +6632,16 @@
       "moveToFolderTitle_other": "{{count}} Fotos in einen Ordner verschieben",
       "photosMoved_one": "{{count}} Foto nach {{folder}} verschoben",
       "photosMoved_other": "{{count}} Fotos nach {{folder}} verschoben",
-      "moveFailed": "Die Fotos konnten nicht verschoben werden"
+      "moveFailed": "Die Fotos konnten nicht verschoben werden",
+      "errors": {
+        "exists": "Hier gibt es bereits einen Ordner mit diesem Namen.",
+        "tooDeep": "Ordner lassen sich höchstens {{limit}} Ebenen tief verschachteln.",
+        "notFound": "Dieser Ordner existiert nicht mehr. Laden Sie die Seite neu.",
+        "cycle": "Ein Ordner kann nicht in sich selbst oder einen seiner Unterordner verschoben werden.",
+        "limitReached": "Diese Galerie hat die Höchstzahl von {{limit}} Ordnern erreicht.",
+        "requestLimitReached": "Diese Galerie hat die Höchstzahl von {{limit}} offenen Ordneranfragen erreicht. Genehmigen oder lehnen Sie zuerst einige ab.",
+        "requestNotFound": "Über diese Ordneranfrage wurde bereits entschieden, oder sie existiert nicht mehr."
+      }
     },
     "folderRequests": {
       "title_one": "{{count}} Ordneranfrage",

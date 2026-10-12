@@ -324,7 +324,7 @@ async function insertFolder(eventId, { name, parentId = null, sourcePath = null 
     ? (await conn('photo_categories').where('id', parentId).first('slug'))?.slug
     : null;
   if (parentId != null && depthOf(parentId, indexById(await eventFolders(eventId, conn))) >= MAX_FOLDER_DEPTH) {
-    throw new FolderError(`Folders can be nested at most ${MAX_FOLDER_DEPTH} levels deep`, 400, 'FOLDER_TOO_DEEP');
+    throw new FolderError(`Folders can be nested at most ${MAX_FOLDER_DEPTH} levels deep`, 400, 'FOLDER_TOO_DEEP', { limit: MAX_FOLDER_DEPTH });
   }
   await assertFolderCapacity(eventId, conn);
   const own = slugify(name) || 'folder';
@@ -454,7 +454,7 @@ async function createFolder(eventId, { name, parentId = null }, conn = db) {
   if (parentId != null) {
     if (!(await findEventFolder(eventId, parentId, conn))) throw new FolderError('Parent folder not found', 404, 'FOLDER_NOT_FOUND');
     if (depthOf(parentId, indexById(folders)) >= MAX_FOLDER_DEPTH) {
-      throw new FolderError(`Folders can be nested at most ${MAX_FOLDER_DEPTH} levels deep`, 400, 'FOLDER_TOO_DEEP');
+      throw new FolderError(`Folders can be nested at most ${MAX_FOLDER_DEPTH} levels deep`, 400, 'FOLDER_TOO_DEEP', { limit: MAX_FOLDER_DEPTH });
     }
   }
   const sibling = childrenOf(parentId, folders).find((f) => String(f.name).toLowerCase() === clean.toLowerCase());
@@ -520,7 +520,7 @@ async function moveFolder(eventId, folderId, newParentId, conn = db) {
   }
   const targetDepth = target == null ? 0 : depthOf(target, indexById(folders));
   if (targetDepth + subtreeHeight(folder.id, folders) > MAX_FOLDER_DEPTH) {
-    throw new FolderError(`Folders can be nested at most ${MAX_FOLDER_DEPTH} levels deep`, 400, 'FOLDER_TOO_DEEP');
+    throw new FolderError(`Folders can be nested at most ${MAX_FOLDER_DEPTH} levels deep`, 400, 'FOLDER_TOO_DEEP', { limit: MAX_FOLDER_DEPTH });
   }
   const clash = childrenOf(target, folders)
     .find((f) => Number(f.id) !== Number(folder.id) && String(f.name).toLowerCase() === String(folder.name).toLowerCase());
