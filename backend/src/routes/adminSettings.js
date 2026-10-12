@@ -153,6 +153,9 @@ const TRACKER_CODE_KEYS = new Set([
   'analytics_umami_url',
   'analytics_rybbit_url',
   'analytics_custom_head_html',
+  // Decides whether visitors who sent Do Not Track are counted (issue 1921):
+  // the same kind of decision as where the events go.
+  'analytics_honor_do_not_track',
 ]);
 const parseStoredSetting = (row) => {
   if (!row) return undefined;
@@ -167,6 +170,7 @@ const effectiveMissingSetting = async (key) => {
     return umami === true || umami === 'true' ? 'umami' : 'none';
   }
   if (key === 'analytics_umami_enabled') return false;
+  if (key === 'analytics_honor_do_not_track') return true;
   return null;
 };
 // A rule names either the owning `perm`, or `superAdmin: true` when the key is
@@ -231,6 +235,15 @@ const rejectUnauthorizedProtectedKeys = async (settings, req, res) => {
       error: 'Custom analytics scripts are no longer supported; choose Umami, Rybbit or none',
       code: 'CUSTOM_ANALYTICS_DISABLED',
     });
+    return true;
+  }
+  // Also shared by every generic writer, so the stored value has one shape
+  // whichever endpoint wrote it: a strict boolean (issue 1921). The client
+  // reads it through the public settings and the relay reads it directly;
+  // a string would let the two disagree about who is counted.
+  if (Object.hasOwn(settings, 'analytics_honor_do_not_track')
+    && typeof settings.analytics_honor_do_not_track !== 'boolean') {
+    res.status(400).json({ error: 'analytics_honor_do_not_track must be true or false', code: 'BAD_BOOLEAN' });
     return true;
   }
   return false;
@@ -684,6 +697,7 @@ router.get('/transfers',
         accept_all: policy.acceptAll,
         allowed_types: policy.allowedTypes,
         max_size_mb: policy.maxSizeMb,
+        max_files: policy.maxFiles,
       });
     } catch (error) {
       errorResponse(res, error, 500, 'Failed to load transfer settings');
@@ -696,7 +710,7 @@ router.put('/transfers',
   requireFlag('transfers'),
   async (req, res) => {
     try {
-      const { normalizeAllowedTypes } = require('../services/transferUploadPolicy');
+      const { normalizeAllowedTypes, normalizeMaxFiles, MAX_FILES_CEILING } = require('../services/transferUploadPolicy');
       const has = (k) => Object.prototype.hasOwnProperty.call(req.body, k);
 
       // Validate EVERY field before writing any of them. Interleaving the two
@@ -732,6 +746,19 @@ router.put('/transfers',
           return res.status(400).json({ error: 'Maximum file size must be between 1 and 100000 MB', code: 'BAD_SIZE' });
         }
         writes.push(['transfer_max_upload_size_mb', JSON.stringify(mb), 'number']);
+      }
+
+      // The default number of files per upload round (issue 1914); a file
+      // request can carry its own value.
+      if (has('max_files')) {
+        const files = normalizeMaxFiles(req.body.max_files);
+        if (!files) {
+          return res.status(400).json({
+            error: `Maximum files per upload must be a whole number between 1 and ${MAX_FILES_CEILING}`,
+            code: 'BAD_FILE_COUNT',
+          });
+        }
+        writes.push(['transfer_upload_max_files', JSON.stringify(files), 'number']);
       }
 
       const updated = [];
