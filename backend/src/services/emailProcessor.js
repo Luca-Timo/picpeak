@@ -1493,6 +1493,19 @@ async function processEmailQueueInternal({ ignoreSchedule = false, limit = 10, o
         // the template say "not shown" instead of mailing the mask.
         emailData = replaceMaskedSecrets(emailData);
 
+        // No administrative emails (migration 299), checked again at send
+        // time: queueEmail decides when the row is written, but a reminder
+        // held back to business hours, or a row put back to pending by a
+        // resend / retry / send-now / health retry, reaches this loop later.
+        // The switch as it is NOW decides; turned off again, the row goes out.
+        if (await require('./_adminEmailOptOut').isSuppressedForRecipient(email.recipient_email, email.email_type)) {
+          // Status-guarded like the refusal below: a row cancelled since the
+          // batch was fetched stays cancelled.
+          await db('email_queue').where({ id: email.id, status: email.status }).update({ status: 'suppressed' });
+          logger.info(`Email suppressed at send time: ${email.email_type} (row ${email.id}, customer opted out of administrative emails)`);
+          continue;
+        }
+
         // An invitation or password-reset link is scrubbed once its mail is
         // out, so a re-queued copy would mail a dead link. Refuse it here, the
         // one place every requeue path passes, instead of sending it.
@@ -1790,6 +1803,15 @@ async function queueEmail(eventId, recipientEmail, emailType, emailData, options
       // (issue 1670). NULL is what the processor's whereNull() looks for.
       scheduled_at: null,
     };
+    // Customer opted out of administrative mail (migration 299): keep the row
+    // in the email log as `suppressed` so the admin can see what was held
+    // back, but never hand it to the processor (it only picks up pending).
+    if (await require('./_adminEmailOptOut').isSuppressedForRecipient(recipientEmail, emailType)) {
+      row.status = 'suppressed';
+      await db('email_queue').insert(row);
+      logger.info(`Email suppressed: ${emailType} (customer opted out of administrative emails)`);
+      return true;
+    }
     let snappedFrom = null;
     // Base time to schedule from:
     //   - explicit options.scheduledAt (CRM split-payment invoices), OR

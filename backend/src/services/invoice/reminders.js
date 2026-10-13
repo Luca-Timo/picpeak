@@ -81,7 +81,12 @@ async function applyReminder(invoice, lineItems, level, adminId, actor = adminId
   // immutable invoice; it appears on the separate Mahnung document below.
   let lateFeeGross = invoice.late_fee_amount_minor || 0;
   let lateFeeVat = invoice.late_fee_vat_minor || 0;
-  if (level >= 2) {
+  // A customer who takes no administrative emails (migration 299) never gets
+  // the Mahnung that states the fee, and an uncommunicated fee can't be
+  // charged: the reminder still records its level and `overdue`, the fee
+  // stays as it was.
+  const feeCommunicated = !(customer && (customer.no_admin_emails === true || customer.no_admin_emails === 1));
+  if (level >= 2 && feeCommunicated) {
     const net = await resolveLateFeeNetMinor(invoice);
     const rate = await resolveLateFeeVatRate();
     const vatPer = rate > 0 ? Math.round(net * rate / 100) : 0;

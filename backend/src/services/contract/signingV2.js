@@ -531,6 +531,12 @@ async function reissueInvitation(contractId, signerId, { actor, event, payload =
   if (!dueSigners(contract, rows).some((r) => r.id === row.id)) {
     throw new AppError('This signer can\'t sign yet, or has already signed', 409, 'SIGNER_NOT_DUE');
   }
+  // No administrative emails (migration 299): the mail carrying the new link
+  // would be held back, yet the old link would stop working and the chain
+  // would record a resend nobody received. Refuse instead.
+  if (await require('../_adminEmailOptOut').isSuppressedForRecipient(signerEmail(row), template)) {
+    throw new AppError('This customer takes no administrative emails, so no link can be sent to them. They sign in the customer portal or on paper.', 409, 'NO_ADMIN_EMAILS');
+  }
   const token = await db.transaction(async (trx) => {
     // An erased customer's partly signed contract stays `sent` with every way
     // in revoked; a new link must not open it again. Customer row first, as

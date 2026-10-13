@@ -289,6 +289,8 @@ export interface ContractSummary {
     lastName: string | null;
     companyName: string | null;
     preferredLanguage?: string | null;
+    /** No administrative emails (migration 299): send becomes Issue. */
+    noAdminEmails?: boolean;
   };
   status: ContractStatus;
   language: string;

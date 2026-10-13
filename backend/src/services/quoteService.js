@@ -466,6 +466,8 @@ async function getQuoteById(id) {
         'customer_accounts.company_name as customer_company_name',
         // For transformQuote.customer.isPassive — never leaves the API.
         'customer_accounts.password_hash as customer_password_hash',
+        // Drives the Issue (no email) button (migration 299).
+        'customer_accounts.no_admin_emails as customer_no_admin_emails',
         'conv_contract.contract_number as converted_contract_number',
         'replaced.quote_number as replaces_quote_number',
         'replaced.issue_date as replaces_issue_date',

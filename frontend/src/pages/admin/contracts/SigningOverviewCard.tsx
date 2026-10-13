@@ -36,9 +36,13 @@ interface SigningOverviewCardProps {
   contractId: number;
   contractStatus: ContractStatus;
   overview: ContractSignersOverview;
+  /** The customer's address when they take no administrative emails
+   *  (migration 299): no link can be mailed to that signer, so the resend
+   *  and reminder buttons are hidden for them (the backend refuses too). */
+  noMailEmail?: string | null;
 }
 
-export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contractId, contractStatus, overview }) => {
+export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contractId, contractStatus, overview, noMailEmail = null }) => {
   const { t } = useTranslation();
   const confirm = useConfirm();
   const { formatDateTime } = useLocalizedDate();
@@ -187,7 +191,10 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
           {signers.map((s) => {
             const via = viaLabel(s.verifiedVia);
             // While details are collected, the first signer's link is the details link.
-            const canResend = s.role === 'customer' && s.status === 'invited'
+            // No link can be mailed to a customer who takes no administrative emails.
+            const noMailSigner = !!noMailEmail && !!s.email
+              && s.email.trim().toLowerCase() === noMailEmail.trim().toLowerCase();
+            const canResend = s.role === 'customer' && s.status === 'invited' && !noMailSigner
               && (contractStatus === 'sent' || contractStatus === 'awaiting_data');
             return (
               <li key={s.id} className="py-2 flex flex-wrap items-start gap-3 text-sm">

@@ -155,6 +155,31 @@ afterAll(async () => {
   if (cleanup) await cleanup();
 });
 
+describe('a customer who takes no administrative emails (migration 299)', () => {
+  test('no link is mailed again: resend and reminder are refused, the old link keeps working', async () => {
+    const signingV2 = require('../../src/services/contract/signingV2');
+    await db('customer_accounts').where({ id: customerId }).update({ no_admin_emails: true });
+    try {
+      const id = await newContract();
+      await sendContract(id);
+      expect((await db('email_queue').where({ email_type: 'contract_sent', recipient_email: customerEmail })
+        .orderBy('id', 'desc').first()).status).toBe('suppressed');
+      const signer = await db('contract_signers').where({ contract_id: id, role: 'customer' }).first();
+      const liveLinks = () => db('contract_signer_invitations').where({ signer_id: signer.id }).whereNull('revoked_at').select('id');
+      const linksBefore = await liveLinks();
+      expect(linksBefore).toHaveLength(1);
+
+      await expect(signingV2.resendInvitation(id, signer.id, adminId)).rejects.toMatchObject({ code: 'NO_ADMIN_EMAILS' });
+      await expect(signingV2.sendReminder(id, signer.id, { adminId })).rejects.toMatchObject({ code: 'NO_ADMIN_EMAILS' });
+      // The reminder's claim was taken back with the refusal.
+      expect(Number((await db('contract_signers').where({ id: signer.id }).first()).reminder_count) || 0).toBe(0);
+      expect(await liveLinks()).toEqual(linksBefore);
+    } finally {
+      await db('customer_accounts').where({ id: customerId }).update({ no_admin_emails: false });
+    }
+  });
+});
+
 // ---------------------------------------------------------------------
 // Slice 3 — the attachment manifest is bound into the signature
 // ---------------------------------------------------------------------
