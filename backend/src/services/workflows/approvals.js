@@ -234,10 +234,11 @@ async function listPendingForAdmin(admin, limit = 100) {
   return runScopedWorkflowQuery(query);
 }
 
-// Whether a send_document of the invoice is reachable from the gate's confirm
-// edge: the gate guards that send, so handling the invoice by hand answers it.
-// A gate elsewhere in a custom flow (one that asks something else) is left.
-async function gateGuardsInvoiceSend(workflowId, version, gateKey) {
+// How the gate relates to the invoice send: `guards` when a send_document of
+// the invoice is reachable from its confirm edge (handling the invoice by hand
+// answers it; a gate elsewhere in a custom flow asks something else and is
+// left alone), `hasDeny` when it has a deny edge to take.
+async function gateShape(workflowId, version, gateKey) {
   const nodes = await db('workflow_nodes').where({ workflow_id: workflowId, version }).select('node_key', 'type', 'config');
   const edges = await db('workflow_edges').where({ workflow_id: workflowId, version }).select('from_node', 'from_handle', 'to_node');
   const byKey = new Map(nodes.map((n) => {
@@ -245,6 +246,7 @@ async function gateGuardsInvoiceSend(workflowId, version, gateKey) {
     try { config = typeof config === 'string' ? JSON.parse(config) : (config || {}); } catch (_) { config = {}; }
     return [n.node_key, { ...n, config }];
   }));
+  const hasDeny = edges.some((e) => e.from_node === gateKey && e.from_handle === 'deny');
   const queue = edges.filter((e) => e.from_node === gateKey && e.from_handle === 'confirm').map((e) => e.to_node);
   const seen = new Set();
   while (queue.length) {
@@ -253,26 +255,36 @@ async function gateGuardsInvoiceSend(workflowId, version, gateKey) {
     seen.add(key);
     const node = byKey.get(key);
     if (!node) continue;
-    if (node.config?.action === 'send_document' && (node.config.document || 'invoice') === 'invoice') return true;
+    if (node.config?.action === 'send_document' && (node.config.document || 'invoice') === 'invoice') {
+      return { guards: true, hasDeny };
+    }
     for (const e of edges) if (e.from_node === key) queue.push(e.to_node);
   }
-  return false;
+  return { guards: false, hasDeny };
 }
 
 /**
- * The admin sent, paid or cancelled an invoice by hand while a booking run
- * still waits at the review gate in front of its send. Once every invoice the
- * run prepared is out of 'scheduled', the gate is moot: confirming it would
- * walk on to a send of invoices that are already out, and it would sit in the
- * inbox forever. Mark the approval superseded and cancel the run (no edge is
- * taken, so neither branch runs). While one of the run's invoices is still
- * unsent (a deposit sent by hand, the final still held), the gate stays: its
- * confirm sends the rest, and send_document skips what is already out.
- * Matches runs through the invoice ids prepare_invoice / prepare_event /
- * prepare_contract_invoice store in the run context. Never throws; called
- * after the invoice change has committed.
+ * The admin sent, paid or cancelled by hand an invoice that a waiting run's
+ * review gate guards (the gate sits in front of the run's own send). Once
+ * every invoice the run prepared is out of 'scheduled', the admin has answered
+ * the gate by doing the work, so the gate is decided on their behalf and the
+ * run CONTINUES: down 'confirm' when any of its invoices went out (send_document
+ * then skips what is already out; whatever the flow does after the send still
+ * happens), down 'deny' when every one was cancelled. Nothing is dropped and
+ * nothing is mailed twice, and the approval leaves the inbox.
+ *
+ * Called only when THIS change moved the invoice out of 'scheduled'. A gate a
+ * run reaches after its own send (e.g. "Payment received?") is asked about an
+ * invoice that is already out, so recording the payment answers nothing there.
+ *
+ * While one of the run's invoices is still unsent (a deposit sent by hand, the
+ * final held) the gate stays: its confirm sends the rest. Decided through
+ * finalizeApproval, so the same compare-and-set, kill-switch and take-back
+ * apply as for a click in the inbox. Matches runs through the invoice ids
+ * prepare_invoice / prepare_event / prepare_contract_invoice store in the run
+ * context. Never throws; called after the invoice change has committed.
  */
-async function supersedeGatesForInvoice(invoiceId, reason) {
+async function answerGatesForInvoice(invoiceId) {
   try {
     const id = Number(invoiceId);
     const rows = await db('workflow_approvals as a')
@@ -280,30 +292,30 @@ async function supersedeGatesForInvoice(invoiceId, reason) {
       .whereIn('a.status', ['pending', 'expired'])
       .where('r.status', 'waiting')
       .whereRaw('r.current_node = a.node_key')
-      .select('a.id as approval_id', 'a.node_key', 'r.id as run_id', 'r.workflow_id', 'r.version', 'r.context');
+      .select('a.*', 'r.workflow_id', 'r.version', 'r.context');
     for (const row of rows) {
       let vars = {};
       try { vars = (typeof row.context === 'string' ? JSON.parse(row.context) : row.context)?.vars || {}; } catch (_) { /* unreadable context */ }
       const ids = Array.isArray(vars.preparedInvoiceIds) ? vars.preparedInvoiceIds.map(Number) : [];
       if (!ids.includes(id)) continue;
-      const unsent = await db('invoices').whereIn('id', ids).where({ status: 'scheduled' }).first('id');
-      if (unsent) continue;
-      if (!(await gateGuardsInvoiceSend(row.workflow_id, row.version, row.node_key))) continue;
-      // Claim the approval first, the same compare-and-set finalizeApproval
-      // uses: an admin decision and this supersede cannot both win, so a
-      // confirm is never recorded on a run this then cancels.
-      const claimed = await db('workflow_approvals').where({ id: row.approval_id }).whereIn('status', ['pending', 'expired'])
-        .update({ status: 'superseded', acted_via: 'system', acted_at: db.fn.now() });
-      if (!claimed) continue;
-      await engine.cancelRun(row.run_id, `invoice ${id} ${reason} outside the workflow`);
-      logger.info('[workflow] gate superseded by manual invoice change', { runId: row.run_id, invoiceId: id, reason });
+      const statuses = (await db('invoices').whereIn('id', ids).select('status')).map((r) => r.status);
+      if (statuses.includes('scheduled')) continue;
+      const shape = await gateShape(row.workflow_id, row.version, row.node_key);
+      if (!shape.guards) continue;
+      // A gate without a deny edge would fail the run on 'deny'; its confirm
+      // path is safe too, send_document skips a cancelled invoice.
+      const decision = shape.hasDeny && statuses.every((st) => st === 'cancelled') ? 'deny' : 'confirm';
+      const res = await finalizeApproval(row, decision, { acted_via: 'system' });
+      if (res.ok && !res.already) {
+        logger.info('[workflow] gate answered by a manual invoice change', { runId: row.run_id, invoiceId: id, decision });
+      }
     }
   } catch (e) {
-    logger.warn('[workflow] superseding gates for invoice failed', { invoiceId, error: e.message });
+    logger.warn('[workflow] answering gates for invoice failed', { invoiceId, error: e.message });
   }
 }
 
 module.exports = {
   hashToken, createApproval, actByToken, actById, actByIdForAdmin,
-  listPending, listPendingForAdmin, peekApproval, supersedeGatesForInvoice,
+  listPending, listPendingForAdmin, peekApproval, answerGatesForInvoice,
 };

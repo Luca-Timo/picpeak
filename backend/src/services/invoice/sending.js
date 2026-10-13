@@ -32,12 +32,13 @@ const { auditedInsert, auditedUpdate } = require('../accountingHistory');
 // workflow send_document and an admin click can reach the same scheduled row
 // at once; the conditional status flip below is what keeps a second one from
 // mailing, this just makes it wait for the first instead of rendering a second
-// PDF. A caller that waited then runs the normal path, which reads the row
-// again: it reports the first send, or sends itself when that one failed.
+// PDF. When the send it waited for went out, a waiting caller reports that
+// send, a re-send included: two quick clicks on Send are one send, not two.
+// When it failed, the waiting caller runs the normal path and may send itself.
 const sendsInFlight = new Map();
-// Separate set: sendInvoice hands a storno row to sendStorno while it still
+// Separate map: sendInvoice hands a storno row to sendStorno while it still
 // holds the id in sendsInFlight.
-const stornoSendsInFlight = new Set();
+const stornoSendsInFlight = new Map();
 
 /**
  * Send (or, with options.allowResend, re-send) an invoice to the customer.
@@ -48,15 +49,25 @@ const stornoSendsInFlight = new Set();
  */
 async function sendInvoice(id, adminId, options = {}) {
   while (sendsInFlight.has(id)) {
-    try { await sendsInFlight.get(id); } catch (_) { /* that send failed; this one may try */ }
+    let other = null;
+    try { other = await sendsInFlight.get(id); } catch (_) { /* that send failed; this one may try */ }
+    if (other && other.sent) return { sent: false, alreadySent: true };
   }
   const attempt = sendInvoiceOnce(id, adminId, options);
   sendsInFlight.set(id, attempt);
+  let result;
   try {
-    return await attempt;
+    result = await attempt;
   } finally {
     if (sendsInFlight.get(id) === attempt) sendsInFlight.delete(id);
   }
+  // A first send of an invoice a waiting booking run prepared answers that
+  // run's review gate. After the in-flight entry is gone: the run continues
+  // from here and its own send_document must not wait on this very send.
+  if (result && result.firstSend) {
+    await require('../workflows').answerGatesForInvoice(id);
+  }
+  return result && result.sent ? { sent: true, pdfPath: result.pdfPath } : result;
 }
 
 async function sendInvoiceOnce(id, adminId, options = {}) {
@@ -227,13 +238,7 @@ async function sendInvoiceOnce(id, adminId, options = {}) {
     });
   } catch (_) { /* non-fatal */ }
 
-  // Sent by hand (or by the scheduler) while a booking run still waits at its
-  // review gate for this invoice: that gate is moot now.
-  if (invoice.status === 'scheduled') {
-    await require('../workflows').supersedeGatesForInvoice(id, 'sent');
-  }
-
-  return { sent: true, pdfPath };
+  return { sent: true, pdfPath, firstSend: invoice.status === 'scheduled' };
 }
 
 /**
@@ -446,6 +451,22 @@ async function createStorno(originalId, adminId, trx = db) {
  * template — the row stays in `sent` either way.
  */
 async function sendStorno(stornoId, adminId) {
+  // Same wait as sendInvoice: a caller that finds a send of this storno in
+  // flight waits for it, then reads the row again, so it never reports "sent"
+  // for a storno whose send then failed.
+  while (stornoSendsInFlight.has(stornoId)) {
+    try { await stornoSendsInFlight.get(stornoId); } catch (_) { /* that send failed; this one may try */ }
+  }
+  const attempt = sendStornoOnce(stornoId, adminId);
+  stornoSendsInFlight.set(stornoId, attempt);
+  try {
+    return await attempt;
+  } finally {
+    if (stornoSendsInFlight.get(stornoId) === attempt) stornoSendsInFlight.delete(stornoId);
+  }
+}
+
+async function sendStornoOnce(stornoId, adminId) {
   const data = await getInvoiceById(stornoId);
   if (!data) throw new AppError('Storno not found', 404);
   const { invoice: storno, lineItems } = data;
@@ -453,16 +474,6 @@ async function sendStorno(stornoId, adminId) {
     throw new AppError(`Expected kind='storno', got '${storno.kind}'`, 409);
   }
   if (storno.status === 'sent') return { status: 'sent' };
-  if (stornoSendsInFlight.has(stornoId)) return { status: 'sent' };
-  stornoSendsInFlight.add(stornoId);
-  try {
-    return await sendStornoOnce(storno, lineItems, stornoId, adminId);
-  } finally {
-    stornoSendsInFlight.delete(stornoId);
-  }
-}
-
-async function sendStornoOnce(storno, lineItems, stornoId, adminId) {
   const customer = await db('customer_accounts').where({ id: storno.customer_account_id }).first();
   ensureCustomerCanBill(customer);
 
@@ -750,7 +761,8 @@ async function cancelInvoice(id, adminId) {
         { invoiceId: id, viaStorno: false },
         invoice.event_id || null, `admin:${adminId}`);
     } catch (_) { /* non-fatal */ }
-    await require('../workflows').supersedeGatesForInvoice(id, 'cancelled');
+    // Still unsent until now: a booking run's review gate for it is answered.
+    await require('../workflows').answerGatesForInvoice(id);
     return { cancelled: true, stornoId: null };
   }
 
@@ -762,7 +774,6 @@ async function cancelInvoice(id, adminId) {
   try { await sendStorno(stornoId, adminId); } catch (err) {
     logger.warn('sendStorno after cancelInvoice failed — scheduler will retry', { stornoId, err: err.message });
   }
-  await require('../workflows').supersedeGatesForInvoice(id, 'cancelled');
   return { cancelled: true, stornoId };
 }
 

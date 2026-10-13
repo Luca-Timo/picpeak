@@ -205,9 +205,13 @@ async function recordPayment(id, { amountMinor, paidAt, paymentMethod, reference
         },
       });
     } catch (_) { /* non-fatal */ }
-    // Paid by hand while a booking run still waits at its review gate for
-    // this invoice: the gate is moot.
-    await require('../workflows').supersedeGatesForInvoice(id, 'paid');
+    // Paid before it was ever sent: a booking run's review gate in front of
+    // its send is answered. Only from 'scheduled' — an invoice that was already
+    // out is not what such a gate asks about, and a gate after the run's own
+    // send ("Payment received?") must stay with the admin.
+    if (invoice.status === 'scheduled') {
+      await require('../workflows').answerGatesForInvoice(id);
+    }
   }
   return markResult;
 }
