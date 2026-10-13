@@ -562,6 +562,11 @@ async function deleteFolder(eventId, folderId, conn = db) {
       );
     }
     const moved = await trx('photos').where({ event_id: eventId, folder_id: folder.id }).update({ folder_id: parentId });
+    // A subfolder may carry the folder's own name (an archive's wrapper
+    // folder: Name/Name). The check above rightly treats that name as free,
+    // but the row is still there until the delete below: take it out of the
+    // sibling-name index (folders only) before its children move up.
+    await trx('photo_categories').where('id', folder.id).update({ is_folder: formatBoolean(false) });
     await trx('photo_categories').where({ event_id: eventId, parent_id: folder.id }).update({ parent_id: parentId });
     await trx('folder_requests').where({ event_id: eventId, fallback_folder_id: folder.id }).update({ fallback_folder_id: parentId });
     await trx('event_category_order').where({ category_id: folder.id }).del();

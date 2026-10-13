@@ -190,6 +190,15 @@ describe('nested folders', () => {
       expect((await request(app).delete(`/api/admin/events/${eventId}/folders/${top.id}`)).status).toBe(200);
     });
 
+    it('deletes a folder whose subfolder has its own name (Name/Name): the subfolder takes its place', async () => {
+      const { folderId: inner } = await tree.ensurePath(eventId, ['Twin', 'twin']);
+      const outer = (await tree.eventFolders(eventId)).find((f) => f.name === 'Twin');
+      const res = await request(app).delete(`/api/admin/events/${eventId}/folders/${outer.id}`);
+      expect(res.status).toBe(200);
+      expect(await db('photo_categories').where('id', outer.id).first()).toBeUndefined();
+      expect((await db('photo_categories').where('id', inner).first()).parent_id).toBeNull();
+    });
+
     it('inherits a download restriction to everything below', async () => {
       await tree.ensurePath(eventId, ['Saturday', 'Activity B', 'Part 1']);
       const sat = (await tree.eventFolders(eventId)).find((f) => f.name === 'Saturday');
