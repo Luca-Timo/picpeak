@@ -205,6 +205,9 @@ async function recordPayment(id, { amountMinor, paidAt, paymentMethod, reference
         },
       });
     } catch (_) { /* non-fatal */ }
+    // Paid by hand while a booking run still waits at its review gate for
+    // this invoice: the gate is moot.
+    await require('../workflows').supersedeGatesForInvoice(id, 'paid');
   }
   return markResult;
 }

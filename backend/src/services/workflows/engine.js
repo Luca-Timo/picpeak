@@ -117,6 +117,26 @@ async function finishRun(runId) {
 }
 
 /**
+ * Stop a waiting run without taking any edge — for when the admin did the
+ * gated work by hand, so neither branch may run any more. Claims the run on
+ * its waiting status + node like resumeRun does, so a decision or the
+ * scheduler that got there first wins and this is a no-op. Returns whether
+ * this call cancelled it.
+ */
+async function cancelRun(runId, reason) {
+  const run = await db('workflow_runs').where({ id: runId }).first();
+  if (!run || run.status !== 'waiting') return false;
+  const claimed = await db('workflow_runs')
+    .where({ id: runId, status: 'waiting', current_node: run.current_node })
+    .update({ status: 'cancelled', wake_at: null, error: reason, finished_at: db.fn.now(), updated_at: db.fn.now() });
+  if (!claimed) return false;
+  const { nodeByKey } = await loadGraph(run.workflow_id, run.version);
+  const node = nodeByKey.get(run.current_node) || { node_key: run.current_node || '-', type: null };
+  await recordStep(runId, node, 'skipped', { cancelled: true, reason });
+  return true;
+}
+
+/**
  * Walk the graph from the run's current node until it ends, fails, or pauses
  * (wait / gate). Persists context + current_node after each node.
  */
@@ -657,6 +677,7 @@ module.exports = {
   resumeRun,
   finishRun,
   failRun,
+  cancelRun,
   workflowsEnabled,
   // exported for tests / introspection
   loadGraph,

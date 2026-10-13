@@ -865,7 +865,9 @@ router.post(
     const proofInboundIds = Array.isArray(req.body.proofInboundIds)
       ? req.body.proofInboundIds.map((n) => parseInt(n, 10)).filter(Number.isInteger)
       : undefined;
-    await invoiceService.sendInvoice(parseInt(req.params.id, 10), req.admin.id, { proofInboundIds });
+    // The admin's Send button is the one caller that may re-send an invoice
+    // that is already out (the "Resend" action).
+    await invoiceService.sendInvoice(parseInt(req.params.id, 10), req.admin.id, { proofInboundIds, allowResend: true });
     return successResponse(res, { sent: true });
   })
 );

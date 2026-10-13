@@ -59,7 +59,8 @@ async function createApproval(ctx) {
     type: cfg.type || 'payment_confirm',
     status: 'pending',
     token_hash: hashToken(raw),
-    payload: JSON.stringify({ prompt: cfg.prompt || null, vars: ctx.vars || {} }),
+    // label: the gate's name in the editor, shown when it has no prompt of its own.
+    payload: JSON.stringify({ prompt: cfg.prompt || null, label: cfg.label || null, vars: ctx.vars || {} }),
     expires_at: expiresAt,
     created_at: db.fn.now(),
   });
@@ -78,7 +79,7 @@ async function createApproval(ctx) {
     if (adminEmail) {
       const emailProcessor = require('../emailProcessor');
       const emailData = {
-        prompt: cfg.prompt || 'A workflow needs your confirmation.',
+        prompt: cfg.prompt || cfg.label || 'A workflow needs your confirmation.',
         confirm_url: confirmUrl,
         deny_url: denyUrl,
         ...(ctx.vars?.emailData || {}),
@@ -169,7 +170,10 @@ async function peekApproval(rawToken) {
   const a = await db('workflow_approvals').where({ token_hash: hashToken(rawToken) }).first();
   if (!a) return { found: false };
   let prompt = null;
-  try { prompt = (JSON.parse(a.payload || '{}') || {}).prompt || null; } catch (_) { /* ignore */ }
+  try {
+    const p = (typeof a.payload === 'string' ? JSON.parse(a.payload || '{}') : a.payload) || {};
+    prompt = p.prompt || p.label || null;
+  } catch (_) { /* ignore */ }
   return { found: true, status: a.status, prompt, expired: isExpired(a) };
 }
 
@@ -230,7 +234,76 @@ async function listPendingForAdmin(admin, limit = 100) {
   return runScopedWorkflowQuery(query);
 }
 
+// Whether a send_document of the invoice is reachable from the gate's confirm
+// edge: the gate guards that send, so handling the invoice by hand answers it.
+// A gate elsewhere in a custom flow (one that asks something else) is left.
+async function gateGuardsInvoiceSend(workflowId, version, gateKey) {
+  const nodes = await db('workflow_nodes').where({ workflow_id: workflowId, version }).select('node_key', 'type', 'config');
+  const edges = await db('workflow_edges').where({ workflow_id: workflowId, version }).select('from_node', 'from_handle', 'to_node');
+  const byKey = new Map(nodes.map((n) => {
+    let config = n.config;
+    try { config = typeof config === 'string' ? JSON.parse(config) : (config || {}); } catch (_) { config = {}; }
+    return [n.node_key, { ...n, config }];
+  }));
+  const queue = edges.filter((e) => e.from_node === gateKey && e.from_handle === 'confirm').map((e) => e.to_node);
+  const seen = new Set();
+  while (queue.length) {
+    const key = queue.shift();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const node = byKey.get(key);
+    if (!node) continue;
+    if (node.config?.action === 'send_document' && (node.config.document || 'invoice') === 'invoice') return true;
+    for (const e of edges) if (e.from_node === key) queue.push(e.to_node);
+  }
+  return false;
+}
+
+/**
+ * The admin sent, paid or cancelled an invoice by hand while a booking run
+ * still waits at the review gate in front of its send. Once every invoice the
+ * run prepared is out of 'scheduled', the gate is moot: confirming it would
+ * walk on to a send of invoices that are already out, and it would sit in the
+ * inbox forever. Mark the approval superseded and cancel the run (no edge is
+ * taken, so neither branch runs). While one of the run's invoices is still
+ * unsent (a deposit sent by hand, the final still held), the gate stays: its
+ * confirm sends the rest, and send_document skips what is already out.
+ * Matches runs through the invoice ids prepare_invoice / prepare_event /
+ * prepare_contract_invoice store in the run context. Never throws; called
+ * after the invoice change has committed.
+ */
+async function supersedeGatesForInvoice(invoiceId, reason) {
+  try {
+    const id = Number(invoiceId);
+    const rows = await db('workflow_approvals as a')
+      .join('workflow_runs as r', 'r.id', 'a.run_id')
+      .whereIn('a.status', ['pending', 'expired'])
+      .where('r.status', 'waiting')
+      .whereRaw('r.current_node = a.node_key')
+      .select('a.id as approval_id', 'a.node_key', 'r.id as run_id', 'r.workflow_id', 'r.version', 'r.context');
+    for (const row of rows) {
+      let vars = {};
+      try { vars = (typeof row.context === 'string' ? JSON.parse(row.context) : row.context)?.vars || {}; } catch (_) { /* unreadable context */ }
+      const ids = Array.isArray(vars.preparedInvoiceIds) ? vars.preparedInvoiceIds.map(Number) : [];
+      if (!ids.includes(id)) continue;
+      const unsent = await db('invoices').whereIn('id', ids).where({ status: 'scheduled' }).first('id');
+      if (unsent) continue;
+      if (!(await gateGuardsInvoiceSend(row.workflow_id, row.version, row.node_key))) continue;
+      // Claim the approval first, the same compare-and-set finalizeApproval
+      // uses: an admin decision and this supersede cannot both win, so a
+      // confirm is never recorded on a run this then cancels.
+      const claimed = await db('workflow_approvals').where({ id: row.approval_id }).whereIn('status', ['pending', 'expired'])
+        .update({ status: 'superseded', acted_via: 'system', acted_at: db.fn.now() });
+      if (!claimed) continue;
+      await engine.cancelRun(row.run_id, `invoice ${id} ${reason} outside the workflow`);
+      logger.info('[workflow] gate superseded by manual invoice change', { runId: row.run_id, invoiceId: id, reason });
+    }
+  } catch (e) {
+    logger.warn('[workflow] superseding gates for invoice failed', { invoiceId, error: e.message });
+  }
+}
+
 module.exports = {
   hashToken, createApproval, actByToken, actById, actByIdForAdmin,
-  listPending, listPendingForAdmin, peekApproval,
+  listPending, listPendingForAdmin, peekApproval, supersedeGatesForInvoice,
 };

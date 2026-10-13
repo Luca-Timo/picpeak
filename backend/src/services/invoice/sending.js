@@ -28,7 +28,38 @@ const { auditedInsert, auditedUpdate } = require('../accountingHistory');
  *        (auto-send / scheduler) the resolved per-customer/global default
  *        decides all-or-none.
  */
+// In-progress sends in this process, by invoice id. The scheduler flush, a
+// workflow send_document and an admin click can reach the same scheduled row
+// at once; the conditional status flip below is what keeps a second one from
+// mailing, this just makes it wait for the first instead of rendering a second
+// PDF. A caller that waited then runs the normal path, which reads the row
+// again: it reports the first send, or sends itself when that one failed.
+const sendsInFlight = new Map();
+// Separate set: sendInvoice hands a storno row to sendStorno while it still
+// holds the id in sendsInFlight.
+const stornoSendsInFlight = new Set();
+
+/**
+ * Send (or, with options.allowResend, re-send) an invoice to the customer.
+ * Only the admin's own Send button passes allowResend: every automatic
+ * caller — scheduler, workflow, delivery release, monthly trigger — sends an
+ * invoice once, and an invoice that is already out comes back as
+ * { sent: false, alreadySent: true } with no email.
+ */
 async function sendInvoice(id, adminId, options = {}) {
+  while (sendsInFlight.has(id)) {
+    try { await sendsInFlight.get(id); } catch (_) { /* that send failed; this one may try */ }
+  }
+  const attempt = sendInvoiceOnce(id, adminId, options);
+  sendsInFlight.set(id, attempt);
+  try {
+    return await attempt;
+  } finally {
+    if (sendsInFlight.get(id) === attempt) sendsInFlight.delete(id);
+  }
+}
+
+async function sendInvoiceOnce(id, adminId, options = {}) {
   const data = await getInvoiceById(id);
   if (!data) throw new AppError('Invoice not found', 404);
   const { invoice, lineItems } = data;
@@ -41,6 +72,9 @@ async function sendInvoice(id, adminId, options = {}) {
   }
   if (!['scheduled', 'sent', 'overdue'].includes(invoice.status)) {
     throw new AppError(`Cannot send invoice with status '${invoice.status}'`, 409);
+  }
+  if (invoice.status !== 'scheduled' && !options.allowResend) {
+    return { sent: false, alreadySent: true };
   }
   // Monthly-draft guard (migration 128). Rows flagged
   // is_monthly_draft=true accumulate line items across the period
@@ -104,7 +138,7 @@ async function sendInvoice(id, adminId, options = {}) {
     if (storedDue && storedDue === oldAutoDue) {
       updates.due_date = computeDueDate(new Date(sendDateIso), netDays).toISOString().slice(0, 10);
     }
-    await auditedUpdate(db, 'invoices', { id }, updates, { actor: adminId, source: 'invoice.send.issueDate' });
+    await auditedUpdate(db, 'invoices', { id, status: 'scheduled' }, updates, { actor: adminId, source: 'invoice.send.issueDate' });
     invoice.issue_date = updates.issue_date;
     if (updates.due_date) invoice.due_date = updates.due_date;
   }
@@ -125,9 +159,16 @@ async function sendInvoice(id, adminId, options = {}) {
   });
 
   const newStatus = invoice.status === 'overdue' ? 'overdue' : 'sent';
-  await auditedUpdate(db, 'invoices', { id }, {
+  // Conditional on the status read above: when another process sent this
+  // scheduled invoice in the meantime, the row is no longer 'scheduled',
+  // nothing updates and no second email is queued.
+  const claimed = await auditedUpdate(db, 'invoices', { id, status: invoice.status }, {
     status: newStatus, sent_at: new Date(), pdf_path: storedPath, updated_at: new Date(),
   }, { actor: adminId, source: 'invoice.send' });
+  if (!claimed) {
+    logger.warn(`sendInvoice: ${invoice.invoice_number} was sent by another caller — not sending again`);
+    return { sent: false, alreadySent: true };
+  }
 
   const { to: invoiceTo, cc: invoiceCc } = resolveBillingRecipients(customer, invoice.cc_pdf_email);
 
@@ -185,6 +226,12 @@ async function sendInvoice(id, adminId, options = {}) {
       },
     });
   } catch (_) { /* non-fatal */ }
+
+  // Sent by hand (or by the scheduler) while a booking run still waits at its
+  // review gate for this invoice: that gate is moot now.
+  if (invoice.status === 'scheduled') {
+    await require('../workflows').supersedeGatesForInvoice(id, 'sent');
+  }
 
   return { sent: true, pdfPath };
 }
@@ -406,7 +453,16 @@ async function sendStorno(stornoId, adminId) {
     throw new AppError(`Expected kind='storno', got '${storno.kind}'`, 409);
   }
   if (storno.status === 'sent') return { status: 'sent' };
+  if (stornoSendsInFlight.has(stornoId)) return { status: 'sent' };
+  stornoSendsInFlight.add(stornoId);
+  try {
+    return await sendStornoOnce(storno, lineItems, stornoId, adminId);
+  } finally {
+    stornoSendsInFlight.delete(stornoId);
+  }
+}
 
+async function sendStornoOnce(storno, lineItems, stornoId, adminId) {
   const customer = await db('customer_accounts').where({ id: storno.customer_account_id }).first();
   ensureCustomerCanBill(customer);
 
@@ -425,12 +481,15 @@ async function sendStorno(stornoId, adminId) {
     issuer: ctx.issuer,
   });
 
-  await auditedUpdate(db, 'invoices', { id: stornoId }, {
+  // Same claim as sendInvoice: only the caller that flips the row mails it
+  // (cancelInvoice's inline send and the scheduler retry can overlap).
+  const claimed = await auditedUpdate(db, 'invoices', { id: stornoId, status: storno.status }, {
     status: 'sent',
     sent_at: new Date(),
     pdf_path: storedPath,
     updated_at: new Date(),
   }, { actor: adminId, source: 'invoice.storno.send' });
+  if (!claimed) return { status: 'sent' };
 
   // Look up the original so we can include both numbers in the
   // email body — customers' bookkeepers expect to see the pair.
@@ -691,6 +750,7 @@ async function cancelInvoice(id, adminId) {
         { invoiceId: id, viaStorno: false },
         invoice.event_id || null, `admin:${adminId}`);
     } catch (_) { /* non-fatal */ }
+    await require('../workflows').supersedeGatesForInvoice(id, 'cancelled');
     return { cancelled: true, stornoId: null };
   }
 
@@ -702,6 +762,7 @@ async function cancelInvoice(id, adminId) {
   try { await sendStorno(stornoId, adminId); } catch (err) {
     logger.warn('sendStorno after cancelInvoice failed — scheduler will retry', { stornoId, err: err.message });
   }
+  await require('../workflows').supersedeGatesForInvoice(id, 'cancelled');
   return { cancelled: true, stornoId };
 }
 
