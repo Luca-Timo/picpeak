@@ -632,8 +632,8 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
       {withFolders && overLimit && !limitUnknown && (
         <Notice tone="warning">
           {overLimit.code === 'FOLDER_REQUEST_LIMIT_REACHED'
-            ? t('upload.structure.overRequestLimit', 'This upload would open {{adding}} folder requests, but the gallery already has {{current}} of at most {{limit}} open. Ask an administrator to approve or reject some first, or turn off “Keep folder structure”.', { adding: overLimit.adding, current: overLimit.current, limit: overLimit.limit })
-            : t('upload.structure.overFolderLimit', 'This upload would add {{adding}} folders, but the gallery already has {{current}} of at most {{limit}}. Turn off “Keep folder structure” or remove folders first.', { adding: overLimit.adding, current: overLimit.current, limit: overLimit.limit })}
+            ? t('upload.structure.overRequestLimit', 'This upload would open {{adding}} folder requests, but the gallery already has {{current}} of at most {{limit}} open. Ask an administrator to approve or reject some first, or turn off “Keep folder structure”.', { count: overLimit.adding, adding: overLimit.adding, current: overLimit.current, limit: overLimit.limit })
+            : t('upload.structure.overFolderLimit', 'This upload would add {{adding}} folders, but the gallery already has {{current}} of at most {{limit}}. Turn off “Keep folder structure” or remove folders first.', { count: overLimit.adding, adding: overLimit.adding, current: overLimit.current, limit: overLimit.limit })}
         </Notice>
       )}
 

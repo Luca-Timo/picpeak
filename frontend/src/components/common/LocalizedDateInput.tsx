@@ -122,8 +122,11 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
   // but leave the text alone when it already means that value: the value is
   // our own live commit coming back, and reformatting it mid-edit moved the
   // caret to the end, so the next Delete or digit landed in the wrong place.
+  // A cleared value only keeps a blank field: half-typed text also parses to
+  // '', and a reset from outside must still clear it.
   React.useEffect(() => {
-    setText((current) => (toIso(current) === String(value || '').slice(0, 10) ? current : toDisplay(value)));
+    const iso = String(value || '').slice(0, 10);
+    setText((current) => ((iso ? toIso(current) === iso : !current.trim()) ? current : toDisplay(value)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
@@ -138,7 +141,9 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
   useEscapeClose(open, closeFromKeyboard);
 
   // Below the field, right edges lined up; above it when the window has no
-  // room below; kept inside the window on a phone.
+  // room below; kept inside the window on a phone. The calendar sizes itself
+  // to this width (border included). When neither side has room, it goes on
+  // the roomier side, pushed back inside the window over the field.
   const place = React.useCallback(() => {
     const field = fieldRef.current;
     if (!field) return;
@@ -147,9 +152,14 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
     const height = popoverRef.current?.offsetHeight || 340;
     const left = Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8));
     const below = box.bottom + 4;
-    const top = below + height > window.innerHeight - 8 && box.top - 4 - height >= 8
-      ? box.top - 4 - height
-      : below;
+    const above = box.top - 4 - height;
+    const fitsBelow = below + height <= window.innerHeight - 8;
+    const fitsAbove = above >= 8;
+    let top = below;
+    if (!fitsBelow && fitsAbove) top = above;
+    else if (!fitsBelow) {
+      top = window.innerHeight - box.bottom >= box.top ? Math.max(8, window.innerHeight - 8 - height) : 8;
+    }
     setPosition({ position: 'fixed', top, left, width });
   }, []);
 
@@ -253,6 +263,21 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
               const next = e.relatedTarget as Node | null;
               if (next && (popoverRef.current?.contains(next) || fieldRef.current?.contains(next))) return;
               if (next) setOpen(false);
+            }}
+            // The popover is the last node in <body>, so Tab past its last
+            // button leaves the page (relatedTarget null, the blur above
+            // cannot tell that from switching windows). Tab past either end
+            // closes it and returns to the calendar button, which sits where
+            // the popover belongs in the tab order.
+            onKeyDown={(e) => {
+              if (e.key !== 'Tab' || e.altKey || e.metaKey || e.ctrlKey) return;
+              const stops = Array.from(popoverRef.current?.querySelectorAll<HTMLElement>(
+                'button:not(:disabled):not([tabindex="-1"])',
+              ) || []);
+              const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
+              if (e.target !== edge) return;
+              e.preventDefault();
+              closeFromKeyboard();
             }}
             role="dialog"
             aria-label={label || t('common.chooseDate', 'Choose date')}

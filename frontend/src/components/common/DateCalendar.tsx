@@ -51,12 +51,12 @@ export const DateCalendar: React.FC<DateCalendarProps> = ({ value, onSelect, loc
   const today = new Date();
   // Start on the selected day (or today), moved into [min, max]: a disabled
   // day cannot take focus, and the grid would have no keyboard entry.
-  const [focusDay, setFocusDay] = React.useState<Date>(() => {
-    const start = selected || today;
-    if (minDate && start < minDate) return minDate;
-    if (maxDate && start > maxDate) return maxDate;
-    return start;
-  });
+  const clamp = (d: Date) => {
+    if (minDate && d < minDate) return minDate;
+    if (maxDate && d > maxDate) return maxDate;
+    return d;
+  };
+  const [focusDay, setFocusDay] = React.useState<Date>(() => clamp(selected || today));
   const [month, setMonth] = React.useState<Date>(() => startOfMonth(focusDay));
   const gridRef = React.useRef<HTMLDivElement>(null);
   // Focus follows the active day: on open (so the arrow keys work at once)
@@ -79,7 +79,10 @@ export const DateCalendar: React.FC<DateCalendarProps> = ({ value, onSelect, loc
     gridRef.current?.querySelector<HTMLButtonElement>(`[data-day="${toIso(focusDay)}"]`)?.focus({ preventScroll: true });
   }, [focusDay, month]);
 
-  const goTo = (d: Date) => {
+  // Every move stays inside [min, max] for the same reason: focus on a
+  // disabled day goes nowhere and the arrow keys would go dead.
+  const goTo = (target: Date) => {
+    const d = clamp(target);
     moveFocus.current = true;
     setFocusDay(d);
     if (!isSameMonth(d, month)) setMonth(startOfMonth(d));
@@ -97,29 +100,33 @@ export const DateCalendar: React.FC<DateCalendarProps> = ({ value, onSelect, loc
       End: () => endOfWeek(focusDay, { weekStartsOn }),
     };
     const next = step[e.key];
-    if (!next) return;
+    // Alt+Left is the browser's Back; leave modified keys alone.
+    if (!next || e.altKey || e.metaKey || e.ctrlKey) return;
     e.preventDefault();
     goTo(next());
   };
 
+  // A month wholly outside [min, max] has no day to pick or focus.
+  const canPrev = !minDate || endOfMonth(addMonths(month, -1)) >= minDate;
+  const canNext = !maxDate || startOfMonth(addMonths(month, 1)) <= maxDate;
   const shiftMonth = (by: number) => {
     const next = addMonths(month, by);
     setMonth(next);
-    setFocusDay(isSameMonth(focusDay, next) ? focusDay : next);
+    setFocusDay(isSameMonth(focusDay, next) ? focusDay : clamp(next));
   };
 
-  const navButton = 'p-1.5 rounded-md text-muted hover:text-heading hover:bg-hover';
+  const navButton = 'p-1.5 rounded-md text-muted hover:text-heading hover:bg-hover disabled:opacity-40 disabled:pointer-events-none';
 
   return (
-    <div className="w-72 max-w-[calc(100vw-2rem)] p-3">
+    <div className="p-3">
       <div className="flex items-center justify-between mb-2">
-        <button type="button" onClick={() => shiftMonth(-1)} className={navButton} aria-label={t('common.previousMonth', 'Previous month')}>
+        <button type="button" onClick={() => shiftMonth(-1)} disabled={!canPrev} className={navButton} aria-label={t('common.previousMonth', 'Previous month')}>
           <ChevronLeft className="w-4 h-4" />
         </button>
         <span className="text-sm font-medium text-heading capitalize" aria-live="polite">
           {format(month, 'LLLL yyyy', { locale })}
         </span>
-        <button type="button" onClick={() => shiftMonth(1)} className={navButton} aria-label={t('common.nextMonth', 'Next month')}>
+        <button type="button" onClick={() => shiftMonth(1)} disabled={!canNext} className={navButton} aria-label={t('common.nextMonth', 'Next month')}>
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>

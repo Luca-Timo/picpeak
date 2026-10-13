@@ -174,6 +174,22 @@ describe('nested folders', () => {
       expect((await db('photo_categories').where('id', leaf).first()).parent_id).toBe(Number(top.id));
     });
 
+    it('a delete whose subfolder would clash with a folder one level up answers 409 and changes nothing', async () => {
+      await tree.ensurePath(eventId, ['ProbeTop', 'Portraits']);
+      await tree.ensurePath(eventId, ['portraits']);
+      const top = (await tree.eventFolders(eventId)).find((f) => f.name === 'ProbeTop');
+      const inTop = await addPhoto('top.jpg', { folder_id: top.id });
+      const res = await request(app).delete(`/api/admin/events/${eventId}/folders/${top.id}`);
+      expect(res.status).toBe(409);
+      expect(res.body).toMatchObject({ code: 'FOLDER_DELETE_NAME_CLASH', name: 'Portraits' });
+      expect(await db('photo_categories').where('id', top.id).first()).toBeTruthy();
+      expect((await db('photos').where('id', inTop).first()).folder_id).toBe(Number(top.id));
+      // Once the clash is renamed away, the delete goes through.
+      const sub = (await tree.eventFolders(eventId)).find((f) => f.name === 'Portraits');
+      await tree.renameFolder(eventId, sub.id, 'Portraits 2');
+      expect((await request(app).delete(`/api/admin/events/${eventId}/folders/${top.id}`)).status).toBe(200);
+    });
+
     it('inherits a download restriction to everything below', async () => {
       await tree.ensurePath(eventId, ['Saturday', 'Activity B', 'Part 1']);
       const sat = (await tree.eventFolders(eventId)).find((f) => f.name === 'Saturday');

@@ -547,6 +547,20 @@ async function deleteFolder(eventId, folderId, conn = db) {
   const run = async (trx) => {
     // Same lock as moveFolder, so a move and a delete of the tree serialise.
     if (isPostgreSQL()) await trx('photo_categories').where({ event_id: eventId }).forUpdate().select('id');
+    // The subfolders move up a level; one that shares a name with a folder
+    // already there would break the sibling-name index (migration 285). Refuse
+    // and name it, so the admin renames or moves it first.
+    const folders = await eventFolders(eventId, trx);
+    const above = new Set(childrenOf(parentId, folders)
+      .filter((f) => Number(f.id) !== Number(folder.id))
+      .map((f) => String(f.name).toLowerCase()));
+    const clash = childrenOf(folder.id, folders).find((f) => above.has(String(f.name).toLowerCase()));
+    if (clash) {
+      throw new FolderError(
+        `The subfolder "${clash.name}" cannot move up: a folder with this name already exists there`,
+        409, 'FOLDER_DELETE_NAME_CLASH', { name: clash.name },
+      );
+    }
     const moved = await trx('photos').where({ event_id: eventId, folder_id: folder.id }).update({ folder_id: parentId });
     await trx('photo_categories').where({ event_id: eventId, parent_id: folder.id }).update({ parent_id: parentId });
     await trx('folder_requests').where({ event_id: eventId, fallback_folder_id: folder.id }).update({ fallback_folder_id: parentId });

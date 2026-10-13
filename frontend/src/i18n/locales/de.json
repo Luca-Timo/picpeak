@@ -978,8 +978,10 @@
       "firstLookSettings": "Fälligkeit und Badge: Einstellungen dieser Galerie → Ordner & Auslieferung. Stichwörter: Einstellungen → Events.",
       "nothingToUpload": "Keine der ausgewählten Dateien kann hochgeladen werden: Alle liegen in versteckten oder übersprungenen Ordnern.",
       "keptForNext": "Dateien, die während der Vorbereitung der Ordner hinzukamen, sind noch ausgewählt: {{count}}.",
-      "overFolderLimit": "Dieser Upload würde {{adding}} Ordner anlegen, die Galerie hat aber schon {{current}} von höchstens {{limit}}. Schalten Sie „Ordnerstruktur übernehmen“ aus oder entfernen Sie zuerst Ordner.",
-      "overRequestLimit": "Dieser Upload würde {{adding}} Ordneranfragen stellen, die Galerie hat aber schon {{current}} von höchstens {{limit}} offenen. Bitten Sie eine Administratorin oder einen Administrator, zuerst einige zu genehmigen oder abzulehnen, oder schalten Sie „Ordnerstruktur übernehmen“ aus."
+      "overFolderLimit_one": "Dieser Upload würde {{adding}} Ordner anlegen, die Galerie hat aber schon {{current}} von höchstens {{limit}}. Schalten Sie „Ordnerstruktur übernehmen“ aus oder entfernen Sie zuerst Ordner.",
+      "overFolderLimit_other": "Dieser Upload würde {{adding}} Ordner anlegen, die Galerie hat aber schon {{current}} von höchstens {{limit}}. Schalten Sie „Ordnerstruktur übernehmen“ aus oder entfernen Sie zuerst Ordner.",
+      "overRequestLimit_one": "Dieser Upload würde {{adding}} Ordneranfrage stellen, die Galerie hat aber schon {{current}} von höchstens {{limit}} offenen. Bitten Sie eine Administratorin oder einen Administrator, zuerst einige zu genehmigen oder abzulehnen, oder schalten Sie „Ordnerstruktur übernehmen“ aus.",
+      "overRequestLimit_other": "Dieser Upload würde {{adding}} Ordneranfragen stellen, die Galerie hat aber schon {{current}} von höchstens {{limit}} offenen. Bitten Sie eine Administratorin oder einen Administrator, zuerst einige zu genehmigen oder abzulehnen, oder schalten Sie „Ordnerstruktur übernehmen“ aus."
     },
     "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch.",
     "removeFile": "{{name}} entfernen"
@@ -6650,6 +6652,7 @@
       "moveFailed": "Die Fotos konnten nicht verschoben werden",
       "errors": {
         "exists": "Hier gibt es bereits einen Ordner mit diesem Namen.",
+        "deleteNameClash": "Der Unterordner «{{name}}» kann nicht eine Ebene höher: Dort gibt es bereits einen Ordner mit diesem Namen. Benennen Sie ihn zuerst um oder verschieben Sie ihn.",
         "tooDeep": "Ordner lassen sich höchstens {{limit}} Ebenen tief verschachteln.",
         "notFound": "Dieser Ordner existiert nicht mehr. Laden Sie die Seite neu.",
         "cycle": "Ein Ordner kann nicht in sich selbst oder einen seiner Unterordner verschoben werden.",

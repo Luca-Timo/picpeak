@@ -814,15 +814,9 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
     // allow_ratings as it was, and the chips hide with feedbackEnabled.
     minRating: feedbackSettings?.feedback_enabled && feedbackSettings?.allow_ratings ? minRating : null,
   });
-  // The same scope with every search and filter off: tells "nothing matches"
-  // from "nothing here yet" when the grid comes out empty.
-  const scopePhotos = useGalleryFiltering({
-    sourcePhotos: data?.photos, categories: data?.categories, folderId: openFolderId, viewAll,
-    selectedCategoryId: null, searchTerm: '', sortBy, sortDesc, watermarkEnabled, slug,
-    activeFilters: [], activeColorFilters: [], mediaFilter: 'all', isGuestIdentityMode, myFeedbackPhotoIds,
-    selectedPersonIds: [], peopleMatchAny,
-  });
-  const emptyIsFiltered = filteredPhotos.length === 0 && scopePhotos.length > 0;
+  // `scopedPhotos` is the same scope with every search and filter off: tells
+  // "nothing matches" from "nothing here yet" when the grid comes out empty.
+  const emptyIsFiltered = filteredPhotos.length === 0 && scopedPhotos.length > 0;
   const creditsVisible = data?.event?.credits_visible === true;
 
   // Resolve a `?photo=` against the photos this viewer has loaded (issue

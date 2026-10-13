@@ -8,6 +8,10 @@ import type React from 'react';
 
 const TREE_ITEM = '[data-tree-item]:not(:disabled)';
 
+// Alt+Left is the browser's Back, Cmd/Ctrl+arrows belong to the OS and the
+// browser: the widgets only take the bare keys.
+const hasModifier = (e: React.KeyboardEvent) => e.altKey || e.metaKey || e.ctrlKey;
+
 /**
  * Keyboard for a folder tree. Each row's main button carries
  * `data-tree-item`, `data-key`, `data-parent` (the parent's key, '' at the
@@ -22,6 +26,7 @@ export function treeKeyDown(
   e: React.KeyboardEvent<HTMLElement>,
   { expand, collapse }: { expand: (key: string) => void; collapse: (key: string) => void },
 ): void {
+  if (hasModifier(e)) return;
   const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>(TREE_ITEM));
   const current = (e.target as HTMLElement).closest<HTMLElement>('[data-tree-item]');
   const index = current ? items.indexOf(current) : -1;
@@ -58,7 +63,7 @@ export function treeKeyDown(
  */
 export function radioGroupKeyDown(e: React.KeyboardEvent<HTMLElement>): void {
   const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-  if (!step) return;
+  if (!step || hasModifier(e)) return;
   const radios = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]:not(:disabled)'));
   const index = radios.indexOf((e.target as HTMLElement).closest<HTMLElement>('[role="radio"]')!);
   if (index < 0 || radios.length === 0) return;
