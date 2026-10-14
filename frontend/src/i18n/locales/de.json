@@ -7421,7 +7421,7 @@
       "dayRate": "Standard-Tagessatz",
       "dayRateHint": "Für Angebotspositionen pro Tag. In {{currency}}. Leer lassen, um den Standard-Tagessatz aus Einstellungen → Buchhaltung zu verwenden.",
       "noAdminEmails": "Keine administrativen E-Mails",
-      "noAdminEmailsHint": "Angebote, Verträge, Rechnungen und Mahnungen werden wie gewohnt erstellt, aber dieser Kunde erhält dazu keine E-Mail. Mit Portalzugang sieht er sie dort, sonst übergeben Sie sie selbst. Zurückgehaltene E-Mails erscheinen im E-Mail-Protokoll als „Unterdrückt“. Galerie-E-Mails sind nicht betroffen."
+      "noAdminEmailsHint": "Angebote, Verträge, Rechnungen und Mahnungen werden wie gewohnt erstellt, aber dieser Kunde erhält dazu keine E-Mail. Mit Portalzugang sieht er sie dort, sonst übergeben Sie sie selbst. Zurückgehaltene E-Mails erscheinen im E-Mail-Protokoll als „Unterdrückt“. Galerie-E-Mails sind nicht betroffen. Kopien an weitere Empfänger desselben Dokuments (z. B. eine Treuhänderin in CC) werden ebenfalls zurückgehalten. E-Mails, die beim Einschalten bereits in der Warteschlange sind, gehen noch raus."
     },
     "hours": {
       "section": "Stunden",

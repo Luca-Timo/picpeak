@@ -94,6 +94,15 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
     }
   };
   const signers = [...overview.signers].sort((a, b) => a.position - b.position);
+  // How each signer's current link reached them, from the signing log rather
+  // than today's switch: a link mailed before "no administrative emails"
+  // went on still reads "Link sent".
+  const LINK_EVENTS = ['invited', 'invited_portal', 'invitation_resent', 'reminded'];
+  const portalOnly = new Set<number>();
+  for (const e of [...overview.events].sort((a, b) => a.seq - b.seq)) {
+    if (e.signerId == null || !LINK_EVENTS.includes(e.type)) continue;
+    if (e.type === 'invited_portal') portalOnly.add(e.signerId); else portalOnly.delete(e.signerId);
+  }
   const nameOf = (id: number | null) => (id == null ? null : signers.find((s) => s.id === id)?.name || null);
 
   const resendMutation = useMutationWithToast({
@@ -138,7 +147,7 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
     switch (s.status) {
       case 'signed': return t('contracts.signers.status.signed', 'Signed');
       case 'declined': return t('contracts.signers.status.declined', 'Declined');
-      case 'invited': return s.noMail
+      case 'invited': return portalOnly.has(s.id)
         ? t('contracts.signers.log.type.invited_portal', 'Opened in the portal (no email)')
         : t('contracts.signers.status.invited', 'Link sent');
       default:
@@ -213,7 +222,7 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
                   <p className="text-xs text-soft">
                     {[
                       s.status === 'invited' && s.invitedAt
-                        ? (s.noMail
+                        ? (portalOnly.has(s.id)
                           ? t('contracts.signers.portalOpenAt', 'Open in the portal since {{date}} (no email)', { date: formatDateTime(s.invitedAt) })
                           : t('contracts.signers.invitedAt', 'Link sent {{date}}', { date: formatDateTime(s.invitedAt) }))
                         : null,

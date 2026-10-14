@@ -6702,7 +6702,7 @@
       "dayRate": "Privzeta dnevna cena",
       "dayRateHint": "Uporablja se pri postavkah ponudbe na dan. Glavne denarne enote ({{currency}}). Pustite prazno za uporabo privzete dnevne cene iz Nastavitve → Računovodstvo.",
       "noAdminEmails": "Brez administrativnih e-poštnih sporočil",
-      "noAdminEmailsHint": "Ponudbe, pogodbe, računi in opomini se ustvarijo kot običajno, vendar ta stranka o njih ne prejme e-pošte. Z dostopom do portala jih vidi tam, sicer ji jih predate sami. Zadržana sporočila so v dnevniku e-pošte označena kot »Zadržano«. E-pošta o galerijah ni prizadeta."
+      "noAdminEmailsHint": "Ponudbe, pogodbe, računi in opomini se ustvarijo kot običajno, vendar ta stranka o njih ne prejme e-pošte. Z dostopom do portala jih vidi tam, sicer ji jih predate sami. Zadržana sporočila so v dnevniku e-pošte označena kot »Zadržano«. E-pošta o galerijah ni prizadeta. Zadržane so tudi kopije drugim prejemnikom istega dokumenta (npr. računovodji v CC). E-pošta, ki je ob vklopu že v čakalni vrsti, se še pošlje."
     },
     "hours": {
       "section": "Ure",

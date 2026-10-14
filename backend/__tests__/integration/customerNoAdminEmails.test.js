@@ -249,3 +249,20 @@ test('the admin payment-check mail announces no fee for an opted-out customer', 
   expect(await feeAnnounced(await sentInvoice(customerId, 'R-NOMAIL-CHECK'))).toBe(false);
   expect(await feeAnnounced(await sentInvoice(await otherCustomer('check-control@example.com'), 'R-MAILED-CHECK'))).toBe(true);
 });
+
+test('a row queued before the switch went on keeps its decision; a resend is a new decision', async () => {
+  const projectService = require('../../src/services/projectService');
+  const optedIn = await otherCustomer('late-switch@example.com');
+  await queueEmail(null, 'late-switch@example.com', 'invoice_sent', {}, { customerAccountId: optedIn });
+  const pending = await lastRow('late-switch@example.com', 'invoice_sent');
+  expect(pending.status).toBe('pending');
+
+  await db('customer_accounts').where({ id: optedIn }).update({ no_admin_emails: true });
+  // Retry on the same row: queued while the switch was off, so it stays
+  // sendable, exactly as the processor would send it (round 2, concern 1).
+  await expect(projectService.retryEmail(pending.id, adminId)).resolves.toMatchObject({ id: pending.id });
+  expect((await db('email_queue').where({ id: pending.id }).first()).status).toBe('pending');
+  // Resend queues a NEW mail: the switch as it is now decides.
+  await db('email_queue').where({ id: pending.id }).update({ status: 'sent' });
+  await expect(projectService.resendEmail(pending.id, adminId)).rejects.toMatchObject({ code: 'NO_ADMIN_EMAILS' });
+});

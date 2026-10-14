@@ -715,7 +715,7 @@ export const CustomerDetailPage: React.FC = () => {
             />
             <p className="text-xs text-muted mt-1">
               {t('customers.field.noAdminEmailsHint',
-                'Quotes, contracts, invoices and reminders are created as usual, but no email about them is sent to this customer. With portal access they see them there; otherwise you hand them over yourself. Held-back emails appear as “Suppressed” in the email log. Gallery emails are not affected.')}
+                'Quotes, contracts, invoices and reminders are created as usual, but no email about them is sent to this customer. With portal access they see them there; otherwise you hand them over yourself. Held-back emails appear as “Suppressed” in the email log. Gallery emails are not affected. Copies to other recipients of the same document (e.g. an accountant in CC) are held back too. Emails already queued when you turn this on still go out.')}
             </p>
           </div>
         )}
