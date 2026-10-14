@@ -102,7 +102,7 @@ export const ContractDetailPage: React.FC = () => {
   // handles caching so navigating between contract/quote/bill detail
   // pages doesn't refetch.
   const sourceQuoteId = data?.contract?.sourceQuoteId ?? null;
-  // Customer takes no administrative emails (migration 299): Send becomes
+  // Customer takes no administrative emails (migration 300): Send becomes
   // Issue — no mail goes to the customer; they sign in the portal when they
   // have access, otherwise on paper. Above the mutations, which read it.
   const noMail = !!data?.contract?.customer?.noAdminEmails;
@@ -240,7 +240,7 @@ export const ContractDetailPage: React.FC = () => {
   const resendSignedMutation = useMutationWithToast({
     mutationFn: () => contractsService.resendSigned(numericId as number),
     successMessage: (noMail
-      ? t('contracts.detail.resentSignedNoMailToast', 'Signed contract re-sent to any other signers; this customer gets no email.')
+      ? t('contracts.detail.resentSignedNoMailToast', 'Signed contract re-sent to you; this customer gets no email.')
       : t('contracts.detail.resentSignedToast', 'Signed contract re-sent to both parties.')) as string,
     invalidateKeys: [['contract', numericId]],
     errorMessage: t('contracts.detail.resendError', 'Resend failed') as string,
@@ -387,7 +387,7 @@ export const ContractDetailPage: React.FC = () => {
   const resendSigned = async () => {
     if (await confirm({
       message: noMail
-        ? t('contracts.detail.confirmResendSignedNoMail', 'Re-send the signed contract PDF? This customer gets no email; any other signers do.')
+        ? t('contracts.detail.confirmResendSignedNoMail', 'Re-send the signed contract PDF? It goes to you; this customer gets no email.')
         : t('contracts.detail.confirmResendSigned', 'Re-send the signed contract PDF to both parties?'),
       confirmLabel: t('contracts.detail.resendSigned', 'Re-send signed PDF'),
     })) resendSignedMutation.mutate();
@@ -587,8 +587,7 @@ export const ContractDetailPage: React.FC = () => {
 
           {/* Signatures v2: every signer, the signing log, the evidence. */}
           {isV2 && signersQuery.data && numericId !== null && (
-            <SigningOverviewCard contractId={numericId} contractStatus={c.status} overview={signersQuery.data}
-              noMailEmail={noMail ? c.customer?.email ?? null : null} />
+            <SigningOverviewCard contractId={numericId} contractStatus={c.status} overview={signersQuery.data} />
           )}
 
           {/* Signature evidence — contracts sent before v2 (the Signers card

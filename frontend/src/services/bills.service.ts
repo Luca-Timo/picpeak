@@ -47,7 +47,7 @@ export interface InvoiceSummary {
      *  customer (no portal access). Drives the Passive badge that
      *  appears next to the customer label across editor + lists. */
     isPassive?: boolean;
-    /** No administrative emails (migration 299): send becomes Issue. */
+    /** No administrative emails (migration 300): send becomes Issue. */
     noAdminEmails?: boolean;
   };
   sourceQuoteId: number | null;

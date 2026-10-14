@@ -9776,8 +9776,8 @@
       "issue": "Ausstellen",
       "finishIssuing": "Mit den Kundendaten fertig ausstellen",
       "issuedToast": "Vertrag ausgestellt. Der Kunde hat keine E-Mail erhalten; mit Portalzugang kann er ihn dort unterschreiben.",
-      "confirmResendSignedNoMail": "Den unterschriebenen Vertrag als PDF erneut senden? Dieser Kunde erhält keine E-Mail, weitere Unterzeichner schon.",
-      "resentSignedNoMailToast": "Unterschriebener Vertrag an weitere Unterzeichner erneut gesendet; dieser Kunde erhält keine E-Mail."
+      "confirmResendSignedNoMail": "Den unterschriebenen Vertrag als PDF erneut senden? Er geht an Sie; dieser Kunde erhält keine E-Mail.",
+      "resentSignedNoMailToast": "Unterschriebener Vertrag erneut an Sie gesendet; dieser Kunde erhält keine E-Mail."
     },
     "editor": {
       "create": "Entwurf erstellen",
@@ -10208,7 +10208,8 @@
           "expired": "Frist zur Unterzeichnung abgelaufen",
           "reminded": "Erinnerung gesendet",
           "data_requested": "Angaben der Kundschaft angefordert",
-          "data_collected": "Angaben der Kundschaft eingegangen"
+          "data_collected": "Angaben der Kundschaft eingegangen",
+          "invited_portal": "Im Portal freigegeben (keine E-Mail)"
         },
         "actor": {
           "admin": "Admin",
@@ -10256,7 +10257,9 @@
       "remindError": "Die Erinnerung konnte nicht gesendet werden. Versuchen Sie es erneut.",
       "remindedAt": "{{count}}× erinnert, zuletzt {{date}}",
       "remindConfirm": "{{name}} eine Erinnerung senden? Sie enthält einen neuen Link; der bisherige funktioniert dann nicht mehr.",
-      "remind": "Erinnerung senden"
+      "remind": "Erinnerung senden",
+      "portalOpenAt": "Seit {{date}} im Portal freigegeben (keine E-Mail)",
+      "noAdminEmails": "Dieser Kunde erhält keine administrativen E-Mails, daher kann ihm kein Link gesendet werden. Er unterschreibt im Kundenportal oder auf Papier."
     },
     "paperUpload": {
       "title": "Unterschriebenen Vertrag hochladen",

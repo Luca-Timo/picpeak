@@ -135,7 +135,7 @@ export const BillDetailPage: React.FC = () => {
 
   if (isLoading || !data) return <Loading />;
   const inv = data.invoice;
-  // Customer takes no administrative emails (migration 299): Send becomes
+  // Customer takes no administrative emails (migration 300): Send becomes
   // Issue — the invoice is issued (in the portal when the customer has access), nothing is mailed.
   const noMail = !!inv.customer?.noAdminEmails;
   // Not issued yet: the server still takes edits. Issued invoices never

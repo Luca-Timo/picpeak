@@ -35,7 +35,7 @@ export const SendReviewModal: React.FC<{
   sending: boolean;
   /** {{customer_address}} would print empty: offer collect-then-freeze. */
   customerAddressMissing?: boolean;
-  /** Customer takes no administrative emails (migration 299): the final
+  /** Customer takes no administrative emails (migration 300): the final
    *  button says Issue and the review says no mail goes to the customer. */
   noMail?: boolean;
 }> = ({ contractId, onClose, onSend, onPreviewPdf, sending, customerAddressMissing = false, noMail = false }) => {

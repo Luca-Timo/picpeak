@@ -333,7 +333,7 @@ export const CustomerDetailPage: React.FC = () => {
               {t('customers.passive.activeLabel', 'Has portal access')}
             </span>
           )}
-          {/* No administrative emails (migration 299): visible without opening the switch. */}
+          {/* No administrative emails (migration 300): visible without opening the switch. */}
           {customer.noAdminEmails && (
             <Badge tone="warning" icon={<MailX />}>
               {t('customers.field.noAdminEmails', 'No administrative emails')}
@@ -639,7 +639,7 @@ export const CustomerDetailPage: React.FC = () => {
       </Card>
       )}
 
-      {(flags.calendar || flags.quotes || flags.bills || flags.hoursLogging || flags.contracts) && (
+      {(flags.calendar || flags.quotes || flags.bills || flags.hoursLogging || flags.contracts || flags.documents) && (
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-heading mb-1 flex items-center gap-2">
           <ToggleLeft className="w-5 h-5" />
@@ -699,9 +699,10 @@ export const CustomerDetailPage: React.FC = () => {
           })}
         </div>
 
-        {/* No administrative emails (migration 299). Documents are still
-            issued as usual; only the mail is held back. */}
-        {(flags.quotes || flags.bills || flags.contracts) && (
+        {/* No administrative emails (migration 300). Documents are still
+            issued as usual; only the mail is held back. Customer-document
+            mail counts too, hence flags.documents. */}
+        {(flags.quotes || flags.bills || flags.contracts || flags.documents) && (
           <div className="mt-4 pt-4 border-t border-line">
             <Switch
               checked={!!form.noAdminEmails}

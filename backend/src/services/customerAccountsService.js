@@ -673,7 +673,7 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Per-customer Skonto opt-out (migration 112). Boolean, coerced
     // via formatBoolean below for SQLite compatibility.
     'skonto_disabled',
-    // Per-customer "no administrative emails" (migration 299). Boolean,
+    // Per-customer "no administrative emails" (migration 300). Boolean,
     // coerced via formatBoolean below for SQLite compatibility.
     'no_admin_emails',
     // Per-customer re-bill proof-attachment override (migration 169, #866).

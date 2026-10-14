@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration 299: per-customer "no administrative emails" switch.
+ * Migration 300: per-customer "no administrative emails" switch.
  *
  * When true, quote / contract / invoice / reminder / document-request mails
  * addressed to this customer are recorded in the email log as `suppressed`

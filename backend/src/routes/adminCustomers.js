@@ -107,7 +107,7 @@ function transformCustomer(c) {
     // this customer's invoices qualify for an early-payment discount,
     // regardless of template / global defaults.
     skontoDisabled: c.skonto_disabled === true || c.skonto_disabled === 1,
-    // Per-customer "no administrative emails" (migration 299): quote /
+    // Per-customer "no administrative emails" (migration 300): quote /
     // contract / invoice mail is logged as suppressed instead of sent.
     noAdminEmails: c.no_admin_emails === true || c.no_admin_emails === 1,
     // Per-customer re-bill proof-attachment override (migration 169, #866).
@@ -645,7 +645,7 @@ router.put('/:id', [
     .withMessage('billing_cycle_day must be -15..-1 (days before month end) or 1..28 (day of month)'),
   // Per-customer Skonto opt-out (migration 112).
   body('skonto_disabled').optional().isBoolean(),
-  // Per-customer "no administrative emails" (migration 299).
+  // Per-customer "no administrative emails" (migration 300).
   body('no_admin_emails').optional().isBoolean(),
   // Per-customer re-bill proof-attachment override (migration 169, #866).
   // Nullable tri-state: null clears the override (inherit global default).

@@ -36,13 +36,9 @@ interface SigningOverviewCardProps {
   contractId: number;
   contractStatus: ContractStatus;
   overview: ContractSignersOverview;
-  /** The customer's address when they take no administrative emails
-   *  (migration 299): no link can be mailed to that signer, so the resend
-   *  and reminder buttons are hidden for them (the backend refuses too). */
-  noMailEmail?: string | null;
 }
 
-export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contractId, contractStatus, overview, noMailEmail = null }) => {
+export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contractId, contractStatus, overview }) => {
   const { t } = useTranslation();
   const confirm = useConfirm();
   const { formatDateTime } = useLocalizedDate();
@@ -106,6 +102,9 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
     invalidateKeys: [['contract-signers', contractId]],
     errorMessage: (err: unknown) => {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'NO_ADMIN_EMAILS') {
+        return t('contracts.signers.noAdminEmails', 'This customer takes no administrative emails, so no link can be sent to them. They sign in the customer portal or on paper.') as string;
+      }
       if (code === 'SIGNER_NOT_DUE') {
         return t('contracts.signers.resendNotDue', 'This signer can\'t get a new link now: it isn\'t their turn yet, or they have already signed.') as string;
       }
@@ -122,6 +121,9 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
     invalidateKeys: [['contract-signers', contractId]],
     errorMessage: (err: unknown) => {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'NO_ADMIN_EMAILS') {
+        return t('contracts.signers.noAdminEmails', 'This customer takes no administrative emails, so no link can be sent to them. They sign in the customer portal or on paper.') as string;
+      }
       if (code === 'SIGNER_NOT_DUE') {
         return t('contracts.signers.remindNotDue', 'This signer can\'t be reminded now: it isn\'t their turn yet, or they have already answered.') as string;
       }
@@ -136,7 +138,9 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
     switch (s.status) {
       case 'signed': return t('contracts.signers.status.signed', 'Signed');
       case 'declined': return t('contracts.signers.status.declined', 'Declined');
-      case 'invited': return t('contracts.signers.status.invited', 'Link sent');
+      case 'invited': return s.noMail
+        ? t('contracts.signers.log.type.invited_portal', 'Opened in the portal (no email)')
+        : t('contracts.signers.status.invited', 'Link sent');
       default:
         return s.role === 'issuer'
           ? t('contracts.signers.status.issuerPending', 'Counter-signs last')
@@ -191,10 +195,7 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
           {signers.map((s) => {
             const via = viaLabel(s.verifiedVia);
             // While details are collected, the first signer's link is the details link.
-            // No link can be mailed to a customer who takes no administrative emails.
-            const noMailSigner = !!noMailEmail && !!s.email
-              && s.email.trim().toLowerCase() === noMailEmail.trim().toLowerCase();
-            const canResend = s.role === 'customer' && s.status === 'invited' && !noMailSigner
+            const canResend = s.role === 'customer' && s.status === 'invited' && !s.noMail
               && (contractStatus === 'sent' || contractStatus === 'awaiting_data');
             return (
               <li key={s.id} className="py-2 flex flex-wrap items-start gap-3 text-sm">
@@ -212,7 +213,9 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
                   <p className="text-xs text-soft">
                     {[
                       s.status === 'invited' && s.invitedAt
-                        ? t('contracts.signers.invitedAt', 'Link sent {{date}}', { date: formatDateTime(s.invitedAt) })
+                        ? (s.noMail
+                          ? t('contracts.signers.portalOpenAt', 'Open in the portal since {{date}} (no email)', { date: formatDateTime(s.invitedAt) })
+                          : t('contracts.signers.invitedAt', 'Link sent {{date}}', { date: formatDateTime(s.invitedAt) }))
                         : null,
                       via,
                       s.signedAt ? t('contracts.signers.signedAt', 'Signed {{date}}', { date: formatDateTime(s.signedAt) }) : null,

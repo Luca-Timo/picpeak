@@ -9810,8 +9810,8 @@
       "issue": "Issue",
       "finishIssuing": "Finish issuing with the customer's details",
       "issuedToast": "Contract issued. No email was sent to the customer; with portal access they can sign it there.",
-      "confirmResendSignedNoMail": "Re-send the signed contract PDF? This customer gets no email; any other signers do.",
-      "resentSignedNoMailToast": "Signed contract re-sent to any other signers; this customer gets no email."
+      "confirmResendSignedNoMail": "Re-send the signed contract PDF? It goes to you; this customer gets no email.",
+      "resentSignedNoMailToast": "Signed contract re-sent to you; this customer gets no email."
     },
     "editor": {
       "create": "Create draft",
@@ -10242,7 +10242,8 @@
           "expired": "Time to sign ran out",
           "reminded": "Reminder sent",
           "data_requested": "Customer details requested",
-          "data_collected": "Customer details received"
+          "data_collected": "Customer details received",
+          "invited_portal": "Opened in the portal (no email)"
         },
         "actor": {
           "admin": "Admin",
@@ -10290,7 +10291,9 @@
       "remindError": "The reminder couldn't be sent. Try again.",
       "remindedAt": "Reminded {{count}}×, last {{date}}",
       "remindConfirm": "Send {{name}} a reminder? It carries a new link; the previous one stops working.",
-      "remind": "Send reminder"
+      "remind": "Send reminder",
+      "portalOpenAt": "Open in the portal since {{date}} (no email)",
+      "noAdminEmails": "This customer takes no administrative emails, so no link can be sent to them. They sign in the customer portal or on paper."
     },
     "paperUpload": {
       "title": "Upload a signed contract",

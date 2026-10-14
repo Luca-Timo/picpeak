@@ -64,7 +64,7 @@ export const QuoteDetailPage: React.FC = () => {
 
   if (isLoading || !data) return <Loading />;
   const q = data.quote;
-  // Customer takes no administrative emails (migration 299): Send becomes
+  // Customer takes no administrative emails (migration 300): Send becomes
   // Issue — the quote is issued (in the portal when the customer has access), nothing is mailed.
   const noMail = !!q.customer?.noAdminEmails;
   // Accepted, and no contract, event or invoice yet: it can be reissued or declined.

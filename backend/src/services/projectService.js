@@ -34,7 +34,12 @@ function pendingStatusFor(row) {
 // Any other account-recovery row that is no longer encrypted (a sent admin
 // reset keeps only the masked password) cannot go back to pending either:
 // the storage guard refuses it, so answer like System Health does.
-function assertResendable(row) {
+async function assertResendable(row) {
+  // No administrative emails (migration 300): a held-back mail stays held
+  // back while the switch is on; turned off, it may go out again.
+  if (await require('./_adminEmailOptOut').isRowHeldBack(row)) {
+    throw new AppError('This customer takes no administrative emails, so this email isn\'t sent. Turn the switch off on the customer to send it.', 409, 'NO_ADMIN_EMAILS');
+  }
   if (hasMaskedRecoveryLink(parseEmailData(row.email_data))) {
     throw new AppError('This invitation or password-reset email cannot be sent again: its link is not kept after sending. Send a new invitation or password reset instead.', 409);
   }
@@ -770,7 +775,7 @@ async function logEmailAction(activityType, emailId, row, adminId) {
 async function resendEmail(emailId, adminId = null) {
   const row = await db('email_queue').where({ id: emailId }).first();
   if (!row) throw new AppError('Email not found', 404);
-  assertResendable(row);
+  await assertResendable(row);
   // Normalise email_data to match the canonical enqueue (emailProcessor.js
   // stores JSON.stringify(...) in the json column). PG returns jsonb as a
   // parsed object, SQLite as a string — re-stringify the object form so the
@@ -806,7 +811,7 @@ async function cancelEmail(emailId, adminId = null) {
 async function retryEmail(emailId, adminId = null) {
   const row = await db('email_queue').where({ id: emailId }).first();
   if (!row) throw new AppError('Email not found', 404);
-  assertResendable(row);
+  await assertResendable(row);
   await db('email_queue').where({ id: emailId })
     .update({ status: pendingStatusFor(row), retry_count: 0, error_message: null, scheduled_at: null });
   await logEmailAction('project_email_retried', emailId, row, adminId);
@@ -816,7 +821,7 @@ async function retryEmail(emailId, adminId = null) {
 async function sendEmailNow(emailId, adminId = null) {
   const row = await db('email_queue').where({ id: emailId }).first();
   if (!row) throw new AppError('Email not found', 404);
-  assertResendable(row);
+  await assertResendable(row);
   await db('email_queue').where({ id: emailId }).update({ status: pendingStatusFor(row), scheduled_at: null });
   // Flush ONLY this email — passing onlyId scopes processEmailQueue to a single
   // row so a forced "send now" never force-retries OTHER dead-lettered emails

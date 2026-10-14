@@ -9009,8 +9009,8 @@
       "issue": "Izdaj",
       "finishIssuing": "Dokončaj izdajo s podatki stranke",
       "issuedToast": "Pogodba je izdana. Stranki ni bila poslana e-pošta; z dostopom do portala jo lahko podpiše tam.",
-      "confirmResendSignedNoMail": "Ponovno poslati podpisano pogodbo v PDF? Ta stranka ne prejme e-pošte, drugi podpisniki jo.",
-      "resentSignedNoMailToast": "Podpisana pogodba je ponovno poslana drugim podpisnikom; ta stranka ne prejme e-pošte."
+      "confirmResendSignedNoMail": "Ponovno poslati podpisano pogodbo v PDF? Prejmete jo vi; ta stranka ne prejme e-pošte.",
+      "resentSignedNoMailToast": "Podpisana pogodba je ponovno poslana vam; ta stranka ne prejme e-pošte."
     },
     "editor": {
       "create": "Ustvari osnutek",
@@ -9440,7 +9440,8 @@
           "expired": "Čas za podpis je potekel",
           "reminded": "Opomnik poslan",
           "data_requested": "Zahtevani podatki stranke",
-          "data_collected": "Podatki stranke prejeti"
+          "data_collected": "Podatki stranke prejeti",
+          "invited_portal": "Odprto na portalu (brez e-pošte)"
         },
         "actor": {
           "admin": "Skrbnik",
@@ -9488,7 +9489,9 @@
       "remindError": "Opomnika ni bilo mogoče poslati. Poskusite znova.",
       "remindedAt": "Opomnjeno {{count}}×, nazadnje {{date}}",
       "remindConfirm": "Pošljem {{name}} opomnik? Vsebuje novo povezavo; prejšnja bo prenehala delovati.",
-      "remind": "Pošlji opomnik"
+      "remind": "Pošlji opomnik",
+      "portalOpenAt": "Odprto na portalu od {{date}} (brez e-pošte)",
+      "noAdminEmails": "Ta stranka ne prejema administrativnih e-poštnih sporočil, zato ji povezave ni mogoče poslati. Podpiše na portalu za stranke ali na papirju."
     },
     "paperUpload": {
       "title": "Naloži podpisano pogodbo",

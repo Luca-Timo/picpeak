@@ -1,5 +1,5 @@
 /**
- * Per-customer "no administrative emails" (migration 299).
+ * Per-customer "no administrative emails" (migration 300).
  *
  * Real quoteService / emailProcessor → SQLite with the full core-migration
  * run (helpers/crmDb). Pins:
@@ -93,7 +93,7 @@ test('other recipients are unaffected', async () => {
 
 test('a customer who has not opted out still gets administrative mail', async () => {
   await db('customer_accounts').insert({
-    email: 'regular@example.com', display_name: 'Regular', is_active: 1, created_at: new Date(),
+    email: 'regular@example.com', display_name: 'Regular', is_active: 1, created_at: new Date().toISOString(),
   });
   await queueEmail(null, 'regular@example.com', 'invoice_sent', {});
   expect((await lastRow('regular@example.com', 'invoice_sent')).status).toBe('pending');
@@ -164,30 +164,44 @@ test('a shared billing address is held back only when every account at it opted 
   expect(optedOut).toBeTruthy();
 });
 
-test('the switch is checked again at send time: a row queued earlier, or put back by a resend, is held back', async () => {
-  // Written straight to the table, the way a business-hours reminder sits
-  // pending until later, or a resend / retry puts a row back to pending.
-  const [row] = await db('email_queue').insert({
-    recipient_email: 'customer@example.com', email_type: 'invoice_sent', status: 'pending',
-    email_data: JSON.stringify({}), created_at: new Date().toISOString(), retry_count: 0,
-  }).returning('id');
-  const id = typeof row === 'object' ? row.id : row;
-  // A working transport, so the pass reaches the send loop (same stub as
-  // customerErasureEmailQueue).
-  const transport = require('../../src/services/emailWebhookTransport');
-  const savedFrom = process.env.EMAIL_FROM;
-  process.env.EMAIL_FROM = 'noreply@example.com';
-  const enabled = jest.spyOn(transport, 'isEnabled').mockReturnValue(true);
-  const send = jest.spyOn(transport, 'send').mockResolvedValue({ success: true });
+test('with the document\'s customer, the decision follows that customer, not the address', async () => {
+  // A and B share a billing inbox; only A opted out (round 1, concern 3).
+  const a = await otherCustomer('a-doc@example.com', { billing_email: 'office@shared-doc.example', no_admin_emails: true });
+  const b = await otherCustomer('b-doc@example.com', { billing_email: 'office@shared-doc.example' });
+
+  await queueEmail(null, 'office@shared-doc.example', 'invoice_sent', { cc: 'a-doc@example.com' }, { customerAccountId: a });
+  // A's invoice is held back as a whole, its cc to A's own login included.
+  expect((await lastRow('office@shared-doc.example', 'invoice_sent')).status).toBe('suppressed');
+
+  await queueEmail(null, 'office@shared-doc.example', 'invoice_sent', {}, { customerAccountId: b });
+  expect((await lastRow('office@shared-doc.example', 'invoice_sent')).status).toBe('pending');
+
+  // A co-signer at another address is not the customer: their mail goes out.
+  await queueEmail(null, 'cosigner-doc@example.com', 'contract_sent', {}, { customerAccountId: a });
+  expect((await lastRow('cosigner-doc@example.com', 'contract_sent')).status).toBe('pending');
+});
+
+test('queueEmail reports a held-back mail as \'suppressed\'', async () => {
+  expect(await queueEmail(null, 'customer@example.com', 'invoice_sent', {}, { customerAccountId: customerId })).toBe('suppressed');
+});
+
+test('a held-back mail is not sent again by resend / retry / send-now while the switch is on', async () => {
+  const projectService = require('../../src/services/projectService');
+  await queueEmail(null, 'customer@example.com', 'quote_sent', {}, { customerAccountId: customerId });
+  const row = await lastRow('customer@example.com', 'quote_sent');
+  expect(row.status).toBe('suppressed');
+  for (const action of ['resendEmail', 'retryEmail', 'sendEmailNow']) {
+    await expect(projectService[action](row.id, adminId)).rejects.toMatchObject({ code: 'NO_ADMIN_EMAILS' });
+  }
+  expect((await db('email_queue').where({ id: row.id }).first()).status).toBe('suppressed');
+
+  // Switched off, the same row may go out again.
+  await db('customer_accounts').where({ id: customerId }).update({ no_admin_emails: false });
   try {
-    const { processEmailQueue } = require('../../src/services/emailProcessor');
-    await processEmailQueue({ ignoreSchedule: true, onlyId: id });
-    expect((await db('email_queue').where({ id }).first()).status).toBe('suppressed');
-    expect(send).not.toHaveBeenCalled();
+    await projectService.retryEmail(row.id, adminId);
+    expect((await db('email_queue').where({ id: row.id }).first()).status).toBe('pending');
   } finally {
-    enabled.mockRestore();
-    send.mockRestore();
-    if (savedFrom === undefined) delete process.env.EMAIL_FROM; else process.env.EMAIL_FROM = savedFrom;
+    await db('customer_accounts').where({ id: customerId }).update({ no_admin_emails: true });
   }
 });
 
@@ -212,4 +226,26 @@ test('a reminder for an opted-out customer records its level but adds no late fe
     .toEqual(['overdue', 2, 0]);
   // Control: the fee is on for this install, so the 0 above is the switch.
   expect(Number((await db('invoices').where({ id: mailed }).first()).late_fee_amount_minor)).toBeGreaterThan(0);
+});
+
+test('the admin payment-check mail announces no fee for an opted-out customer', async () => {
+  const { queuePaymentCheckEmail } = require('../../src/services/invoice/payments');
+  const profile = await db('business_profile').first();
+  if (profile) await db('business_profile').where({ id: profile.id }).update({ email: 'studio@example.com' });
+  const sentInvoice = async (customerAccountId, number) => {
+    const [ins] = await db('invoices').insert({
+      customer_account_id: customerAccountId, invoice_number: number, status: 'sent', currency: 'CHF',
+      issue_date: '2026-09-01', due_date: '2026-09-15', total_amount_minor: 100000, net_amount_minor: 100000,
+      vat_amount_minor: 0, reminder_level: 1,
+    }).returning('id');
+    return typeof ins === 'object' ? ins.id : ins;
+  };
+  const feeAnnounced = async (invoiceId) => {
+    await queuePaymentCheckEmail(invoiceId, { skipThrottle: true });
+    const row = await db('email_queue').where({ email_type: 'invoice_payment_check' }).orderBy('id', 'desc').first();
+    const data = typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data;
+    return data.late_fee_due;
+  };
+  expect(await feeAnnounced(await sentInvoice(customerId, 'R-NOMAIL-CHECK'))).toBe(false);
+  expect(await feeAnnounced(await sentInvoice(await otherCustomer('check-control@example.com'), 'R-MAILED-CHECK'))).toBe(true);
 });

@@ -119,7 +119,7 @@ function transformInvoice(i) {
       // identified by a null password_hash. We expose just the
       // boolean — the hash itself is dropped here.
       isPassive: i.customer_password_hash == null,
-      // No administrative emails (migration 299): the send action becomes
+      // No administrative emails (migration 300): the send action becomes
       // Issue — the document is issued (in the portal when the customer has access), no mail goes out.
       noAdminEmails: i.customer_no_admin_emails === true || i.customer_no_admin_emails === 1,
     },

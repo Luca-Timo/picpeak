@@ -410,7 +410,7 @@ describe('customer erasure clears email_queue', () => {
   });
 
   it('redacts mail held back for a customer who takes no administrative emails', async () => {
-    // Migration 299: such mail is stored as `suppressed` instead of sent, with
+    // Migration 300: such mail is stored as `suppressed` instead of sent, with
     // the same template variables (document numbers, names) as a sent row.
     const optedOut = await insertCustomer(db);
     const now = new Date().toISOString();

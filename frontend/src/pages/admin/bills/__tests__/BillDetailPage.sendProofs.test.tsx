@@ -121,7 +121,7 @@ describe('BillDetailPage — send with supplier proofs', () => {
   });
 });
 
-// A customer who takes no administrative emails (migration 299): the action
+// A customer who takes no administrative emails (migration 300): the action
 // reads Issue, and there is no proof dialog — nothing is mailed to attach to.
 describe('BillDetailPage — customer without administrative emails', () => {
   beforeEach(() => {
