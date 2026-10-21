@@ -66,7 +66,7 @@ export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, bu
               {i > 0 && (
                 <span
                   aria-hidden
-                  className={`hidden sm:block absolute top-4 right-1/2 w-full h-0.5 ${done || current ? 'bg-success' : 'bg-fill'}`}
+                  className={`hidden sm:block absolute top-4 right-1/2 w-full h-0.5 ${stopped ? 'bg-danger' : done || current ? 'bg-success' : 'bg-fill'}`}
                 />
               )}
               <span className={`relative z-10 w-8 h-8 shrink-0 rounded-full border-2 grid place-items-center text-sm font-semibold ${circle}`}>
