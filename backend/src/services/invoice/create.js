@@ -225,6 +225,7 @@ async function createInvoice(payload, adminId, trx = db) {
       paymentTimingTemplateId,
       paymentTermSnapshot,
       dealUuid: await resolveDealUuid(trx, payload),
+      projectId: payload.projectId || null,
     });
   }
 
@@ -289,6 +290,10 @@ async function createInvoice(payload, adminId, trx = db) {
   if (payload.vatCode !== undefined && await hasColumnCached('invoices', 'vat_code')) {
     row.vat_code = payload.vatCode ? String(payload.vatCode).slice(0, 16) : null;
   }
+  // Migration 315 — created from a project page. The route vets the project.
+  if (payload.projectId && await hasColumnCached('invoices', 'project_id')) {
+    row.project_id = payload.projectId;
+  }
   const inserted = await auditedInsert(trx, 'invoices', row, { actor: adminId, source: 'invoice.create' });
   const invoiceId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
@@ -327,7 +332,7 @@ async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, curre
   ccPdfEmail, netDays,
   eventName, eventTimeStart, eventTimeEnd,
   paymentNetDaysTemplateId, paymentTimingTemplateId,
-  paymentTermSnapshot, dealUuid, hold = false }) {
+  paymentTermSnapshot, dealUuid, projectId = null, hold = false }) {
   // Monthly-billing intercept (migration 128). Quote → invoice
   // conversion for a monthly-mode customer doesn't fan out N
   // installment invoices — the customer pays one consolidated bill
@@ -365,6 +370,9 @@ async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, curre
   const acceptanceTime = new Date();
   const invoiceIds = [];
 
+  // Migration 315. Only a project-page invoice passes projectId, outside a
+  // transaction, so the schema read never waits on a held connection.
+  const projectIdColumn = !!projectId && await hasColumnCached('invoices', 'project_id');
   for (let i = 0; i < total; i++) {
     const inst = installments[i];
     const percent = ensureNumber(inst.percent, 0);
@@ -469,6 +477,7 @@ async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, curre
       created_at: new Date(),
       updated_at: new Date(),
     };
+    if (projectIdColumn) row.project_id = projectId;
 
     const inserted = await auditedInsert(trx, 'invoices', row, { actor: adminId, source: 'invoice.spawnInstallments' });
     const invoiceId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];

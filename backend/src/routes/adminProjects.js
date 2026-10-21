@@ -9,7 +9,7 @@
  */
 
 const express = require('express');
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission, userHasAnyPermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
@@ -83,8 +83,43 @@ async function requireProjectsFlag(req, res, next) {
 }
 router.use(requireProjectsFlag);
 
+// Where an inquiry came from. Keys only; the UI translates them.
+const INQUIRY_SOURCES = ['referral', 'website', 'social', 'returning', 'fair', 'other'];
+
+// The inquiry fields (migration 315). `values: 'null'` lets the editor send
+// null to clear a field; an empty string clears too and is skipped here.
+const optionalField = (name) => body(name).optional({ values: 'falsy' });
+const inquiryValidators = [
+  optionalField('eventType').isString().trim().isLength({ max: 50 }),
+  optionalField('eventDate').isISO8601({ strict: true }),
+  optionalField('eventEndDate').isISO8601({ strict: true }).custom((end, { req }) => {
+    if (req.body.eventDate && String(end) < String(req.body.eventDate)) {
+      throw new Error('The end date is before the start date');
+    }
+    return true;
+  }),
+  optionalField('location').isString().trim().isLength({ max: 255 }),
+  optionalField('guestCount').isInt({ min: 0, max: 100000 }),
+  optionalField('budgetMinor').isInt({ min: 0, max: 100000000000 }),
+  optionalField('currency').isString().trim().isLength({ min: 3, max: 3 }).isAlpha(),
+  optionalField('source').isIn(INQUIRY_SOURCES),
+  optionalField('notes').isString().isLength({ max: 10000 }),
+  body('status').optional().isIn(projectService.PROJECT_STATUSES),
+];
+
+const INQUIRY_KEYS = ['eventType', 'eventDate', 'eventEndDate', 'location', 'guestCount',
+  'budgetMinor', 'currency', 'source', 'notes'];
+const inquiryFields = (reqBody) => Object.fromEntries(
+  INQUIRY_KEYS.filter((k) => reqBody[k] !== undefined).map((k) => [k, reqBody[k]]),
+);
+
 // List
-router.get('/', requirePermission('events.view'), handleAsync(async (req, res) => {
+router.get('/', requirePermission('events.view'), [
+  // A comma list (`inquiry,active`) for the dashboard, or one status.
+  query('status').optional().isString().isLength({ max: 200 }),
+  query('withStages').optional().isIn(['0', '1', 'true', 'false']),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
   // Value rollup mirrors the cockpit's per-doc gating so the list never
   // shows figures the admin lacks permission to see. Only invoices + quotes
   // carry monetary totals; contracts contribute none, so (unlike the detail
@@ -98,11 +133,16 @@ router.get('/', requirePermission('events.view'), handleAsync(async (req, res) =
   // project count can't hit the driver's bind-parameter limit; null means
   // unrestricted.
   const projectIds = ownedProjectsSubquery(req.admin);
+  const statuses = String(req.query.status || '').split(',').map((x) => x.trim()).filter(Boolean)
+    .filter((x) => projectService.PROJECT_STATUSES.includes(x));
+  const withStages = req.query.withStages === '1' || req.query.withStages === 'true';
+  if (withStages) perms.contracts = await userHasAnyPermission(req.admin.id, ['contracts.view']);
   const projects = await projectService.listProjects({
     search: req.query.q || '',
-    status: req.query.status || null,
+    status: statuses.length > 1 ? statuses : (statuses[0] || null),
     perms,
     projectIds,
+    withStages,
   });
   const visible = (await mayViewCustomers(req)) ? projects : projects.map(withoutCustomer);
   return successResponse(res, { projects: visible });
@@ -111,12 +151,21 @@ router.get('/', requirePermission('events.view'), handleAsync(async (req, res) =
 // Create
 router.post('/',
   requirePermission('events.edit'),
-  [body('name').isString().trim().isLength({ min: 1, max: 255 }), body('customerAccountId').optional({ values: 'falsy' }).isInt({ min: 1 })],
+  [
+    body('name').isString().trim().isLength({ min: 1, max: 255 }),
+    body('customerAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+    ...inquiryValidators,
+  ],
   handleAsync(async (req, res) => {
     validateRequest(req);
     await assertMayLinkCustomer(req);
     const project = await projectService.createProject(
-      { name: req.body.name, customerAccountId: req.body.customerAccountId || null },
+      {
+        name: req.body.name,
+        customerAccountId: req.body.customerAccountId || null,
+        status: req.body.status || 'active',
+        ...inquiryFields(req.body),
+      },
       req.admin.id,
     );
     return successResponse(res, { project: await projectForCaller(req, project) }, 201, 'Project created');
@@ -140,7 +189,7 @@ router.put('/:id',
     body('name').optional().isString().trim().isLength({ min: 1, max: 255 }),
     // nullable:true → accept JSON `null` (clear the customer); isInt otherwise.
     body('customerAccountId').optional({ nullable: true }).isInt({ min: 1 }),
-    body('status').optional().isString().isLength({ max: 24 }),
+    ...inquiryValidators,
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -149,8 +198,22 @@ router.put('/:id',
       name: req.body.name,
       customerAccountId: req.body.customerAccountId,
       status: req.body.status,
+      ...inquiryFields(req.body),
     });
     return successResponse(res, { project: await projectForCaller(req, project) }, 200, 'Project updated');
+  }),
+);
+
+// Delete. The project's galleries, quotes, contracts, invoices and hours stay;
+// they only lose the link (projectService.deleteProject).
+router.delete('/:id',
+  requirePermission('events.edit'),
+  requireProjectOwnership,
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await projectService.deleteProject(parseInt(req.params.id, 10), req.admin);
+    return successResponse(res, result, 200, 'Project deleted');
   }),
 );
 

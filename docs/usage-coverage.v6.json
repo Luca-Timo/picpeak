@@ -1152,6 +1152,7 @@
         "POST /",
         "GET /:id",
         "PUT /:id",
+        "DELETE /:id",
         "POST /:id/events",
         "POST /:id/quotes",
         "POST /:id/contracts",

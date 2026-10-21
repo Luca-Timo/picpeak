@@ -52,6 +52,38 @@ async function assertResendable(row, { newMail = false } = {}) {
   }
 }
 
+// `inquiry` → `active` → `completed`, plus `cancelled` (no job came of it).
+// `archived` is the value older UIs could set; it stays accepted.
+const PROJECT_STATUSES = ['inquiry', 'active', 'completed', 'cancelled', 'archived'];
+
+// The inquiry a project starts from (migration 315). API key → column.
+const INQUIRY_FIELDS = {
+  eventType: 'event_type',
+  eventDate: 'event_date',
+  eventEndDate: 'event_end_date',
+  location: 'location',
+  guestCount: 'guest_count',
+  budgetMinor: 'budget_minor',
+  currency: 'currency',
+  source: 'source',
+  notes: 'notes',
+};
+const DATE_FIELDS = new Set(['event_date', 'event_end_date']);
+const INT_FIELDS = new Set(['guest_count', 'budget_minor']);
+
+// PostgreSQL hands a `date` column back as a Date at local midnight, SQLite as
+// the stored text. Both leave here as YYYY-MM-DD, so the editor and the
+// document defaults see one shape.
+function toDateOnly(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  }
+  return String(value).slice(0, 10);
+}
+
 function transformProject(p) {
   if (!p) return null;
   return {
@@ -61,15 +93,98 @@ function transformProject(p) {
     customerEmail: p.customer_email || null,
     status: p.status,
     eventCount: p.event_count != null ? Number(p.event_count) : undefined,
+    eventType: p.event_type ?? null,
+    eventDate: toDateOnly(p.event_date),
+    eventEndDate: toDateOnly(p.event_end_date),
+    location: p.location ?? null,
+    guestCount: p.guest_count != null ? Number(p.guest_count) : null,
+    budgetMinor: p.budget_minor != null ? Number(p.budget_minor) : null,
+    currency: p.currency ?? null,
+    source: p.source ?? null,
+    notes: p.notes ?? null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
 }
 
+/** The project's end date may not come before its start date, whichever of
+ *  the two an edit changes. */
+function assertDateRange(row) {
+  const start = toDateOnly(row.event_date);
+  const end = toDateOnly(row.event_end_date);
+  if (start && end && end < start) throw new AppError('The end date is before the start date', 400);
+}
+
+/** The inquiry columns `payload` sets, as a row patch. Keys left undefined are
+ *  not touched; an empty value clears the column. Nothing is written on an
+ *  instance that has not run migration 315. */
+async function inquiryPatch(payload = {}) {
+  const patch = {};
+  if (!(await hasColumnCached('projects', 'notes'))) return patch;
+  for (const [key, column] of Object.entries(INQUIRY_FIELDS)) {
+    if (payload[key] === undefined) continue;
+    let value = payload[key];
+    if (value === '' || value === null) value = null;
+    else if (DATE_FIELDS.has(column)) value = toDateOnly(value);
+    else if (INT_FIELDS.has(column)) value = Math.trunc(Number(value));
+    else value = String(value).trim() || null;
+    if (column === 'currency' && value) value = value.toUpperCase();
+    patch[column] = value;
+  }
+  return patch;
+}
+
+const CHUNK = 500;
+
+/**
+ * The invoices that belong to each of `projectIds`, attributed to one project
+ * each. An invoice belongs to a project through any of:
+ *   - its gallery (events.project_id), the original rollup;
+ *   - its own invoices.project_id (migration 315), set when it is created from
+ *     the project, e.g. a deposit before any gallery exists;
+ *   - its deal: the deal_uuid of a quote or contract linked to the project.
+ * `columns` are invoice columns, selected unqualified.
+ */
+async function invoicesForProjects(projectIds, columns) {
+  const found = new Map();
+  if (!projectIds.length) return [];
+  const keep = (rows) => {
+    for (const r of rows) if (!found.has(r.id)) found.set(r.id, r);
+  };
+  const cols = columns.map((c) => `inv.${c}`);
+
+  keep(await db('invoices as inv')
+    .join('events as e', 'e.id', 'inv.event_id')
+    .whereIn('e.project_id', projectIds)
+    .select('e.project_id as project_id', ...cols));
+
+  if (await hasColumnCached('invoices', 'project_id')) {
+    keep(await db('invoices as inv')
+      .whereIn('inv.project_id', projectIds)
+      .select('inv.project_id as project_id', ...cols.filter((c) => c !== 'inv.project_id')));
+  }
+
+  if (await hasColumnCached('invoices', 'deal_uuid')) {
+    const dealToProject = new Map();
+    for (const tbl of ['quotes', 'contracts']) {
+      if (!(await hasColumnCached(tbl, 'project_id')) || !(await hasColumnCached(tbl, 'deal_uuid'))) continue;
+      const rows = await db(tbl).whereIn('project_id', projectIds).whereNotNull('deal_uuid')
+        .distinct('deal_uuid', 'project_id');
+      for (const r of rows) if (!dealToProject.has(r.deal_uuid)) dealToProject.set(r.deal_uuid, r.project_id);
+    }
+    const deals = Array.from(dealToProject.keys());
+    for (let i = 0; i < deals.length; i += CHUNK) {
+      const rows = await db('invoices as inv').whereIn('inv.deal_uuid', deals.slice(i, i + CHUNK)).select(...cols);
+      keep(rows.map((r) => ({ ...r, project_id: dealToProject.get(r.deal_uuid) })));
+    }
+  }
+  return Array.from(found.values());
+}
+
 /** List projects with customer email + event count + rolled-up value.
  *  `perms` gates which document types feed the value (matches the cockpit):
  *  invoices need bills.view, quotes need quotes.view. */
-async function listProjects({ search = '', status = null, perms = {}, projectIds = null } = {}) {
+async function listProjects({ search = '', status = null, perms = {}, projectIds = null, withStages = false } = {}) {
   let q = db('projects')
     .leftJoin('customer_accounts', 'customer_accounts.id', 'projects.customer_account_id')
     .select(
@@ -83,7 +198,8 @@ async function listProjects({ search = '', status = null, perms = {}, projectIds
   // large project count off the driver's bind-parameter limit, and correctly
   // yields no rows for an admin who owns nothing.
   if (projectIds !== null) q = q.whereIn('projects.id', projectIds);
-  if (status) q = q.where('projects.status', status);
+  if (Array.isArray(status) && status.length) q = q.whereIn('projects.status', status);
+  else if (status && !Array.isArray(status)) q = q.where('projects.status', status);
   if (search) {
     q = q.where(function () {
       this.where('projects.name', 'like', `%${search}%`)
@@ -93,6 +209,7 @@ async function listProjects({ search = '', status = null, perms = {}, projectIds
   const rows = await q;
   const projects = rows.map(transformProject);
   await attachValuations(projects, perms);
+  if (withStages) await attachStages(projects, perms);
   return projects;
 }
 
@@ -106,14 +223,11 @@ async function attachValuations(projects, perms = {}) {
   if (!projects.length) return;
   const projectIds = projects.map((p) => p.id);
 
-  // Invoices roll up by event → project_id; quotes by quotes.project_id.
+  // Invoices roll up by event, own project_id or deal; quotes by quotes.project_id.
   let invoices = [];
   if (perms.bills !== false) {
-    invoices = await db('invoices as inv')
-      .join('events as e', 'e.id', 'inv.event_id')
-      .whereIn('e.project_id', projectIds)
-      .select('e.project_id as project_id', 'inv.id', 'inv.deal_uuid',
-        'inv.total_amount_minor', 'inv.paid_amount_minor', 'inv.currency');
+    invoices = await invoicesForProjects(projectIds,
+      ['id', 'deal_uuid', 'total_amount_minor', 'paid_amount_minor', 'currency']);
   }
   let quotes = [];
   if (perms.quotes !== false && await hasColumnCached('quotes', 'project_id')) {
@@ -168,15 +282,18 @@ async function getProjectById(id) {
   return transformProject(row);
 }
 
-async function createProject({ name, customerAccountId = null }, adminId) {
+async function createProject({ name, customerAccountId = null, status = 'active', ...fields }, adminId) {
   if (!name || !String(name).trim()) throw new AppError('Project name is required', 400);
+  if (!PROJECT_STATUSES.includes(status)) throw new AppError('Unknown project status', 400);
   const row = {
     name: String(name).trim(),
     customer_account_id: customerAccountId || null,
-    status: 'active',
+    status,
+    ...(await inquiryPatch(fields)),
     created_at: new Date(),
     updated_at: new Date(),
   };
+  assertDateRange(row);
   // Record the owner (GHSA-wrg5). adminId was already passed in and silently
   // discarded, which left a brand-new empty project with no derivable owner —
   // it has no linked events to infer one from yet. Guarded so an instance that
@@ -212,7 +329,7 @@ async function projectLinkedCustomerIds(id, conn = db) {
   return ids;
 }
 
-async function updateProject(id, { name, customerAccountId, status }) {
+async function updateProject(id, { name, customerAccountId, status, ...fields }) {
   const existing = await db('projects').where({ id }).first();
   if (!existing) throw new AppError('Project not found', 404);
   const patch = { updated_at: new Date() };
@@ -231,9 +348,45 @@ async function updateProject(id, { name, customerAccountId, status }) {
     }
     patch.customer_account_id = next;
   }
-  if (status !== undefined) patch.status = status;
+  if (status !== undefined) {
+    if (!PROJECT_STATUSES.includes(status)) throw new AppError('Unknown project status', 400);
+    patch.status = status;
+  }
+  Object.assign(patch, await inquiryPatch(fields));
+  assertDateRange({ ...existing, ...patch });
   await db('projects').where({ id }).update(patch);
   return getProjectById(id);
+}
+
+/** Delete a project. Its galleries, documents and hours stay and only lose the
+ *  link: done explicitly, because SQLite runs without PRAGMA foreign_keys and
+ *  the audited tables have to record the change (accountingHistoryReferences). */
+async function deleteProject(id, actor = null) {
+  const existing = await db('projects').where({ id }).first('id');
+  if (!existing) throw new AppError('Project not found', 404);
+  const { deleteWithAccountingHistory } = require('./accountingHistory');
+  // Resolved before the transaction: on SQLite a query on the global
+  // connection waits for the one the transaction holds.
+  const eventsLinked = await hasColumnCached('events', 'project_id');
+  const documentsLinked = await hasColumnCached('customer_documents', 'project_id');
+  await db.transaction(async (trx) => {
+    if (eventsLinked) {
+      await trx('events').where({ project_id: id }).update({ project_id: null });
+    }
+    if (documentsLinked) {
+      await trx('customer_documents').where({ project_id: id }).update({ project_id: null });
+    }
+    await deleteWithAccountingHistory(trx, 'projects', { id },
+      { actor: actor?.id ?? null, source: 'project.delete' });
+  });
+  return { id };
+}
+
+/** An inquiry becomes an active project the moment something is attached to
+ *  it: a quote, contract, gallery or invoice. Any other status is left alone. */
+async function promoteInquiry(projectId, conn = db) {
+  await conn('projects').where({ id: projectId, status: 'inquiry' })
+    .update({ status: 'active', updated_at: new Date() });
 }
 
 /** Distinct customer_account_ids an event is assigned to (event_customer_assignments
@@ -267,6 +420,7 @@ async function assignEvent(projectId, eventId) {
   }
 
   await db('events').where({ id: eventId }).update({ project_id: projectId });
+  await promoteInquiry(projectId);
   return { projectId, eventId };
 }
 
@@ -351,6 +505,9 @@ async function linkDealToProject(dealUuid, projectId, conn = db, actor = null) {
       throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
     }
   }
+
+  // Every caller has just linked a document to the project.
+  await promoteInquiry(projectId, conn);
 
   // Nothing to cascade without a deal, but the destination above still had
   // to be vetted: every caller writes `project_id` onto its own row BEFORE
@@ -479,6 +636,7 @@ async function assignDocument(table, projectId, documentId, actor = null) {
   }
   await auditedUpdate(db, table, { id: documentId }, { project_id: projectId || null },
     { actor: actor?.id ?? null, source: 'project.assign_document' });
+  if (projectId) await promoteInquiry(projectId);
   return { projectId: projectId || null, documentId };
 }
 
@@ -540,6 +698,78 @@ function computeValuation(invoices = [], quotes = []) {
   };
 }
 
+// ── Stages ──────────────────────────────────────────────────────────────
+//
+// Where a project stands, derived from what it holds rather than set by hand,
+// so a quote created outside the project flow still moves it forward:
+//   inquiry  — always done once the project exists;
+//   quote    — a quote was accepted (or already converted);
+//   contract — a contract is fully signed;
+//   gallery  — a gallery is published;
+//   invoice  — it has invoices and every one that still counts is paid;
+//   done     — the admin completed the project.
+// A stage that is not done while a later one is reads `skipped`. The first
+// stage after the last done one is `current`; a cancelled or completed project
+// has none. A stage whose documents the admin may not see reads `hidden`.
+const STAGES = ['inquiry', 'quote', 'contract', 'gallery', 'invoice', 'done'];
+const QUOTE_DONE = new Set(['accepted', 'converted']);
+const CONTRACT_DONE = new Set(['fully_signed']);
+const INVOICE_IGNORED = new Set(['cancelled', 'skipped', 'draft']);
+
+const truthy = (v) => v === true || v === 1 || v === '1';
+
+function deriveStages({ status, quotes = [], contracts = [], events = [], invoices = [] }, perms = {}) {
+  const counting = invoices.filter((inv) => inv.kind !== 'storno' && !INVOICE_IGNORED.has(inv.status));
+  const done = {
+    inquiry: true,
+    quote: quotes.some((q) => QUOTE_DONE.has(q.status)),
+    contract: contracts.some((c) => CONTRACT_DONE.has(c.status)),
+    gallery: events.some((e) => truthy(e.is_active) && !truthy(e.is_draft)),
+    invoice: counting.length > 0 && counting.every((inv) => inv.status === 'paid'),
+    done: status === 'completed',
+  };
+  const hidden = { quote: perms.quotes === false, contract: perms.contracts === false, invoice: perms.bills === false };
+  let lastDone = -1;
+  STAGES.forEach((key, i) => { if (done[key] && !hidden[key]) lastDone = i; });
+  const closed = status === 'completed' || status === 'cancelled';
+  let current = null;
+  const stages = STAGES.map((key, i) => {
+    let state;
+    if (hidden[key]) state = 'hidden';
+    else if (done[key]) state = 'done';
+    else if (i < lastDone || (closed && key !== 'done')) state = 'skipped';
+    else if (!closed && current === null) { state = 'current'; current = key; }
+    else state = 'todo';
+    return { key, state };
+  });
+  return { stages, current };
+}
+
+/** Attach `stage` ({ stages, current }) to each listed project, in bulk. */
+async function attachStages(projects, perms = {}) {
+  if (!projects.length) return;
+  const ids = projects.map((p) => p.id);
+  const group = (rows) => {
+    const m = new Map();
+    for (const r of rows) { const l = m.get(r.project_id) || []; l.push(r); m.set(r.project_id, l); }
+    return m;
+  };
+  const quotes = perms.quotes !== false && await hasColumnCached('quotes', 'project_id')
+    ? group(await db('quotes').whereIn('project_id', ids).select('project_id', 'status')) : new Map();
+  const contracts = perms.contracts !== false && await hasColumnCached('contracts', 'project_id')
+    ? group(await db('contracts').whereIn('project_id', ids).select('project_id', 'status')) : new Map();
+  const events = group(await db('events').whereIn('project_id', ids).select('project_id', 'is_active', 'is_draft'));
+  const invoices = perms.bills !== false
+    ? group(await invoicesForProjects(ids, ['id', 'status', 'kind', 'deal_uuid'])) : new Map();
+  for (const p of projects) {
+    p.stage = deriveStages({
+      status: p.status,
+      quotes: quotes.get(p.id), contracts: contracts.get(p.id),
+      events: events.get(p.id), invoices: invoices.get(p.id),
+    }, perms);
+  }
+}
+
 /**
  * Full overview aggregation for the cockpit. Returns the project, its events,
  * and the rolled-up emails / quotes / contracts / invoices / hours + a
@@ -588,13 +818,14 @@ async function getProjectOverview(id, perms = {}, admin = null) {
 
   const out = { project, events, emails: [], quotes: [], contracts: [], invoices: [], hours: { entries: [], totalMinutes: 0 } };
 
-  // Invoices (by event) incl. storno.
-  if (eventIds.length && perms.bills !== false) {
-    out.invoices = await db('invoices')
-      .whereIn('event_id', eventIds)
-      .select('id', 'invoice_number', 'status', 'kind', 'issue_date', 'due_date',
-        'total_amount_minor', 'paid_amount_minor', 'paid_at', 'currency', 'event_id', 'deal_uuid')
-      .orderBy('issue_date', 'desc');
+  // Invoices (by event, own project_id or deal) incl. storno.
+  if (perms.bills !== false) {
+    const rows = await invoicesForProjects([id], ['id', 'invoice_number', 'status', 'kind', 'issue_date', 'due_date',
+      'total_amount_minor', 'paid_amount_minor', 'paid_at', 'currency', 'event_id', 'deal_uuid']);
+    out.invoices = rows
+      .map(({ project_id: _p, ...inv }) => inv)
+      // Newest first, as before. Compared as times: PostgreSQL returns Dates.
+      .sort((a, b) => (b.issue_date ? new Date(b.issue_date).getTime() : 0) - (a.issue_date ? new Date(a.issue_date).getTime() : 0));
   }
 
   // Quotes / contracts. These tables carry no event_id (migration 107), so
@@ -716,6 +947,8 @@ async function getProjectOverview(id, perms = {}, admin = null) {
 
   // Rolled-up project value (newest stage wins per deal, cumulative).
   out.valuation = computeValuation(out.invoices, out.quotes);
+
+  out.stage = deriveStages({ status: project.status, ...out }, perms);
 
   return out;
 }
@@ -843,10 +1076,14 @@ async function sendEmailNow(emailId, adminId = null) {
 }
 
 module.exports = {
+  PROJECT_STATUSES,
   listProjects,
   getProjectById,
   createProject,
   updateProject,
+  deleteProject,
+  deriveStages,
+  promoteInquiry,
   assignEvent,
   assignQuote,
   assignContract,

@@ -36,9 +36,9 @@ const { getStoragePath } = require('../config/storage');
 const invoiceService = require('../services/invoiceService');
 const accountingHistory = require('../services/accountingHistory');
 const expenseService = require('../services/expenseService');
-const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
+const { requireFeatureFlag, isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { db } = require('../database/db');
-const { canLinkCrmToEvent } = require('../middleware/ownership');
+const { canLinkCrmToEvent, ownedProjectsSubquery } = require('../middleware/ownership');
 const { ensureEventMatchesCustomer } = require('../services/invoice/helpers');
 const { hasColumnCached } = require('../utils/schemaCache');
 
@@ -288,6 +288,9 @@ const INVOICE_BODY_VALIDATORS = [
   // eventId links the invoice to a gallery event (FK) when created from
   // the event detail page; persisted by createInvoice (event_id).
   body('eventId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  // projectId links the invoice to a project when created from the project
+  // page (migration 315). Vetted in POST / (ownership, customer, flag).
+  body('projectId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('eventName').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
   body('eventDate').optional({ values: 'falsy' }).isISO8601(),
   body('eventTimeStart').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
@@ -322,6 +325,7 @@ function mapPayloadToService(body) {
     customerAccountId: 'customerAccountId',
     sourceQuoteId: 'sourceQuoteId',
     eventId: 'eventId',
+    projectId: 'projectId',
     language: 'language', currency: 'currency',
     issueDate: 'issueDate', dueDate: 'dueDate',
     scheduledSendAt: 'scheduledSendAt',
@@ -451,6 +455,26 @@ router.get(
 
 // ---- create + update -------------------------------------------------
 
+// Why a new invoice may not join project `projectId`, or null when it may:
+// the feature is on, the project is the caller's (the same allowlist as the
+// project routes, GHSA-wrg5; 404 so it is no existence oracle), and it is
+// not another customer's (projects hold one customer).
+async function projectLinkRefusal(req, projectId) {
+  if (!(await isFeatureEnabled('projects'))) {
+    return { status: 403, body: { error: 'Projects feature is disabled', code: 'PROJECTS_DISABLED' } };
+  }
+  let q = db('projects').where('projects.id', projectId);
+  const owned = ownedProjectsSubquery(req.admin);
+  if (owned !== null) q = q.whereIn('projects.id', owned);
+  const project = await q.first('id', 'customer_account_id');
+  if (!project) return { status: 404, body: { error: 'Project not found' } };
+  if (project.customer_account_id != null
+    && Number(project.customer_account_id) !== Number(req.body.customerAccountId)) {
+    return { status: 422, body: { error: 'That project belongs to a different customer', code: 'PROJECT_CUSTOMER_MISMATCH' } };
+  }
+  return null;
+}
+
 router.post(
   '/',
   requirePermission('bills.manage'),
@@ -463,6 +487,11 @@ router.post(
     if (linkedEvent && !canLinkCrmToEvent(req.admin, await db('events').where({ id: linkedEvent }).first('id', 'created_by'))) {
       return res.status(403).json({ error: 'That event is not yours to link' });
     }
+    const linkedProject = parseInt(req.body.projectId, 10);
+    if (linkedProject) {
+      const refusal = await projectLinkRefusal(req, linkedProject);
+      if (refusal) return res.status(refusal.status).json(refusal.body);
+    }
     // createInvoice always returns `{ invoiceIds: number[] }` —
     // single-installment / standalone case is a one-element array,
     // multi-installment is N (auto-routed through
@@ -470,6 +499,7 @@ router.post(
     // invoice's payload (the one the editor redirects to) plus the
     // full id list so the editor can show "N invoices created".
     const { invoiceIds } = await invoiceService.createInvoice(mapPayloadToService(req.body), req.admin.id);
+    if (linkedProject) await require('../services/projectService').promoteInquiry(linkedProject);
     const firstId = invoiceIds[0];
     const data = await invoiceService.getInvoiceById(firstId);
     return successResponse(res, {
