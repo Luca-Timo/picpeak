@@ -38,7 +38,7 @@ const accountingHistory = require('../services/accountingHistory');
 const expenseService = require('../services/expenseService');
 const { requireFeatureFlag, isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { db } = require('../database/db');
-const { canLinkCrmToEvent, ownedProjectsSubquery } = require('../middleware/ownership');
+const { canLinkCrmToEvent } = require('../middleware/ownership');
 const { ensureEventMatchesCustomer } = require('../services/invoice/helpers');
 const { hasColumnCached } = require('../utils/schemaCache');
 
@@ -456,21 +456,36 @@ router.get(
 // ---- create + update -------------------------------------------------
 
 // Why a new invoice may not join project `projectId`, or null when it may:
-// the feature is on, the project is the caller's (the same allowlist as the
-// project routes, GHSA-wrg5; 404 so it is no existence oracle), and it is
-// not another customer's (projects hold one customer).
+// - the feature is on;
+// - the project is the caller's: created by them, or any for a super admin.
+//   The rule the CRM access layer applies to project_id on an invoice insert
+//   (crmAccess validateWrite), so it is refused here with a clear answer
+//   rather than failing inside createInvoice. 404, so no existence oracle;
+// - it is not another customer's (projects hold one customer);
+// - the customer is billed per event: a monthly or manual customer's lines go
+//   into one shared draft (createInvoice → appendToMonthlyDraft), which no
+//   single project can hold, so the link would silently drop.
 async function projectLinkRefusal(req, projectId) {
   if (!(await isFeatureEnabled('projects'))) {
     return { status: 403, body: { error: 'Projects feature is disabled', code: 'PROJECTS_DISABLED' } };
   }
-  let q = db('projects').where('projects.id', projectId);
-  const owned = ownedProjectsSubquery(req.admin);
-  if (owned !== null) q = q.whereIn('projects.id', owned);
-  const project = await q.first('id', 'customer_account_id');
+  const projectService = require('../services/projectService');
+  const owned = await projectService.carriedProjectId(projectId, req.admin.id);
+  const project = owned ? await db('projects').where({ id: owned }).first('id', 'customer_account_id') : null;
   if (!project) return { status: 404, body: { error: 'Project not found' } };
   if (project.customer_account_id != null
     && Number(project.customer_account_id) !== Number(req.body.customerAccountId)) {
     return { status: 422, body: { error: 'That project belongs to a different customer', code: 'PROJECT_CUSTOMER_MISMATCH' } };
+  }
+  const customer = await db('customer_accounts').where({ id: req.body.customerAccountId }).first('billing_cadence');
+  if (customer && (customer.billing_cadence === 'monthly' || customer.billing_cadence === 'manual')) {
+    return {
+      status: 422,
+      body: {
+        error: 'This customer is billed monthly or by hand, so the invoice goes into their collected draft and cannot belong to one project. Create it without the project.',
+        code: 'PROJECT_INVOICE_COLLECTED_BILLING',
+      },
+    };
   }
   return null;
 }
@@ -499,7 +514,14 @@ router.post(
     // invoice's payload (the one the editor redirects to) plus the
     // full id list so the editor can show "N invoices created".
     const { invoiceIds } = await invoiceService.createInvoice(mapPayloadToService(req.body), req.admin.id);
-    if (linkedProject) await require('../services/projectService').promoteInquiry(linkedProject);
+    if (linkedProject) {
+      const projectService = require('../services/projectService');
+      // A project without a customer adopts the invoice's, as it adopts a
+      // gallery's (assignEvent), so the next document is held to the same one.
+      await db('projects').where({ id: linkedProject }).whereNull('customer_account_id')
+        .update({ customer_account_id: req.body.customerAccountId, updated_at: new Date() });
+      await projectService.promoteInquiry(linkedProject);
+    }
     const firstId = invoiceIds[0];
     const data = await invoiceService.getInvoiceById(firstId);
     return successResponse(res, {

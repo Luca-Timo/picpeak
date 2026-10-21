@@ -85,7 +85,7 @@ export const ProjectsListPage: React.FC = () => {
             title={search
               ? t('projects.noMatches', 'No projects match this search')
               : t('projects.emptyTitle', 'No projects yet')}
-            description={search ? undefined : t('projects.empty', 'Create one above, or galleries you already have were grouped automatically.')}
+            description={search ? undefined : t('projects.empty', 'Start one with New inquiry, or galleries you already have were grouped automatically.')}
           />
         </Card>
       ) : (

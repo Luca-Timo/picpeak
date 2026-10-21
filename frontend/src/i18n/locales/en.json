@@ -8254,18 +8254,13 @@
     "title": "Project Overview",
     "subtitle": "Group galleries into projects and see every email, document and hour in one cockpit.",
     "search": "Search by name or customer…",
-    "empty": "Create one above, or galleries you already have were grouped automatically.",
+    "empty": "Start one with New inquiry, or galleries you already have were grouped automatically.",
     "notFound": "Project not found",
     "noCustomer": "No single customer",
     "rename": "Rename",
     "timeline": "Milestones",
     "eventCount": "{{count}} galleries",
     "totalHours": "{{hours}} logged",
-    "create": {
-      "label": "New project name",
-      "placeholder": "e.g. Müller wedding 2026",
-      "button": "Create project"
-    },
     "col": {
       "name": "Project",
       "customer": "Customer",
@@ -8315,8 +8310,6 @@
       "reRenderedTag": "≈ re-rendered"
     },
     "toast": {
-      "created": "Project created",
-      "createFailed": "Could not create project",
       "saved": "Project saved",
       "saveFailed": "Save failed",
       "emailAction": "Done",
@@ -8446,7 +8439,8 @@
       "inviteFailed": "Could not send the invitation",
       "title": "Customer",
       "open": "Open account",
-      "invite": "Invite to the portal"
+      "invite": "Invite to the portal",
+      "hidden": "Customers are not visible to your role."
     },
     "delete": {
       "title": "Delete project?",

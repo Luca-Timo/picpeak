@@ -8219,18 +8219,13 @@
     "title": "Projektübersicht",
     "subtitle": "Fasse Galerien zu Projekten zusammen und sieh jede E-Mail, jedes Dokument und jede Stunde in einem Cockpit.",
     "search": "Nach Name oder Kunde suchen…",
-    "empty": "Erstellen Sie oben eines, oder vorhandene Galerien wurden automatisch gruppiert.",
+    "empty": "Starten Sie eines mit „Neue Anfrage“, oder bestehende Galerien wurden automatisch gruppiert.",
     "notFound": "Projekt nicht gefunden",
     "noCustomer": "Kein einzelner Kunde",
     "rename": "Umbenennen",
     "timeline": "Meilensteine",
     "eventCount": "{{count}} Galerien",
     "totalHours": "{{hours}} erfasst",
-    "create": {
-      "label": "Name des neuen Projekts",
-      "placeholder": "z. B. Hochzeit Müller 2026",
-      "button": "Projekt erstellen"
-    },
     "col": {
       "name": "Projekt",
       "customer": "Kunde",
@@ -8280,8 +8275,6 @@
       "reRenderedTag": "≈ neu gerendert"
     },
     "toast": {
-      "created": "Projekt erstellt",
-      "createFailed": "Projekt konnte nicht erstellt werden",
       "saved": "Projekt gespeichert",
       "saveFailed": "Speichern fehlgeschlagen",
       "emailAction": "Erledigt",
@@ -8317,7 +8310,8 @@
       "inviteFailed": "Die Einladung konnte nicht gesendet werden",
       "invited": "Einladung an {{email}} in die Warteschlange gestellt.",
       "open": "Konto öffnen",
-      "title": "Kunde"
+      "title": "Kunde",
+      "hidden": "Kunden sind für Ihre Rolle nicht sichtbar."
     },
     "dashboard": {
       "all": "Alle Projekte",

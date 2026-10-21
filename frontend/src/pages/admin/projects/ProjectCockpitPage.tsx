@@ -27,6 +27,7 @@ import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import { CustomerGroupChipList } from '../../../components/admin/CustomerGroupChips';
 import { ConvertToContractDialog } from '../quotes/ConvertToContractDialog';
 import { projectsService, type ProjectOverview, type ProjectStatus } from '../../../services/projects.service';
+import { businessProfileService } from '../../../services/businessProfile.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../../hooks';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
@@ -130,11 +131,23 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
   const isDirty = dirtyKeys.length > 0 || customerDirty;
   const discard = () => { setDraft(base); setCustomer(savedCustomer); };
 
+  // A budget is stored with its currency: the business profile's when the
+  // admin did not pick one (as on New inquiry).
+  const { data: profileSnap } = useQuery({
+    queryKey: ['business-profile'],
+    queryFn: () => businessProfileService.get(),
+    retry: false,
+  });
+  const defaultCurrency = profileSnap?.profile.defaultCurrency || 'CHF';
   const save = useMutationWithToast({
-    mutationFn: () => projectsService.update(projectId, {
-      ...updatePayload(draft, base),
-      ...(customerDirty ? { customerAccountId: customer.id } : {}),
-    }),
+    mutationFn: () => {
+      const payload = updatePayload(draft, base);
+      if (payload.budgetMinor != null && !draft.currency) payload.currency = defaultCurrency;
+      return projectsService.update(projectId, {
+        ...payload,
+        ...(customerDirty ? { customerAccountId: customer.id } : {}),
+      });
+    },
     successMessage: t('projects.toast.saved', 'Project saved') as string,
     errorMessage: (err: unknown) => {
       const res = (err as { response?: { data?: { code?: string; error?: string } } })?.response?.data;
@@ -174,7 +187,16 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
   const { run, isRunning } = useRunStep(projectId);
   const { main, later } = projectSteps(data, { flags, can: hasPermission });
   const [contractFrom, setContractFrom] = useState<ProjectStep | null>(null);
-  const runStep = (step: ProjectStep) => {
+  // A step's editor starts from the saved project, so unsaved edits (a new
+  // date) are saved first rather than lost behind a leave prompt.
+  const runStep = async (step: ProjectStep) => {
+    if (isDirty) {
+      if (dateRangeError(draft)) {
+        toast.error(t('projects.field.endBeforeStart', 'The end date is before the start date.') as string);
+        return;
+      }
+      try { await save.mutateAsync(); } catch { return; }
+    }
     if (step.kind === 'createContract') { setContractFrom(step); return; }
     run(step);
   };
@@ -248,8 +270,8 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-soft">
-            {(project.customerEmail || customer.label) && (
-              <span className="inline-flex items-center gap-1"><User className="w-4 h-4" />{customer.label || project.customerEmail}</span>
+            {project.customerEmail && (
+              <span className="inline-flex items-center gap-1"><User className="w-4 h-4" />{project.customerEmail}</span>
             )}
             {project.customerGroups && project.customerGroups.length > 0 && (
               <CustomerGroupChipList groups={project.customerGroups} max={2} />
@@ -270,7 +292,7 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
             <ActionMenu items={menuItems} align="right" size="icon-sm" label={t('projects.menu.more', 'More actions') as string} className="hidden sm:block" />
           )}
           {main && (
-            <Button variant="primary" size="sm" leftIcon={<StepIcon kind={main.kind} />} isLoading={isRunning} onClick={() => runStep(main)}>
+            <Button variant="primary" size="sm" leftIcon={<StepIcon kind={main.kind} />} isLoading={isRunning || save.isPending} onClick={() => { void runStep(main); }}>
               {stepLabel(main.kind)}
             </Button>
           )}
@@ -282,8 +304,8 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start">
           <div className="space-y-6 min-w-0">
-            <ProjectStageCard data={data} main={main} later={later} onRun={runStep} busy={isRunning} />
-            <ProjectDocumentsCard data={data} flags={flags} canAttachGallery={canEdit && !closed} />
+            <ProjectStageCard data={data} main={main} later={later} onRun={(step) => { void runStep(step); }} busy={isRunning || save.isPending} />
+            <ProjectDocumentsCard data={data} flags={flags} can={hasPermission} canAttachGallery={canEdit && !closed} />
           </div>
           <div className="space-y-6 min-w-0">
             <ProjectValueCard valuation={data.valuation} quotedMinor={quotedMinor} />
@@ -292,6 +314,7 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
               onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
               dirty={dirtyKeys}
               canEdit={canEdit}
+              defaultCurrency={defaultCurrency}
             />
             <ProjectCustomerCard
               customer={customer}
@@ -301,7 +324,6 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
               canChange={canEdit && canViewCustomers}
               canViewCustomers={canViewCustomers}
               canInvite={hasPermission('customers.create')}
-              fallbackEmail={project.customerEmail}
             />
           </div>
         </div>

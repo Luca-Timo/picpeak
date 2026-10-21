@@ -205,14 +205,33 @@ router.put('/:id',
 );
 
 // Delete. The project's galleries, quotes, contracts, invoices and hours stay;
-// they only lose the link (projectService.deleteProject).
+// they only lose the link (projectService.deleteProject). Clearing a link is a
+// write on that document, so it needs what attaching one needs: the manage
+// permission of each document domain the project holds (as POST /:id/quotes
+// and /:id/contracts), and ownership of every linked gallery (as POST
+// /:id/events), which a super admin may have put into this project.
 router.delete('/:id',
   requirePermission('events.edit'),
   requireProjectOwnership,
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const result = await projectService.deleteProject(parseInt(req.params.id, 10), req.admin);
+    const id = parseInt(req.params.id, 10);
+    const needs = [];
+    for (const [table, perm] of [['quotes', 'quotes.manage'], ['contracts', 'contracts.manage'], ['invoices', 'bills.manage']]) {
+      let linked = null;
+      try { linked = await db(table).where({ project_id: id }).first('id'); } catch { linked = null; }
+      if (linked && !(await userHasAnyPermission(req.admin.id, [perm]))) needs.push(perm);
+    }
+    if (needs.length) {
+      throw new ForbiddenError(`This project holds documents you cannot change; ${needs.join(', ')} is required to delete it`);
+    }
+    const eventIds = (await db('events').where({ project_id: id }).select('id')).map((e) => e.id);
+    const { denied } = await filterOwnedEventIds(req.admin, eventIds);
+    if (denied.length) {
+      return res.status(403).json({ error: 'This project holds galleries that are not yours; they have to be moved out before it can be deleted' });
+    }
+    const result = await projectService.deleteProject(id, req.admin);
     return successResponse(res, result, 200, 'Project deleted');
   }),
 );

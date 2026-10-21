@@ -142,7 +142,8 @@ const CHUNK = 500;
  *   - its gallery (events.project_id), the original rollup;
  *   - its own invoices.project_id (migration 315), set when it is created from
  *     the project, e.g. a deposit before any gallery exists;
- *   - its deal: the deal_uuid of a quote or contract linked to the project.
+ *   - its deal: the deal_uuid of a quote or contract linked to the project;
+ *   - its original: a Storno or reissued invoice of one found above.
  * `columns` are invoice columns, selected unqualified.
  */
 async function invoicesForProjects(projectIds, columns) {
@@ -177,6 +178,35 @@ async function invoicesForProjects(projectIds, columns) {
       const rows = await db('invoices as inv').whereIn('inv.deal_uuid', deals.slice(i, i + CHUNK)).select(...cols);
       keep(rows.map((r) => ({ ...r, project_id: dealToProject.get(r.deal_uuid) })));
     }
+  }
+
+  // The Storno of a project's invoice and the invoice reissued for it follow
+  // their original (cancels_invoice_id / replaces_invoice_id), whichever path
+  // brought the original in: neither copies event, project or always the deal.
+  const lineage = [];
+  for (const column of ['cancels_invoice_id', 'replaces_invoice_id']) {
+    if (await hasColumnCached('invoices', column)) lineage.push(column);
+  }
+  let frontier = Array.from(found.values());
+  for (let depth = 0; lineage.length && frontier.length && depth < 5; depth += 1) {
+    const projectOf = new Map(frontier.map((r) => [r.id, r.project_id]));
+    const parents = Array.from(projectOf.keys());
+    const next = [];
+    for (let i = 0; i < parents.length; i += CHUNK) {
+      const slice = parents.slice(i, i + CHUNK);
+      const rows = await db('invoices as inv')
+        .where((w) => { for (const column of lineage) w.orWhereIn(`inv.${column}`, slice); })
+        .select(...cols, ...lineage.map((c) => `inv.${c} as __${c}`));
+      for (const r of rows) {
+        if (found.has(r.id)) continue;
+        const parent = lineage.map((c) => r[`__${c}`]).find((v) => v != null && projectOf.has(v));
+        const row = { ...r, project_id: projectOf.get(parent) };
+        for (const c of lineage) delete row[`__${c}`];
+        found.set(row.id, row);
+        next.push(row);
+      }
+    }
+    frontier = next;
   }
   return Array.from(found.values());
 }
@@ -445,6 +475,22 @@ async function isSuperAdmin(actor, conn = db) {
 }
 
 /**
+ * The project a document made by `adminId` from another document may keep
+ * (quote → contract, quote/contract → gallery), or null. Only a project the
+ * converter created, or any project for a super admin: the same rule the CRM
+ * access layer applies to project_id on quote, contract and invoice writes
+ * (database/crmAccess.js validateWrite), so a carried link never makes the
+ * conversion fail, and a gallery never lands in another admin's project.
+ * Resolve it before opening the conversion's transaction (global db reads).
+ */
+async function carriedProjectId(projectId, adminId) {
+  if (!projectId || !adminId) return null;
+  if (await isSuperAdmin({ id: adminId })) return projectId;
+  const row = await db('projects').where({ id: projectId, created_by: adminId }).first('id');
+  return row ? row.id : null;
+}
+
+/**
  * Cascade a project link across a whole deal's lineage. Given a deal_uuid, link
  * every quote + contract in that deal to the project, re-point every event the
  * deal produced (so its invoices / emails / gallery roll up automatically), and
@@ -705,7 +751,7 @@ function computeValuation(invoices = [], quotes = []) {
 //   inquiry  — always done once the project exists;
 //   quote    — a quote was accepted (or already converted);
 //   contract — a contract is fully signed;
-//   gallery  — a gallery is published;
+//   gallery  — a gallery was published (expiry does not undo it);
 //   invoice  — it has invoices and every one that still counts is paid;
 //   done     — the admin completed the project.
 // A stage that is not done while a later one is reads `skipped`. The first
@@ -724,7 +770,8 @@ function deriveStages({ status, quotes = [], contracts = [], events = [], invoic
     inquiry: true,
     quote: quotes.some((q) => QUOTE_DONE.has(q.status)),
     contract: contracts.some((c) => CONTRACT_DONE.has(c.status)),
-    gallery: events.some((e) => truthy(e.is_active) && !truthy(e.is_draft)),
+    // Published once is done: an expired gallery (is_active off) stays done.
+    gallery: events.some((e) => !truthy(e.is_draft)),
     invoice: counting.length > 0 && counting.every((inv) => inv.status === 'paid'),
     done: status === 'completed',
   };
@@ -758,7 +805,7 @@ async function attachStages(projects, perms = {}) {
     ? group(await db('quotes').whereIn('project_id', ids).select('project_id', 'status')) : new Map();
   const contracts = perms.contracts !== false && await hasColumnCached('contracts', 'project_id')
     ? group(await db('contracts').whereIn('project_id', ids).select('project_id', 'status')) : new Map();
-  const events = group(await db('events').whereIn('project_id', ids).select('project_id', 'is_active', 'is_draft'));
+  const events = group(await db('events').whereIn('project_id', ids).select('project_id', 'is_draft'));
   const invoices = perms.bills !== false
     ? group(await invoicesForProjects(ids, ['id', 'status', 'kind', 'deal_uuid'])) : new Map();
   for (const p of projects) {
@@ -1088,6 +1135,7 @@ module.exports = {
   deleteProject,
   deriveStages,
   promoteInquiry,
+  carriedProjectId,
   assignEvent,
   assignQuote,
   assignContract,

@@ -7502,11 +7502,6 @@
     "timeline": "Mejniki",
     "eventCount": "{{count}} dogodkov",
     "totalHours": "Zabeleženo: {{hours}}",
-    "create": {
-      "label": "Ime novega projekta",
-      "placeholder": "npr. Poroka Müller 2026",
-      "button": "Ustvari projekt"
-    },
     "col": {
       "name": "Projekt",
       "customer": "Stranka",
@@ -7552,8 +7547,6 @@
       "reRenderedTag": "≈ ponovno izrisano"
     },
     "toast": {
-      "created": "Projekt ustvarjen",
-      "createFailed": "Projekta ni bilo mogoče ustvariti",
       "saved": "Projekt shranjen",
       "saveFailed": "Shranjevanje ni uspelo",
       "emailAction": "Končano",

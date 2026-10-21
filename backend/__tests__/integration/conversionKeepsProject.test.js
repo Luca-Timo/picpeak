@@ -76,6 +76,20 @@ describe('conversions keep the project', () => {
     expect((await db('events').where({ id: eventId }).first('project_id')).project_id).toBe(projectId);
   });
 
+  it('drops the link when the converter does not own the project', async () => {
+    const role = await db('roles').where({ name: 'editor' }).first('id');
+    const [editorRow] = await db('admin_users').insert({
+      username: 'conv-editor', email: 'conv-editor@example.com', password_hash: 'x', role_id: role.id,
+      is_active: true, created_at: new Date(), updated_at: new Date(),
+    }).returning('id');
+    const editorId = idOf(editorRow);
+    const projectId = await project(); // created by the seeded admin, not the editor
+    const projectService = require('../../src/services/projectService');
+    expect(await projectService.carriedProjectId(projectId, editorId)).toBeNull();
+    expect(await projectService.carriedProjectId(projectId, adminId)).toBe(projectId);
+    expect(await projectService.carriedProjectId(null, adminId)).toBeNull();
+  });
+
   it('a quote with no project makes a gallery with no project', async () => {
     const quoteId = await acceptedQuote(null);
     const { eventId } = await quoteService.convertToEvent(quoteId, adminId, { hold: true, skipInvoices: true });

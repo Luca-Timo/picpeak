@@ -9,8 +9,8 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, FolderKanban } from 'lucide-react';
-import { Badge, Card, ErrorState, SkeletonList } from '../common';
+import { ArrowRight, FolderKanban, Inbox } from 'lucide-react';
+import { Badge, Button, Card, EmptyState, ErrorState, SkeletonList } from '../common';
 import { projectsService, type ProjectStageKey, type ProjectSummary } from '../../services/projects.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { usePermissions } from '../../contexts/PermissionsContext';
@@ -65,9 +65,15 @@ export const ProjectsDashboardCard: React.FC = () => {
       ) : isError ? (
         <ErrorState size="inline" title={t('projects.loadFailed', 'Could not load the projects')} onRetry={() => refetch()} retrying={isRefetching} />
       ) : projects.length === 0 ? (
-        <p className="text-sm text-muted py-4 text-center">
-          {t('projects.dashboard.empty', 'No open projects. A new inquiry starts one.')}
-        </p>
+        <EmptyState
+          size="inline"
+          title={t('projects.dashboard.empty', 'No open projects. A new inquiry starts one.')}
+          action={hasPermission('events.edit') ? (
+            <Button variant="outline" size="sm" leftIcon={<Inbox className="w-4 h-4" />} onClick={() => navigate('/admin/clients/projects/new')}>
+              {t('projects.inquiry.title', 'New inquiry')}
+            </Button>
+          ) : undefined}
+        />
       ) : (
         <>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-4" role="group" aria-label={t('projects.dashboard.byStage', 'By stage') as string}>

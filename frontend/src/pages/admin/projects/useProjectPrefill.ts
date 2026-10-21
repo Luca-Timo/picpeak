@@ -5,10 +5,11 @@
  * when creating. A failed load (the `projects` feature off answers 403, a
  * foreign project 404) leaves the editor as it would be without the link.
  *
- * Returns the project's id once it has loaded, else null, so a caller never
- * links a document to a project it could not read.
+ * Returns the requested project id (null without one). A caller that links
+ * the new document itself (the gallery page) goes through a route that vets
+ * the project, so a submit made before the load finished still lands in it.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { projectsService, type ProjectSummary } from '../../../services/projects.service';
 
@@ -17,7 +18,6 @@ export function useProjectPrefill(onLoad: (project: ProjectSummary) => void, { e
   const raw = searchParams.get('projectId');
   const parsed = raw ? parseInt(raw, 10) : NaN;
   const requested = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  const [loadedId, setLoadedId] = useState<number | null>(null);
   const done = useRef(false);
   const callback = useRef(onLoad);
   callback.current = onLoad;
@@ -26,12 +26,9 @@ export function useProjectPrefill(onLoad: (project: ProjectSummary) => void, { e
     if (!enabled || !requested || done.current) return;
     done.current = true;
     projectsService.get(requested)
-      .then((project) => {
-        callback.current(project);
-        setLoadedId(project.id);
-      })
+      .then((project) => callback.current(project))
       .catch(() => { /* the editor still works without the project's data */ });
   }, [enabled, requested]);
 
-  return loadedId;
+  return requested;
 }

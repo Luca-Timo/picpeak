@@ -2405,6 +2405,11 @@ async function convertToEvent(quoteId, adminId, options = {}) {
   );
   const shareToken = crypto.randomBytes(16).toString('hex');
   const { shareLinkToStore } = await buildShareLinkVariants({ slug, shareToken });
+  // The gallery stays in the project of the document it came from (the
+  // contract's when the contract→event button re-entered here, else the
+  // quote's), when the converter owns it. Resolved before the transaction.
+  const carriedProject = await require('./projectService')
+    .carriedProjectId(options.projectId || quote.project_id, adminId);
 
   const result = await db.transaction(async (trx) => {
     // Claim the quote before creating anything. Two concurrent conversions
@@ -2475,10 +2480,7 @@ async function convertToEvent(quoteId, adminId, options = {}) {
       is_draft: true,
       created_by: adminId,
       quote_id: quote.id,
-      // The gallery stays in the project of the document it came from: the
-      // contract's when the contract→event button re-entered here, else the
-      // quote's (migration 121).
-      project_id: options.projectId || quote.project_id || null,
+      project_id: carriedProject,
       created_at: new Date(),
       updated_at: new Date(),
       // #1296 — a converted quote produces a real gallery, so the global

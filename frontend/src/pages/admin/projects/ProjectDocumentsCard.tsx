@@ -32,6 +32,7 @@ const truthy = (v: unknown) => v === true || v === 1 || v === '1';
 interface Props {
   data: ProjectOverview;
   flags: Record<string, boolean>;
+  can: (perm: string) => boolean;
   canAttachGallery: boolean;
 }
 
@@ -73,7 +74,7 @@ const Group: React.FC<{ title: string; empty: string; children?: React.ReactNode
   );
 };
 
-export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, canAttachGallery }) => {
+export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAttachGallery }) => {
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
   const qc = useQueryClient();
@@ -104,12 +105,16 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, canAttachGa
   });
 
   const link = (flag: string, href: string) => (flags[flag] ? href : null);
+  // A group the admin cannot have (feature off, or no view permission: the
+  // overview leaves those documents out) is not shown as "none yet".
+  const shows = (flag: string, perm: string) => !!flags[flag] && can(perm);
   const date = (d: string | null | undefined) => (d ? format(d) : '');
 
   return (
     <Card>
       <h2 className="text-base font-semibold text-heading mb-4">{t('projects.documents.title', 'Documents & galleries')}</h2>
       <div className="space-y-5">
+        {shows('quotes', 'quotes.view') && (
         <Group title={t('projects.stage.quote', 'Quote')} empty={t('projects.documents.noQuote', 'No quote yet.')}>
           {data.quotes.map((q) => (
             <Row
@@ -123,7 +128,9 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, canAttachGa
             />
           ))}
         </Group>
+        )}
 
+        {shows('contracts', 'contracts.view') && (
         <Group title={t('projects.stage.contract', 'Contract')} empty={t('projects.documents.noContract', 'No contract yet.')}>
           {data.contracts.map((c) => (
             <Row
@@ -138,6 +145,7 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, canAttachGa
             />
           ))}
         </Group>
+        )}
 
         <Group
           title={t('projects.stage.gallery', 'Gallery')}
@@ -189,6 +197,7 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, canAttachGa
           ))}
         </Group>
 
+        {shows('bills', 'bills.view') && (
         <Group title={t('projects.documents.invoices', 'Invoices')} empty={t('projects.documents.noInvoice', 'No invoice yet.')}>
           {data.invoices.map((inv) => (
             <Row
@@ -204,6 +213,7 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, canAttachGa
             />
           ))}
         </Group>
+        )}
       </div>
     </Card>
   );

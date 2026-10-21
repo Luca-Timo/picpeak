@@ -79,7 +79,8 @@ export function stepFor(stage: ProjectStageKey, data: ProjectOverview, { flags, 
       if (accepted && flags.quotes && canConvert && can('quotes.manage')) {
         return { kind: 'convertQuoteToGallery', stage, sourceId: accepted.id };
       }
-      if (can('events.create')) return { kind: 'createGallery', stage, href: `/admin/events/new?${prefill(data)}` };
+      // The new gallery joins the project through POST /projects/:id/events (events.edit).
+      if (can('events.create') && can('events.edit')) return { kind: 'createGallery', stage, href: `/admin/events/new?${prefill(data)}` };
       return null;
     }
     case 'invoice': {

@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { Ban, CheckCircle2, Flag, RotateCcw, Trash2 } from 'lucide-react';
 import { Button, Card, useConfirm } from '../../../components/common';
 import { useMutationWithToast } from '../../../hooks';
+import { useLeaveGuard } from '../../../contexts/UnsavedChangesContext';
 import { projectsService, type ProjectOverview, type ProjectStatus } from '../../../services/projects.service';
 
 interface Props {
@@ -38,6 +39,7 @@ export const ProjectSettingsTab: React.FC<Props> = ({ data, canEdit }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const { unguarded } = useLeaveGuard();
   const id = data.project.id;
   const status = data.project.status;
   const closed = status === 'cancelled' || status === 'completed';
@@ -58,7 +60,8 @@ export const ProjectSettingsTab: React.FC<Props> = ({ data, canEdit }) => {
     successMessage: t('projects.toast.deleted', 'Project deleted. Its galleries and documents are kept.') as string,
     errorMessage: t('projects.toast.deleteFailed', 'Could not delete the project') as string,
     invalidateKeys: [['projects']],
-    onSuccess: () => navigate('/admin/clients/projects'),
+    // The project is gone, so its unsaved draft goes with it: no leave prompt.
+    onSuccess: () => unguarded(() => navigate('/admin/clients/projects')),
   });
 
   const onDelete = async () => {

@@ -18,6 +18,7 @@ process.env.TEST_DATABASE_PATH = path.join(
 );
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'projflow-test-secret';
 
+const crypto = require('crypto');
 const request = require('supertest');
 const express = require('express');
 const bcrypt = require('bcrypt');
@@ -27,7 +28,7 @@ const { bootCrmDb, seedMinimal } = require('../integration/helpers/crmDb');
 
 describe('project inquiry flow', () => {
   let db; let cleanup; let app;
-  let superToken; let superId; let editorToken; let customerId; let otherCustomerId;
+  let superToken; let superId; let editorToken; let editorId; let customerId; let otherCustomerId;
   let seq = 0;
 
   const idOf = (r) => r[0]?.id ?? r[0];
@@ -128,7 +129,8 @@ describe('project inquiry flow', () => {
 
     const sup = await mkAdmin('flow-super', 'super_admin');
     superToken = sup.token; superId = sup.id;
-    editorToken = (await mkAdmin('flow-editor', 'editor')).token;
+    const editor = await mkAdmin('flow-editor', 'editor');
+    editorToken = editor.token; editorId = editor.id;
 
     app = express();
     app.use(express.json());
@@ -198,7 +200,7 @@ describe('project inquiry flow', () => {
 
   it('derives stages from documents and marks the ones jumped over as skipped', async () => {
     const project = await createInquiry();
-    await mkQuote({ projectId: project.id, dealUuid: `deal-stage-${project.id}` });
+    await mkQuote({ projectId: project.id, dealUuid: crypto.randomUUID() });
     await mkEvent({ projectId: project.id });
     const { stage } = await overview(project.id);
     // Quote accepted, no contract, gallery published, no invoice yet.
@@ -216,11 +218,11 @@ describe('project inquiry flow', () => {
 
   it('rolls up invoices by their own project_id and by the deal of a linked quote', async () => {
     const project = await createInquiry();
-    const deal = `deal-roll-${project.id}`;
+    const deal = crypto.randomUUID();
     await mkQuote({ projectId: project.id, dealUuid: deal });
     const own = await mkInvoice({ projectId: project.id, status: 'paid' });
     const viaDeal = await mkInvoice({ dealUuid: deal });
-    const unrelated = await mkInvoice({ dealUuid: 'some-other-deal' });
+    const unrelated = await mkInvoice({ dealUuid: crypto.randomUUID() });
 
     const { invoices, valuation } = await overview(project.id);
     const ids = invoices.map((i) => i.id);
@@ -264,7 +266,7 @@ describe('project inquiry flow', () => {
 
   it('deletes a project and keeps its gallery, quote and invoice, only unlinked', async () => {
     const project = await createInquiry();
-    const deal = `deal-del-${project.id}`;
+    const deal = crypto.randomUUID();
     const quoteId = await mkQuote({ projectId: project.id, dealUuid: deal });
     const eventId = await mkEvent({ projectId: project.id });
     const invoiceId = await mkInvoice({ projectId: project.id });
@@ -275,6 +277,59 @@ describe('project inquiry flow', () => {
     expect((await db('quotes').where({ id: quoteId }).first('project_id')).project_id).toBeNull();
     expect((await db('events').where({ id: eventId }).first('project_id')).project_id).toBeNull();
     expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBeNull();
+  });
+
+  it('keeps a gallery done once published, even after it expired', async () => {
+    const project = await createInquiry();
+    const eventId = await mkEvent({ projectId: project.id });
+    await db('events').where({ id: eventId }).update({ is_active: 0 });
+    const { stage } = await overview(project.id);
+    expect(stage.stages.find((x) => x.key === 'gallery').state).toBe('done');
+  });
+
+  it('rolls up the Storno and the reissue of a project invoice', async () => {
+    const project = await createInquiry();
+    const original = await mkInvoice({ projectId: project.id, status: 'cancelled' });
+    const storno = await mkInvoice({ status: 'sent', total: -135000 });
+    await db('invoices').where({ id: storno }).update({ kind: 'storno', cancels_invoice_id: original });
+    const reissue = await mkInvoice({ status: 'sent' });
+    await db('invoices').where({ id: reissue }).update({ replaces_invoice_id: original });
+    const { invoices } = await overview(project.id);
+    expect(invoices.map((i) => i.id)).toEqual(expect.arrayContaining([original, storno, reissue]));
+  });
+
+  it('refuses an invoice in the project for a customer billed monthly, rather than dropping the link', async () => {
+    const monthly = idOf(await db('customer_accounts').insert({
+      email: 'monthly@example.com', display_name: 'Monthly', is_active: 1, billing_cadence: 'monthly', created_at: new Date(),
+    }).returning('id'));
+    const project = await createInquiry({ customerAccountId: monthly });
+    const res = await post('/api/admin/invoices', {
+      customerAccountId: monthly, projectId: project.id, currency: 'CHF',
+      lineItems: [{ description: 'Anzahlung', quantity: 1, unitPriceMinor: 1000 }],
+    });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_INVOICE_COLLECTED_BILLING');
+    expect((await db('projects').where({ id: project.id }).first('status')).status).toBe('inquiry');
+  });
+
+  it('lets a project without a customer adopt the customer of its first invoice', async () => {
+    const project = await createInquiry({ customerAccountId: null });
+    const res = await post('/api/admin/invoices', {
+      customerAccountId: customerId, projectId: project.id, currency: 'CHF',
+      lineItems: [{ description: 'Anzahlung', quantity: 1, unitPriceMinor: 1000 }],
+    });
+    expect(res.status).toBe(201);
+    expect((await db('projects').where({ id: project.id }).first('customer_account_id')).customer_account_id).toBe(customerId);
+  });
+
+  it('refuses to delete a project that holds another admin\'s gallery', async () => {
+    const own = idOf(await db('projects').insert({
+      name: 'Editor project', status: 'active', created_by: editorId, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const foreignEvent = await mkEvent({ projectId: own });
+    const res = await request(app).delete(`/api/admin/projects/${own}`).set('Authorization', `Bearer ${editorToken}`);
+    expect(res.status).toBe(403);
+    expect((await db('events').where({ id: foreignEvent }).first('project_id')).project_id).toBe(own);
   });
 
   it('answers 403 on every project route with the feature off', async () => {

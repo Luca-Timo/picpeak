@@ -291,6 +291,8 @@ async function createInvoice(payload, adminId, trx = db) {
     row.vat_code = payload.vatCode ? String(payload.vatCode).slice(0, 16) : null;
   }
   // Migration 315 — created from a project page. The route vets the project.
+  // Only POST /invoices passes projectId, without a transaction, so this schema
+  // read on the global db never waits on a connection a trx holds (SQLite).
   if (payload.projectId && await hasColumnCached('invoices', 'project_id')) {
     row.project_id = payload.projectId;
   }

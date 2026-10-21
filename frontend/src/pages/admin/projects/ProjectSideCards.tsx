@@ -106,8 +106,7 @@ export const ProjectCustomerCard: React.FC<{
   canChange: boolean;
   canViewCustomers: boolean;
   canInvite: boolean;
-  fallbackEmail: string | null;
-}> = ({ customer, savedCustomerId, onChange, dirty, canChange, canViewCustomers, canInvite, fallbackEmail }) => {
+}> = ({ customer, savedCustomerId, onChange, dirty, canChange, canViewCustomers, canInvite }) => {
   const { t } = useTranslation();
   const { data: detail } = useQuery({
     queryKey: ['admin-customer', savedCustomerId],
@@ -144,7 +143,8 @@ export const ProjectCustomerCard: React.FC<{
           onClear={() => onChange({ id: null, label: '', isPassive: false })}
         />
       ) : (
-        <p className="text-sm text-body">{fallbackEmail || t('projects.noCustomer', 'No single customer')}</p>
+        // Without customers.view the API leaves the customer out altogether.
+        <p className="text-sm text-muted">{t('projects.customer.hidden', 'Customers are not visible to your role.')}</p>
       )}
       {detail?.email && customer.id === savedCustomerId && (
         <p className="text-xs text-muted mt-2">{detail.email}</p>
