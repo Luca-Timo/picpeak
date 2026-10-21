@@ -8291,7 +8291,8 @@
       "reopened": "Projekt wieder aufgenommen.",
       "stepFailed": "Das hat nicht geklappt. Versuchen Sie es noch einmal.",
       "stageSkipped": "Schritt übersprungen.",
-      "stageRestored": "Schritt wieder ins Projekt aufgenommen."
+      "stageRestored": "Schritt wieder ins Projekt aufgenommen.",
+      "deleteChanged": "Inzwischen wurde etwas zum Projekt hinzugefügt. Prüfen Sie es und löschen Sie erneut."
     },
     "error": {
       "customerMismatch": "Das gehört zu einem anderen Kunden als dieses Projekt."
@@ -8368,7 +8369,8 @@
       "location": "Ort",
       "notes": "Notizen",
       "source": "Woher kam die Anfrage?",
-      "sourceNone": "— Nicht festgelegt —"
+      "sourceNone": "— Nicht festgelegt —",
+      "tooManyGuests": "Höchstens {{max}} Gäste."
     },
     "inquiry": {
       "createFailed": "Die Anfrage konnte nicht gespeichert werden",

@@ -65,6 +65,8 @@ export interface InvoiceSummary {
   eventId: number | null;
   /** Migration 315: the project it was created in or attached to. */
   projectId?: number | null;
+  /** With `withDealProjects`: the projects its deal's quotes, contracts and invoices are in. */
+  dealProjectIds?: number[];
   /** Inline event snapshot (migration 123). Free-text label for the
    *  event the invoice relates to. Persists independently of the
    *  events FK so renames don't retroactively change historical
@@ -257,6 +259,8 @@ export const billsService = {
      *  main list hides by default (migration 128). Only the Bills list
      *  opts in; pickers/sub-lists leave it off. */
     includeDrafts?: boolean;
+    /** Adds `dealProjectIds` to each row (the project page's add window). */
+    withDealProjects?: boolean;
   } = {}): Promise<InvoiceListResponse> {
     const { data } = await api.get('/admin/invoices', {
       params: {

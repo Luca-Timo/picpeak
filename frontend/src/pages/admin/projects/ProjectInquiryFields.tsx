@@ -12,7 +12,7 @@ import { DecimalInput } from '../../../components/common/DecimalInput';
 import { eventTypesService } from '../../../services/eventTypes.service';
 import { INQUIRY_SOURCES, PROJECT_FLOWS, type ProjectFlow } from '../../../services/projects.service';
 import { radioGroupKeyDown } from '../../../utils/ariaKeyboard';
-import { dateRangeError, type ProjectDraft, type ProjectDraftKey } from './projectDraft';
+import { MAX_GUESTS, dateRangeError, guestCountError, type ProjectDraft, type ProjectDraftKey } from './projectDraft';
 
 const CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
 
@@ -115,6 +115,7 @@ export const OccasionFields: React.FC<FieldProps> = ({ draft, onChange, dirty = 
           disabled={disabled}
           onChange={(e) => onChange({ guestCount: e.target.value.replace(/[^0-9]/g, '') })}
           className={dirtyClass(isDirty('guestCount'))}
+          error={guestCountError(draft) ? (t('projects.field.tooManyGuests', 'At most {{max}} guests.', { max: MAX_GUESTS.toLocaleString() }) as string) : undefined}
         />
       </div>
       <div className={datesClass(layout)}>

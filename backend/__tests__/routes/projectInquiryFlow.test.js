@@ -680,6 +680,97 @@ describe('project inquiry flow', () => {
     expect((res.body.data || res.body).project.status).toBe('active');
   });
 
+  // Review round 1 (the-luap), blocker 1: the exact setup of the report.
+  it('refuses an invoice whose deal sits in another project, and moves nothing', async () => {
+    const a = await createInquiry();
+    const b = await createInquiry();
+    const dealUuid = crypto.randomUUID();
+    const galleryE = await mkEvent({ projectId: b.id });
+    const quoteQ = await mkQuote({ projectId: b.id, dealUuid });
+    await db('quotes').where({ id: quoteQ }).update({ converted_event_id: galleryE });
+    const invoiceI = await mkInvoice({ dealUuid });
+    const res = await post(`/api/admin/projects/${a.id}/invoices`, { invoiceId: invoiceI });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_INVOICE_ELSEWHERE');
+    expect((await db('quotes').where({ id: quoteQ }).first('project_id')).project_id).toBe(b.id);
+    expect((await db('events').where({ id: galleryE }).first('project_id')).project_id).toBe(b.id);
+    expect((await db('invoices').where({ id: invoiceI }).first('project_id')).project_id).toBeNull();
+  });
+
+  it('says in the invoice list which projects an invoice\'s deal is in, when asked', async () => {
+    const b = await createInquiry();
+    const dealUuid = crypto.randomUUID();
+    await mkQuote({ projectId: b.id, dealUuid });
+    const invoiceI = await mkInvoice({ dealUuid });
+    const res = await get('/api/admin/invoices?withDealProjects=true&pageSize=100');
+    expect(res.status).toBe(200);
+    const row = (res.body.data || res.body).invoices.find((i) => i.id === invoiceI);
+    expect(row.dealProjectIds).toEqual([b.id]);
+    const plain = await get('/api/admin/invoices?pageSize=100');
+    expect((plain.body.data || plain.body).invoices.find((i) => i.id === invoiceI).dealProjectIds).toBeUndefined();
+  });
+
+  // Review round 1, concern 1.
+  it('keeps an invoice with its own project when its deal\'s quote is attached to another', async () => {
+    const a = await createInquiry();
+    const b = await createInquiry();
+    const dealUuid = crypto.randomUUID();
+    const invoiceId = await mkInvoice({ projectId: b.id, dealUuid });
+    const quoteId = await mkQuote({ dealUuid });
+    expect((await post(`/api/admin/projects/${a.id}/quotes`, { quoteId })).status).toBe(200);
+    expect((await overview(a.id)).invoices.map((i) => i.id)).not.toContain(invoiceId);
+    expect((await overview(b.id)).invoices.map((i) => i.id)).toContain(invoiceId);
+  });
+
+  // Review round 1, concern 2. isString already refuses an array (location);
+  // isIn, isInt and isISO8601 check each item, so only the array refusal
+  // stops these.
+  it.each([
+    ['source', ['referral', 'website', 'social', 'returning', 'fair']],
+    ['guestCount', ['5', '6']],
+    ['eventDate', ['2027-06-12', '2027-06-13']],
+    ['status', ['active']],
+  ])('refuses an array for %s as a validation error', async (field, value) => {
+    const res = await post('/api/admin/projects', { name: 'Array value', [field]: value });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+  });
+
+  // Review round 1, concern 3.
+  it('refuses the delete when something was linked after the census, and unlinks nothing', async () => {
+    const projectService = require('../../src/services/projectService');
+    const project = await createInquiry();
+    const ev = await mkEvent({ projectId: project.id });
+    // The census saw one gallery and no invoice; an invoice joined since.
+    const invoiceId = await mkInvoice({ projectId: project.id });
+    const checked = { counts: { quotes: 0, contracts: 0, invoices: 0, customer_hour_entries: 0, customer_documents: 0 }, eventIds: [ev] };
+    await expect(projectService.deleteProject(project.id, { id: superId }, { checked }))
+      .rejects.toMatchObject({ code: 'PROJECT_CHANGED' });
+    expect(await db('projects').where({ id: project.id }).first('id')).toBeTruthy();
+    expect((await db('events').where({ id: ev }).first('project_id')).project_id).toBe(project.id);
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBe(project.id);
+  });
+
+  it('answers an unknown status from the service with its own code', async () => {
+    const projectService = require('../../src/services/projectService');
+    await expect(projectService.createProject({ name: 'Odd', status: 'paused' }, superId))
+      .rejects.toMatchObject({ statusCode: 400, code: 'PROJECT_STATUS_UNKNOWN' });
+  });
+
+  // Covered by the review's probe, not by a test until now.
+  it('answers 404 to an admin attaching another admin\'s invoice, and writes nothing', async () => {
+    const other = await mkAdmin(`flow-admin-${crypto.randomUUID().slice(0, 8)}`, 'admin');
+    const own = idOf(await db('projects').insert({
+      name: 'Admin own', status: 'inquiry', created_by: other.id, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const invoiceId = await mkInvoice({});
+    await db('invoices').where({ id: invoiceId }).update({ created_by_admin_id: superId });
+    const res = await post(`/api/admin/projects/${own}/invoices`, { invoiceId }, other.token);
+    expect(res.status).toBe(404);
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBeNull();
+    expect((await db('projects').where({ id: own }).first('customer_account_id')).customer_account_id).toBeNull();
+  });
+
   it.each([
     ['an unknown flow', { flow: 'express' }],
     ['a stage that cannot be skipped', { skippedStages: ['inquiry'] }],

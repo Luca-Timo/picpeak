@@ -23,7 +23,7 @@ import { useMutationWithToast } from '../../../hooks';
 import { usePermissions } from '../../../contexts/PermissionsContext';
 import { useLeaveGuard, useUnsavedChanges } from '../../../contexts/UnsavedChangesContext';
 import { FlowField, FrameFields, OccasionFields } from './ProjectInquiryFields';
-import { EMPTY_DRAFT, changedKeys, dateRangeError, fieldsFromDraft, type ProjectDraft } from './projectDraft';
+import { EMPTY_DRAFT, changedKeys, draftError, fieldsFromDraft, type ProjectDraft } from './projectDraft';
 import type { CustomerChoice } from './ProjectSideCards';
 
 const NO_CUSTOMER: CustomerChoice = { id: null, label: '', isPassive: false };
@@ -104,7 +104,7 @@ export const NewInquiryPage: React.FC = () => {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
-    if (nameMissing || customerMissing || dateRangeError(draft)) return;
+    if (nameMissing || customerMissing || draftError(draft)) return;
     create.mutate();
   };
 

@@ -31,6 +31,8 @@ function deleteRefusal(error: unknown, t: TFunction): string {
       });
     case 'PROJECT_DELETE_FOREIGN_DOCUMENTS':
       return t('projects.toast.deleteForeignDocuments', 'This project holds documents of another admin. Move them out of the project first.');
+    case 'PROJECT_CHANGED':
+      return t('projects.toast.deleteChanged', 'Something was added to the project meanwhile. Check it and delete again.');
     case 'PROJECT_DELETE_FOREIGN_GALLERIES':
       return t('projects.toast.deleteForeignGalleries', 'This project holds galleries of another admin. Move them out of the project first.');
     default:

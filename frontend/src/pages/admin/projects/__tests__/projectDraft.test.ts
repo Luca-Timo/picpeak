@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changedKeys, dateRangeError, draftFromProject, fieldsFromDraft, rebaseDraft, updatePayload } from '../projectDraft';
+import { changedKeys, dateRangeError, draftError, draftFromProject, fieldsFromDraft, guestCountError, rebaseDraft, updatePayload } from '../projectDraft';
 
 const saved = draftFromProject({
   eventType: 'wedding', eventDate: '2027-06-12', eventEndDate: null, location: 'Schloss Vaduz',
@@ -36,5 +36,14 @@ describe('project draft', () => {
     expect(dateRangeError({ ...saved, eventEndDate: '2027-06-11' })).toBe(true);
     expect(dateRangeError({ ...saved, eventEndDate: '2027-06-13' })).toBe(false);
     expect(dateRangeError({ ...saved, eventDate: '', eventEndDate: '2027-06-11' })).toBe(false);
+  });
+
+  it('flags more guests than the API takes instead of sending them', () => {
+    expect(guestCountError({ ...saved, guestCount: '100001' })).toBe(true);
+    expect(guestCountError({ ...saved, guestCount: '100000' })).toBe(false);
+    expect(guestCountError({ ...saved, guestCount: '' })).toBe(false);
+    expect(draftError({ ...saved, guestCount: '100001' })).toBe('tooManyGuests');
+    expect(draftError({ ...saved, eventEndDate: '2027-06-11' })).toBe('endBeforeStart');
+    expect(draftError(saved)).toBeNull();
   });
 });

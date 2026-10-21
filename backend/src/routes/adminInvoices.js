@@ -389,6 +389,8 @@ router.get(
     query('sort').optional({ values: 'falsy' }).isIn(['newest', 'oldest', 'issue_asc', 'issue_desc', 'due_asc', 'due_desc', 'value_asc', 'value_desc', 'customer_asc', 'customer_desc']),
     query('page').optional({ values: 'falsy' }).isInt({ min: 1 }),
     query('pageSize').optional({ values: 'falsy' }).isInt({ min: 1, max: 100 }),
+    // The project page's add window: which projects each invoice's deal sits in.
+    query('withDealProjects').optional({ values: 'falsy' }).isBoolean(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -410,8 +412,13 @@ router.get(
       page: req.query.page ? parseInt(req.query.page, 10) : 1,
       pageSize: req.query.pageSize ? parseInt(req.query.pageSize, 10) : 25,
     });
+    let invoices = rows.map(transformInvoice);
+    if (req.query.withDealProjects === 'true' || req.query.withDealProjects === true) {
+      const byDeal = await require('../services/projectService').dealProjectIds(rows.map((r) => r.deal_uuid));
+      invoices = invoices.map((inv, i) => ({ ...inv, dealProjectIds: byDeal.get(rows[i].deal_uuid) || [] }));
+    }
     return successResponse(res, {
-      invoices: rows.map(transformInvoice),
+      invoices,
       pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) || 1 },
     });
   })
@@ -500,14 +507,14 @@ async function projectLinkRefusal(req, projectId) {
       return { status: 422, body: { error: 'That gallery belongs to another project', code: 'PROJECT_EVENT_MISMATCH' } };
     }
   }
-  // Likewise the quote or contract it is made from: their deal rolls up into
-  // their project, so the invoice would count there as well as here.
-  for (const [table, key] of [['quotes', 'sourceQuoteId'], ['contracts', 'sourceContractId']]) {
-    const sourceId = parseInt(req.body[key], 10);
-    if (!sourceId || !(await hasColumnCached(table, 'project_id'))) continue;
-    const source = await db(table).where({ id: sourceId }).first('project_id');
+  // Likewise the quote it is made from (the only source this route takes:
+  // mapPayloadToService passes sourceQuoteId on): its deal rolls up into its
+  // project, so the invoice would count there as well as here.
+  const sourceQuoteId = parseInt(req.body.sourceQuoteId, 10);
+  if (sourceQuoteId && await hasColumnCached('quotes', 'project_id')) {
+    const source = await db('quotes').where({ id: sourceQuoteId }).first('project_id');
     if (source?.project_id != null && Number(source.project_id) !== Number(project.id)) {
-      return { status: 422, body: { error: 'The document it is made from belongs to another project', code: 'PROJECT_SOURCE_MISMATCH' } };
+      return { status: 422, body: { error: 'The quote it is made from belongs to another project', code: 'PROJECT_SOURCE_MISMATCH' } };
     }
   }
   const held = await projectService.holdProjectToCustomer(project.id, req.body.customerAccountId);

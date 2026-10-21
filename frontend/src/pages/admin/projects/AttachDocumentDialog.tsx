@@ -92,14 +92,15 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
         }));
       }
       if (kind === 'invoice') {
-        // An invoice in another project is listed but cannot move (its
-        // installments share the deal); the server refuses it too.
-        const res = await billsService.list({ ...scope, pageSize: 20 });
-        return res.invoices.filter((x) => x.kind !== 'storno').map((x) => ({
-          id: x.id, title: x.invoiceNumber, date: x.issueDate ?? null,
-          elsewhere: x.projectId != null && x.projectId !== projectId,
-          locked: x.projectId != null && x.projectId !== projectId,
-        }));
+        // An invoice in another project, itself or through its deal, is listed
+        // but cannot move (its deal would move or split); the server refuses
+        // it too.
+        const res = await billsService.list({ ...scope, pageSize: 20, withDealProjects: true });
+        return res.invoices.filter((x) => x.kind !== 'storno').map((x) => {
+          const elsewhere = (x.projectId != null && x.projectId !== projectId)
+            || (x.dealProjectIds || []).some((id) => id !== projectId);
+          return { id: x.id, title: x.invoiceNumber, date: x.issueDate ?? null, elsewhere, locked: elsewhere };
+        });
       }
       const res = await eventsService.getEvents({ limit: 20, search: q || undefined, sortBy: 'created_at', sortOrder: 'desc' });
       return (res.events || []).map((ev) => ({

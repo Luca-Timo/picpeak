@@ -90,8 +90,9 @@ router.use(requireProjectsFlag);
 const INQUIRY_SOURCES = ['referral', 'website', 'social', 'returning', 'fair', 'other'];
 
 // The inquiry fields (migration 315). null clears a field and skips the check;
-// any other value, false and '' included, has to pass it.
-const optionalField = (name) => body(name).optional({ values: 'null' });
+// any other value, false and '' included, has to pass it. Arrays are refused:
+// express-validator would check each item, and the joined value is stored.
+const optionalField = (name) => body(name).optional({ values: 'null' }).not().isArray();
 const inquiryValidators = [
   optionalField('eventType').isString().trim().isLength({ max: 50 }),
   optionalField('eventDate').isISO8601({ strict: true }),
@@ -112,7 +113,7 @@ const inquiryValidators = [
   body('skippedStages.*').isIn(projectService.SKIPPABLE_STAGES),
   // `reopen` (PUT only): the server picks inquiry or active, because it sees
   // documents the caller's overview may not show.
-  body('status').optional().isIn([...projectService.PROJECT_STATUSES, 'reopen']),
+  body('status').optional().not().isArray().isIn([...projectService.PROJECT_STATUSES, 'reopen']),
 ];
 
 const INQUIRY_KEYS = ['flow', 'skippedStages', 'eventType', 'eventDate', 'eventEndDate', 'location', 'guestCount',
@@ -236,6 +237,9 @@ router.delete('/:id',
     const count = async (query) => Number((await query.count('* as c').first())?.c || 0);
     const needs = [];
     let foreign = false;
+    // What was checked, so the delete can refuse when something was linked
+    // after this census (projectService.deleteProject recounts in its transaction).
+    const checked = { counts: {}, eventIds: [] };
     for (const [table, perm] of [
       ['quotes', 'quotes.manage'], ['contracts', 'contracts.manage'], ['invoices', 'bills.manage'],
       ['customer_hour_entries', 'customers.edit'], ['customer_documents', 'customers.documents.manage'],
@@ -243,6 +247,7 @@ router.delete('/:id',
       if (!(await hasColumnCached(table, 'project_id'))) continue;
       const linked = await withTrustedCrmAccess('project delete: linked-record census',
         () => count(db(table).where({ project_id: id })));
+      checked.counts[table] = linked;
       if (!linked) continue;
       if (!(await userHasAnyPermission(req.admin.id, [perm]))) { needs.push(perm); continue; }
       if (await count(db(table).where({ project_id: id })) < linked) foreign = true;
@@ -258,7 +263,8 @@ router.delete('/:id',
     if (denied.length) {
       return res.status(403).json({ error: 'This project holds galleries that are not yours; they have to be moved out before it can be deleted', code: 'PROJECT_DELETE_FOREIGN_GALLERIES' });
     }
-    const result = await projectService.deleteProject(id, req.admin);
+    checked.eventIds = eventIds;
+    const result = await projectService.deleteProject(id, req.admin, { checked });
     return successResponse(res, result, 200, 'Project deleted');
   }),
 );

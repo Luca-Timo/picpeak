@@ -102,3 +102,18 @@ export function rebaseDraft(draft: ProjectDraft, oldBase: ProjectDraft, newBase:
 export function dateRangeError(d: ProjectDraft): boolean {
   return !!(d.eventDate && d.eventEndDate && d.eventEndDate < d.eventDate);
 }
+
+/** The API's limit for guestCount (adminProjects inquiryValidators). */
+export const MAX_GUESTS = 100000;
+
+/** More guests than the API takes: flagged on the field, not sent. */
+export function guestCountError(d: ProjectDraft): boolean {
+  return d.guestCount.trim() !== '' && Number(d.guestCount) > MAX_GUESTS;
+}
+
+/** What stops the draft from saving, as a message key, or null. */
+export function draftError(d: ProjectDraft): 'endBeforeStart' | 'tooManyGuests' | null {
+  if (dateRangeError(d)) return 'endBeforeStart';
+  if (guestCountError(d)) return 'tooManyGuests';
+  return null;
+}

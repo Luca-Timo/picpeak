@@ -59,6 +59,11 @@ exports.up = async function up(knex) {
 
 exports.down = async function down(knex) {
   if (await knex.schema.hasTable('invoices') && await knex.schema.hasColumn('invoices', 'project_id')) {
+    // The index first: PostgreSQL would drop it with the column, but SQLite's
+    // table rebuild is safer without an index on a column that goes away.
+    await knex.schema.alterTable('invoices', (table) => {
+      table.dropIndex(['project_id']);
+    });
     await knex.schema.alterTable('invoices', (table) => {
       table.dropColumn('project_id');
     });

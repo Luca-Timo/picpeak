@@ -42,7 +42,7 @@ import { ProjectSettingsTab } from './ProjectSettingsTab';
 import { projectSteps, type ProjectStep } from './projectSteps';
 import { StepIcon, useRunStep, useStepLabel } from './useProjectSteps';
 import {
-  changedKeys, dateRangeError, draftFromProject, rebaseDraft, updatePayload, type ProjectDraft,
+  MAX_GUESTS, changedKeys, draftError, draftFromProject, rebaseDraft, updatePayload, type ProjectDraft,
 } from './projectDraft';
 
 type ProjectTab = 'overview' | 'activity' | 'settings';
@@ -215,8 +215,9 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
   // date) are saved first rather than lost behind a leave prompt.
   const runStep = async (step: ProjectStep) => {
     if (isDirty) {
-      if (dateRangeError(draft)) {
-        toast.error(t('projects.field.endBeforeStart', 'The end date is before the start date.') as string);
+      const blocked = draftError(draft);
+      if (blocked) {
+        toast.error(t(`projects.field.${blocked}`, blocked === 'endBeforeStart' ? 'The end date is before the start date.' : 'At most {{max}} guests.', { max: MAX_GUESTS.toLocaleString() }) as string);
         return;
       }
       try { await save.mutateAsync(); } catch { return; }
@@ -388,9 +389,10 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
           isDirty={isDirty}
           isSaving={save.isPending}
           onSave={() => {
-            if (dateRangeError(draft)) {
+            const blocked = draftError(draft);
+            if (blocked) {
               setTab('overview');
-              toast.error(t('projects.field.endBeforeStart', 'The end date is before the start date.') as string);
+              toast.error(t(`projects.field.${blocked}`, blocked === 'endBeforeStart' ? 'The end date is before the start date.' : 'At most {{max}} guests.', { max: MAX_GUESTS.toLocaleString() }) as string);
               return;
             }
             save.mutate();

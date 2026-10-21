@@ -8326,7 +8326,8 @@
       "galleryCreated": "Gallery created as a draft.",
       "stepFailed": "That did not work. Try again.",
       "stageSkipped": "Step skipped.",
-      "stageRestored": "Step taken back into the project."
+      "stageRestored": "Step taken back into the project.",
+      "deleteChanged": "Something was added to the project meanwhile. Check it and delete again."
     },
     "error": {
       "customerMismatch": "That belongs to a different customer than this project."
@@ -8386,7 +8387,8 @@
       "budgetHelp": "Comma or point, both work.",
       "source": "Where did the inquiry come from?",
       "sourceNone": "— Not set —",
-      "notes": "Notes"
+      "notes": "Notes",
+      "tooManyGuests": "At most {{max}} guests."
     },
     "inquiry": {
       "title": "New inquiry",
