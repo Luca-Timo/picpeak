@@ -605,6 +605,81 @@ describe('project inquiry flow', () => {
     expect((await db('projects').where({ id: project }).first('customer_account_id')).customer_account_id).toBeNull();
   });
 
+  it('refuses an existing invoice on a project the caller may not tie documents to, before moving anything', async () => {
+    // Legacy ownerless project the editor reaches through their own gallery.
+    const project = idOf(await db('projects').insert({
+      name: 'Legacy', status: 'active', created_by: null, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const own = await mkEvent({ projectId: project });
+    await db('events').where({ id: own }).update({ created_by: editorId });
+    const loose = await mkEvent();
+    await db('events').where({ id: loose }).update({ created_by: editorId });
+    const invoiceId = await mkInvoice({ eventId: loose });
+    const projectService = require('../../src/services/projectService');
+    await expect(projectService.assignInvoice(project, invoiceId, { id: editorId, roleName: 'editor' }))
+      .rejects.toMatchObject({ code: 'PROJECT_NOT_LINKABLE' });
+    expect((await db('events').where({ id: loose }).first('project_id')).project_id).toBeNull();
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBeNull();
+  });
+
+  it('refuses an existing invoice that already belongs to another project', async () => {
+    const a = await createInquiry();
+    const b = await createInquiry();
+    const invoiceId = await mkInvoice({ projectId: a.id });
+    const res = await post(`/api/admin/projects/${b.id}/invoices`, { invoiceId });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_INVOICE_ELSEWHERE');
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBe(a.id);
+  });
+
+  it('refuses an existing invoice whose gallery is another customer\'s', async () => {
+    const project = await createInquiry();
+    const ev = await mkEvent();
+    await db('event_customer_assignments').insert({ event_id: ev, customer_account_id: otherCustomerId });
+    // The invoice is this project's customer's; its gallery is assigned to another.
+    const invoiceId = await mkInvoice({ eventId: ev });
+    const res = await post(`/api/admin/projects/${project.id}/invoices`, { invoiceId });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_CUSTOMER_MISMATCH');
+    expect((await db('events').where({ id: ev }).first('project_id')).project_id).toBeNull();
+  });
+
+  it('counts an invoice for its gallery\'s project on the list, even when that project is filtered out', async () => {
+    const a = await createInquiry();
+    const b = idOf(await db('projects').insert({
+      name: 'Done elsewhere', status: 'completed', created_by: superId, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const ev = await mkEvent({ projectId: b });
+    await mkInvoice({ projectId: a.id, eventId: ev, total: 777700 });
+    const res = await get('/api/admin/projects?status=inquiry,active&withStages=1');
+    expect(res.status).toBe(200);
+    const list = res.body.data?.projects || res.body.projects || res.body.data || res.body;
+    const row = list.find((p) => p.id === a.id);
+    const totals = (row.valuation?.byCurrency || []).map((x) => x.totalMinor);
+    expect(totals).not.toContain(777700);
+  });
+
+  it('refuses an invoice made from a quote that is in another project', async () => {
+    const a = await createInquiry();
+    const b = await createInquiry();
+    const quoteId = await mkQuote({ projectId: b.id, dealUuid: crypto.randomUUID() });
+    const res = await post('/api/admin/invoices', {
+      customerAccountId: customerId, projectId: a.id, sourceQuoteId: quoteId, currency: 'CHF',
+      lineItems: [{ description: 'Rest', quantity: 1, unitPriceMinor: 1000 }],
+    });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_SOURCE_MISMATCH');
+  });
+
+  it('turns an inquiry that holds something active when it is set to inquiry', async () => {
+    const project = await createInquiry();
+    await mkEvent({ projectId: project.id });
+    // The state a document attached during a reopen leaves behind.
+    const res = await put(`/api/admin/projects/${project.id}`, { status: 'inquiry' });
+    expect(res.status).toBe(200);
+    expect((res.body.data || res.body).project.status).toBe('active');
+  });
+
   it.each([
     ['an unknown flow', { flow: 'express' }],
     ['a stage that cannot be skipped', { skippedStages: ['inquiry'] }],

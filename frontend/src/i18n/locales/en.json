@@ -8319,7 +8319,7 @@
       "completed": "Project completed.",
       "deleted": "Project deleted. Its galleries and documents are kept.",
       "deleteFailed": "Could not delete the project",
-      "deleteNeedsPermission": "This project holds records you cannot change. Deleting it needs: {{permissions}}.",
+      "deleteNeedsPermission": "This project holds {{records}} you may not change, so you cannot delete it.",
       "deleteForeignDocuments": "This project holds documents of another admin. Move them out of the project first.",
       "deleteForeignGalleries": "This project holds galleries of another admin. Move them out of the project first.",
       "contractCreated": "Contract created from the quote.",
@@ -8451,7 +8451,14 @@
     "delete": {
       "title": "Delete project?",
       "confirm": "Delete “{{name}}”? Its galleries, quotes, contracts and invoices are kept and only lose the link. The project data and notes are lost. This cannot be undone.",
-      "button": "Delete project"
+      "button": "Delete project",
+      "records": {
+        "quotes_manage": "quotes",
+        "contracts_manage": "contracts",
+        "bills_manage": "invoices",
+        "customers_edit": "hours",
+        "customers_documents_manage": "customer documents"
+      }
     },
     "step": {
       "createQuote": "Create quote",
@@ -8523,7 +8530,10 @@
       "done": "Added to the project",
       "failed": "Could not add it to the project",
       "invoiceTitle": "Add an invoice",
-      "galleryElsewhere": "Its gallery belongs to another project. Add it there, or move the gallery first."
+      "galleryElsewhere": "Its gallery belongs to another project. Add it there, or move the gallery first.",
+      "locked": "in another project",
+      "invoiceElsewhere": "This invoice already belongs to another project.",
+      "helpGallery": "The newest galleries. Search by name to find any other."
     }
   },
   "calendar": {

@@ -69,7 +69,7 @@ const Group: React.FC<{ title: string; empty: string; addLabel?: string; onAdd?:
   const emptyCls = 'w-full rounded-xl border border-dashed border-line-strong px-3 py-2.5 text-left text-sm text-muted';
   return (
     <section>
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="flex items-center gap-3 mb-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
         {onAdd && rows.length > 0 && (
           <button type="button" onClick={onAdd} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
@@ -79,7 +79,7 @@ const Group: React.FC<{ title: string; empty: string; addLabel?: string; onAdd?:
       </div>
       <div className="space-y-1.5">
         {rows.length ? rows : onAdd ? (
-          <button type="button" onClick={onAdd} className={`${emptyCls} flex items-center justify-between gap-2 hover:border-accent hover:text-heading`}>
+          <button type="button" onClick={onAdd} className={`${emptyCls} flex flex-wrap items-center gap-x-3 gap-y-1 hover:border-accent hover:text-heading`}>
             <span>{empty}</span>
             <span className="inline-flex items-center gap-1 text-xs font-medium text-accent"><Plus className="w-3 h-3" />{addLabel}</span>
           </button>

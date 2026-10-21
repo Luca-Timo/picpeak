@@ -63,6 +63,8 @@ export interface InvoiceSummary {
    *  "From contract LBM-C-2026-0010" rather than "From contract #10". */
   sourceContractNumber?: string | null;
   eventId: number | null;
+  /** Migration 315: the project it was created in or attached to. */
+  projectId?: number | null;
   /** Inline event snapshot (migration 123). Free-text label for the
    *  event the invoice relates to. Persists independently of the
    *  events FK so renames don't retroactively change historical

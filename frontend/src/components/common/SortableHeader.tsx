@@ -64,18 +64,19 @@ interface SortableHeaderProps {
 }
 
 /** The clickable label alone, for a header cell that brings its own `<th>`
- *  (`TableHeaderCell`, the shared list table). */
-export const SortButton: React.FC<Omit<SortableHeaderProps, 'align'> & { align?: 'left' | 'right' | 'center' }> = ({
-  label, columnKey, activeKey, activeDir, onSort, align = 'left',
+ *  (`TableHeaderCell`, the shared list table, passes `uppercase tracking-wide`
+ *  to match its other headers). */
+export const SortButton: React.FC<Omit<SortableHeaderProps, 'align'> & { align?: 'left' | 'right' | 'center'; className?: string }> = ({
+  label, columnKey, activeKey, activeDir, onSort, align = 'left', className = '',
 }) => {
   const active = activeKey === columnKey;
   return (
     <button
       type="button"
       onClick={() => onSort(columnKey)}
-      className={`group inline-flex items-center gap-1 uppercase tracking-wide transition-colors hover:text-heading ${
+      className={`group inline-flex items-center gap-1 transition-colors hover:text-heading ${
         align === 'right' ? 'flex-row-reverse' : ''
-      } ${active ? 'text-heading' : ''}`}
+      } ${active ? 'text-heading' : ''} ${className}`}
     >
       <span>{label}</span>
       {active ? (
@@ -89,28 +90,8 @@ export const SortButton: React.FC<Omit<SortableHeaderProps, 'align'> & { align?:
   );
 };
 
-export const SortableHeader: React.FC<SortableHeaderProps> = ({
-  label, columnKey, activeKey, activeDir, onSort, align = 'left',
-}) => {
-  const active = activeKey === columnKey;
-  return (
-    <th className={`px-3 py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-      <button
-        type="button"
-        onClick={() => onSort(columnKey)}
-        className={`group inline-flex items-center gap-1 font-medium transition-colors hover:text-heading ${
-          align === 'right' ? 'flex-row-reverse' : ''
-        } ${active ? 'text-heading' : ''}`}
-      >
-        <span>{label}</span>
-        {active ? (
-          activeDir === 'asc'
-            ? <ChevronUp className="w-3 h-3" />
-            : <ChevronDown className="w-3 h-3" />
-        ) : (
-          <ChevronsUpDown className="w-3 h-3 opacity-30 group-hover:opacity-60" />
-        )}
-      </button>
-    </th>
-  );
-};
+export const SortableHeader: React.FC<SortableHeaderProps> = ({ align = 'left', ...props }) => (
+  <th className={`px-3 py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+    <SortButton {...props} align={align} className="font-medium" />
+  </th>
+);

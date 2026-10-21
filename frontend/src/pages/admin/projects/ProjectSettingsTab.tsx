@@ -23,16 +23,19 @@ interface Props {
 /** Why the server refused the delete, by its code; it names what to move
  *  out or which permission is missing. */
 function deleteRefusal(error: unknown, t: TFunction): string {
-  const data = (error as { response?: { data?: { code?: string; permissions?: string[] } } })?.response?.data;
+  const data = (error as { response?: { data?: { code?: string; error?: string; permissions?: string[] } } })?.response?.data;
   switch (data?.code) {
     case 'PROJECT_DELETE_NEEDS_PERMISSION':
-      return t('projects.toast.deleteNeedsPermission', 'This project holds records you cannot change. Deleting it needs: {{permissions}}.', { permissions: (data.permissions || []).join(', ') });
+      return t('projects.toast.deleteNeedsPermission', 'This project holds {{records}} you may not change, so you cannot delete it.', {
+        records: (data.permissions || []).map((perm) => t(`projects.delete.records.${perm.replace(/\./g, '_')}`, perm)).join(', '),
+      });
     case 'PROJECT_DELETE_FOREIGN_DOCUMENTS':
       return t('projects.toast.deleteForeignDocuments', 'This project holds documents of another admin. Move them out of the project first.');
     case 'PROJECT_DELETE_FOREIGN_GALLERIES':
       return t('projects.toast.deleteForeignGalleries', 'This project holds galleries of another admin. Move them out of the project first.');
     default:
-      return t('projects.toast.deleteFailed', 'Could not delete the project');
+      // Any other refusal: the server's own words, as before.
+      return data?.error || t('projects.toast.deleteFailed', 'Could not delete the project');
   }
 }
 

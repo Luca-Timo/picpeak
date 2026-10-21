@@ -137,6 +137,8 @@ function transformInvoice(i) {
     sourceContractId: i.source_contract_id || null,
     sourceContractNumber: i.source_contract_number || null,
     eventId: i.event_id,
+    // Migration 315: the project it was created in or attached to.
+    projectId: i.project_id ?? null,
     language: i.language,
     currency: i.currency,
     issueDate: i.issue_date,
@@ -496,6 +498,16 @@ async function projectLinkRefusal(req, projectId) {
     const event = await db('events').where({ id: eventId }).first('project_id');
     if (event?.project_id != null && Number(event.project_id) !== Number(project.id)) {
       return { status: 422, body: { error: 'That gallery belongs to another project', code: 'PROJECT_EVENT_MISMATCH' } };
+    }
+  }
+  // Likewise the quote or contract it is made from: their deal rolls up into
+  // their project, so the invoice would count there as well as here.
+  for (const [table, key] of [['quotes', 'sourceQuoteId'], ['contracts', 'sourceContractId']]) {
+    const sourceId = parseInt(req.body[key], 10);
+    if (!sourceId || !(await hasColumnCached(table, 'project_id'))) continue;
+    const source = await db(table).where({ id: sourceId }).first('project_id');
+    if (source?.project_id != null && Number(source.project_id) !== Number(project.id)) {
+      return { status: 422, body: { error: 'The document it is made from belongs to another project', code: 'PROJECT_SOURCE_MISMATCH' } };
     }
   }
   const held = await projectService.holdProjectToCustomer(project.id, req.body.customerAccountId);

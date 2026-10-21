@@ -177,7 +177,8 @@ async function invoicesForProjects(projectIds, columns) {
   const keep = (rows) => {
     for (const r of rows) if (!found.has(r.id)) found.set(r.id, r);
   };
-  const cols = columns.map((c) => `inv.${c}`);
+  // event_id always: the gallery decides which project an invoice belongs to.
+  const cols = Array.from(new Set([...columns, 'event_id'])).map((c) => `inv.${c}`);
 
   keep(await db('invoices as inv')
     .join('events as e', 'e.id', 'inv.event_id')
@@ -202,6 +203,23 @@ async function invoicesForProjects(projectIds, columns) {
     for (let i = 0; i < deals.length; i += CHUNK) {
       const rows = await db('invoices as inv').whereIn('inv.deal_uuid', deals.slice(i, i + CHUNK)).select(...cols);
       keep(rows.map((r) => ({ ...r, project_id: dealToProject.get(r.deal_uuid) })));
+    }
+  }
+
+  // An invoice whose gallery is in a project belongs to that project, whether
+  // or not that project is among `projectIds`: its own project_id or deal
+  // pointing elsewhere does not count it twice. One rule for the list, the
+  // dashboard and the overview, whatever the status filter.
+  const eventIds = Array.from(new Set(Array.from(found.values()).map((r) => r.event_id).filter((e) => e != null)));
+  if (eventIds.length && await hasColumnCached('events', 'project_id')) {
+    const eventProject = new Map();
+    for (let i = 0; i < eventIds.length; i += CHUNK) {
+      const evs = await db('events').whereIn('id', eventIds.slice(i, i + CHUNK)).whereNotNull('project_id').select('id', 'project_id');
+      for (const e of evs) eventProject.set(e.id, e.project_id);
+    }
+    for (const [id, r] of found) {
+      const owner = eventProject.get(r.event_id);
+      if (owner != null && Number(owner) !== Number(r.project_id)) found.delete(id);
     }
   }
 
@@ -469,6 +487,10 @@ async function updateProject(id, { name, customerAccountId, status, ...fields })
   Object.assign(patch, await inquiryPatch(fields));
   assertDateRange({ ...existing, ...patch });
   await db('projects').where({ id }).update(patch);
+  // A document attached between the check above and this write found the
+  // project closed, so nothing promoted it: an inquiry that holds something
+  // turns active now.
+  if (patch.status === 'inquiry' && await projectHoldsAnything(id)) await promoteInquiry(id);
   return getProjectById(id);
 }
 
@@ -797,8 +819,17 @@ const assignContract = (projectId, contractId, actor) => assignDocument('contrac
  * itself. Its deal comes along (linkDealToProject: quotes, contracts and the
  * galleries they made), and so does its gallery when that is in no project
  * yet. Its Storno and reissue follow through the lineage rollup.
- * Refused when its gallery is in another project (it rolls up there), or
- * when it is another customer's. The caller's route vets the gallery owner.
+ *
+ * Refused, before anything is written, when:
+ *  - the caller may not tie documents to this project (the CRM write rule,
+ *    the same carriedProjectId the cockpit's documentsLinkable reports);
+ *  - the invoice is already in another project (its installments share the
+ *    deal and would be split);
+ *  - its gallery is in another project (it rolls up there);
+ *  - it, or its gallery, is another customer's.
+ * The writes run in one transaction, so a later refusal leaves nothing
+ * behind; a customer the empty project adopted is given back. The caller's
+ * route vets the gallery owner.
  */
 async function assignInvoice(projectId, invoiceId, actor = null) {
   if (!(await hasColumnCached('invoices', 'project_id'))) {
@@ -806,36 +837,74 @@ async function assignInvoice(projectId, invoiceId, actor = null) {
   }
   const project = await db('projects').where({ id: projectId }).first('id');
   if (!project) throw new AppError('Project not found', 404);
-  const inv = await db('invoices').where({ id: invoiceId }).first('id', 'event_id', 'deal_uuid', 'customer_account_id');
+  if (actor?.id && !(await carriedProjectId(projectId, actor.id))) {
+    throw new AppError('Documents can join only a project you created', 403, 'PROJECT_NOT_LINKABLE');
+  }
+  const inv = await db('invoices').where({ id: invoiceId }).first('id', 'event_id', 'deal_uuid', 'customer_account_id', 'project_id');
   if (!inv) throw new AppError('Invoice not found', 404);
+  if (inv.project_id != null && Number(inv.project_id) !== Number(projectId)) {
+    throw new AppError('This invoice belongs to another project', 422, 'PROJECT_INVOICE_ELSEWHERE');
+  }
 
+  const eventsLinked = await hasColumnCached('events', 'project_id');
   let event = null;
-  if (inv.event_id && await hasColumnCached('events', 'project_id')) {
+  if (inv.event_id && eventsLinked) {
     event = await db('events').where({ id: inv.event_id }).first('id', 'project_id');
     if (event?.project_id != null && Number(event.project_id) !== Number(projectId)) {
       throw new AppError('This invoice’s gallery belongs to another project', 422, 'PROJECT_EVENT_MISMATCH');
     }
   }
 
-  let adopted = false;
-  if (inv.customer_account_id != null) {
-    const hold = await holdProjectToCustomer(projectId, inv.customer_account_id);
-    if (!hold) throw new AppError('That belongs to a different customer than this project', 422, 'PROJECT_CUSTOMER_MISMATCH');
-    adopted = hold === 'adopted';
-  }
-
+  // Projects hold one customer: the invoice's, and its gallery's (as
+  // assignEvent checks it). An empty project adopts the first.
+  const adopted = [];
+  const hold = async (customerAccountId) => {
+    const held = await holdProjectToCustomer(projectId, customerAccountId);
+    if (!held) throw new AppError('That belongs to a different customer than this project', 422, 'PROJECT_CUSTOMER_MISMATCH');
+    if (held === 'adopted') adopted.push(customerAccountId);
+  };
+  const release = async () => {
+    for (const cid of adopted) await releaseAdoptedCustomer(projectId, cid);
+  };
   try {
-    if (inv.deal_uuid) await linkDealToProject(inv.deal_uuid, projectId, db, actor);
+    if (inv.customer_account_id != null) await hold(inv.customer_account_id);
     if (event && event.project_id == null) {
-      await db('events').where({ id: event.id }).whereNull('project_id').update({ project_id: projectId });
+      const evCustomers = await eventCustomerIds(event.id);
+      const current = (await db('projects').where({ id: projectId }).first('customer_account_id'))?.customer_account_id;
+      if (current != null && evCustomers.length && !evCustomers.includes(Number(current))) {
+        throw new AppError('That belongs to a different customer than this project', 422, 'PROJECT_CUSTOMER_MISMATCH');
+      }
+      if (current == null && evCustomers.length === 1) await hold(evCustomers[0]);
     }
-    await auditedUpdate(db, 'invoices', { id: invoiceId }, { project_id: projectId },
-      { actor: actor?.id ?? null, source: 'project.assign_invoice' });
   } catch (err) {
-    if (adopted) await releaseAdoptedCustomer(projectId, inv.customer_account_id);
+    await release();
     throw err;
   }
-  await promoteInquiry(projectId);
+
+  // Resolved before the transaction: on SQLite a query on the global
+  // connection waits for the one the transaction holds.
+  for (const [table, column] of [['quotes', 'deal_uuid'], ['quotes', 'project_id'], ['contracts', 'deal_uuid'],
+    ['contracts', 'project_id'], ['contracts', 'converted_event_id'], ['invoices', 'deal_uuid']]) {
+    await hasColumnCached(table, column);
+  }
+  try {
+    await db.transaction(async (trx) => {
+      if (inv.deal_uuid) await linkDealToProject(inv.deal_uuid, projectId, trx, actor);
+      if (event && event.project_id == null) {
+        // Conditional: a gallery moved into another project meanwhile is refused.
+        const moved = await trx('events').where({ id: event.id })
+          .where((w) => w.whereNull('project_id').orWhere('project_id', projectId))
+          .update({ project_id: projectId });
+        if (!moved) throw new AppError('This invoice’s gallery belongs to another project', 422, 'PROJECT_EVENT_MISMATCH');
+      }
+      await auditedUpdate(trx, 'invoices', { id: invoiceId }, { project_id: projectId },
+        { actor: actor?.id ?? null, source: 'project.assign_invoice' });
+      await promoteInquiry(projectId, trx);
+    });
+  } catch (err) {
+    await release();
+    throw err;
+  }
   return { projectId, invoiceId };
 }
 
@@ -1037,21 +1106,12 @@ async function getProjectOverview(id, perms = {}, admin = null) {
 
   const out = { project, events, emails: [], quotes: [], contracts: [], invoices: [], hours: { entries: [], totalMinutes: 0 } };
 
-  // Invoices (by event, own project_id or deal) incl. storno.
+  // Invoices (by event, own project_id or deal) incl. storno; one whose
+  // gallery is in another project belongs to that one (invoicesForProjects).
   if (perms.bills !== false) {
     const rows = await invoicesForProjects([id], ['id', 'invoice_number', 'status', 'kind', 'issue_date', 'due_date',
       'total_amount_minor', 'paid_amount_minor', 'paid_at', 'currency', 'event_id', 'deal_uuid']);
-    // An invoice whose gallery sits in another project belongs to that one,
-    // as on the list (invoicesForProjects attributes the event path first),
-    // even when its own project_id or deal points here.
-    const otherEventIds = Array.from(new Set(rows.map((r) => r.event_id).filter((e) => e != null && !eventIds.includes(e))));
-    const elsewhere = new Set();
-    for (let i = 0; i < otherEventIds.length; i += CHUNK) {
-      const evs = await db('events').whereIn('id', otherEventIds.slice(i, i + CHUNK)).whereNotNull('project_id').select('id');
-      for (const e of evs) elsewhere.add(e.id);
-    }
     out.invoices = rows
-      .filter((r) => !elsewhere.has(r.event_id))
       .map(({ project_id: _p, ...inv }) => inv)
       // Newest first, as before. Compared as times: PostgreSQL returns Dates.
       .sort((a, b) => (b.issue_date ? new Date(b.issue_date).getTime() : 0) - (a.issue_date ? new Date(a.issue_date).getTime() : 0));

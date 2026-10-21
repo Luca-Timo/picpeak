@@ -26,6 +26,8 @@ interface Candidate {
   date: string | null;
   /** Another project holds it; attaching moves it here. */
   elsewhere: boolean;
+  /** Another project holds it and it cannot move (an invoice). */
+  locked?: boolean;
 }
 
 interface Props {
@@ -90,11 +92,13 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
         }));
       }
       if (kind === 'invoice') {
-        // The list does not say which project holds an invoice; the server
-        // refuses one whose gallery is in another project.
+        // An invoice in another project is listed but cannot move (its
+        // installments share the deal); the server refuses it too.
         const res = await billsService.list({ ...scope, pageSize: 20 });
         return res.invoices.filter((x) => x.kind !== 'storno').map((x) => ({
-          id: x.id, title: x.invoiceNumber, date: x.issueDate ?? null, elsewhere: false,
+          id: x.id, title: x.invoiceNumber, date: x.issueDate ?? null,
+          elsewhere: x.projectId != null && x.projectId !== projectId,
+          locked: x.projectId != null && x.projectId !== projectId,
         }));
       }
       const res = await eventsService.getEvents({ limit: 20, search: q || undefined, sortBy: 'created_at', sortOrder: 'desc' });
@@ -125,6 +129,10 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
         toast.error(t('projects.error.customerMismatch', 'That belongs to a different customer than this project.') as string);
         return;
       }
+      if (res?.code === 'PROJECT_INVOICE_ELSEWHERE') {
+        toast.error(t('projects.attach.invoiceElsewhere', 'This invoice already belongs to another project.') as string);
+        return;
+      }
       if (res?.code === 'PROJECT_EVENT_MISMATCH') {
         toast.error(t('projects.attach.galleryElsewhere', 'Its gallery belongs to another project. Add it there, or move the gallery first.') as string);
         return;
@@ -147,9 +155,11 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
       open={!!kind}
       onClose={onClose}
       title={title}
-      description={q || !customerAccountId || kind === 'gallery'
-        ? t('projects.attach.help', 'Search by number or name. Its linked documents come along.')
-        : t('projects.attach.helpCustomer', 'This customer’s documents. Search to find any other.')}
+      description={kind === 'gallery'
+        ? t('projects.attach.helpGallery', 'The newest galleries. Search by name to find any other.')
+        : q || !customerAccountId
+          ? t('projects.attach.help', 'Search by number or name. Its linked documents come along.')
+          : t('projects.attach.helpCustomer', 'This customer’s documents. Search to find any other.')}
       size="md"
     >
       <Input
@@ -165,7 +175,7 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
           <button
             key={c.id}
             type="button"
-            disabled={attach.isPending}
+            disabled={attach.isPending || c.locked}
             onClick={() => attach.mutate(c.id)}
             className="w-full flex items-center gap-3 rounded-xl border border-line px-3 py-2.5 text-left hover:bg-hover-soft disabled:opacity-60"
           >
@@ -173,7 +183,7 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
             <span className="flex-1 min-w-0">
               <span className="block text-sm font-semibold text-heading truncate">{c.title}</span>
               <span className="block text-xs text-muted truncate">
-                {[c.date ? format(c.date) : '', c.elsewhere ? t('projects.attach.elsewhere', 'in another project, moves here') : '']
+                {[c.date ? format(c.date) : '', c.locked ? t('projects.attach.locked', 'in another project') : c.elsewhere ? t('projects.attach.elsewhere', 'in another project, moves here') : '']
                   .filter(Boolean).join(' · ')}
               </span>
             </span>

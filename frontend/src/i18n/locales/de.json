@@ -8282,7 +8282,7 @@
       "completed": "Projekt abgeschlossen.",
       "contractCreated": "Vertrag aus dem Angebot erstellt.",
       "deleteFailed": "Das Projekt konnte nicht gelöscht werden",
-      "deleteNeedsPermission": "Dieses Projekt enthält Einträge, die Sie nicht ändern dürfen. Zum Löschen brauchen Sie: {{permissions}}.",
+      "deleteNeedsPermission": "Dieses Projekt enthält {{records}}, die Sie nicht ändern dürfen. Deshalb können Sie es nicht löschen.",
       "deleteForeignDocuments": "Dieses Projekt enthält Dokumente eines anderen Admins. Nehmen Sie diese zuerst aus dem Projekt.",
       "deleteForeignGalleries": "Dieses Projekt enthält Galerien eines anderen Admins. Nehmen Sie diese zuerst aus dem Projekt.",
       "deleted": "Projekt gelöscht. Seine Galerien und Dokumente bleiben erhalten.",
@@ -8333,7 +8333,14 @@
     "delete": {
       "button": "Projekt löschen",
       "confirm": "„{{name}}“ löschen? Galerien, Angebote, Verträge und Rechnungen bleiben erhalten und verlieren nur die Zuordnung. Projektdaten und Notizen gehen verloren. Das kann nicht rückgängig gemacht werden.",
-      "title": "Projekt löschen?"
+      "title": "Projekt löschen?",
+      "records": {
+        "quotes_manage": "Angebote",
+        "contracts_manage": "Verträge",
+        "bills_manage": "Rechnungen",
+        "customers_edit": "Stunden",
+        "customers_documents_manage": "Kundendokumente"
+      }
     },
     "documents": {
       "draft": "Entwurf",
@@ -8488,7 +8495,10 @@
       "done": "Zum Projekt hinzugefügt",
       "failed": "Konnte nicht zum Projekt hinzugefügt werden",
       "invoiceTitle": "Rechnung hinzufügen",
-      "galleryElsewhere": "Die Galerie dazu gehört zu einem anderen Projekt. Fügen Sie sie dort hinzu oder verschieben Sie zuerst die Galerie."
+      "galleryElsewhere": "Die Galerie dazu gehört zu einem anderen Projekt. Fügen Sie sie dort hinzu oder verschieben Sie zuerst die Galerie.",
+      "locked": "in einem anderen Projekt",
+      "invoiceElsewhere": "Diese Rechnung gehört bereits zu einem anderen Projekt.",
+      "helpGallery": "Die neusten Galerien. Suchen Sie nach Namen, um andere zu finden."
     }
   },
   "calendar": {

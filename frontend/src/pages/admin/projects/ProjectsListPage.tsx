@@ -98,10 +98,10 @@ export const ProjectsListPage: React.FC = () => {
           <TableHead>
             <tr>
               <TableHeaderCell>{t('projects.col.name', 'Project')}</TableHeaderCell>
-              <TableHeaderCell aria-sort={ariaSort('customer')}><SortButton label={t('projects.col.customer', 'Customer')} columnKey="customer" activeKey={activeKey} activeDir={activeDir} onSort={toggle} /></TableHeaderCell>
-              <TableHeaderCell align="right" aria-sort={ariaSort('galleries')}><SortButton label={t('projects.col.events', 'Galleries')} columnKey="galleries" activeKey={activeKey} activeDir={activeDir} onSort={toggle} align="right" /></TableHeaderCell>
-              <TableHeaderCell align="right" aria-sort={ariaSort('value')}><SortButton label={t('projects.col.value', 'Value')} columnKey="value" activeKey={activeKey} activeDir={activeDir} onSort={toggle} align="right" /></TableHeaderCell>
-              <TableHeaderCell aria-sort={ariaSort('status')}><SortButton label={t('projects.col.status', 'Status')} columnKey="status" activeKey={activeKey} activeDir={activeDir} onSort={toggle} /></TableHeaderCell>
+              <TableHeaderCell aria-sort={ariaSort('customer')}><SortButton label={t('projects.col.customer', 'Customer')} columnKey="customer" activeKey={activeKey} activeDir={activeDir} onSort={toggle} className="uppercase tracking-wide" /></TableHeaderCell>
+              <TableHeaderCell align="right" aria-sort={ariaSort('galleries')}><SortButton label={t('projects.col.events', 'Galleries')} columnKey="galleries" activeKey={activeKey} activeDir={activeDir} onSort={toggle} className="uppercase tracking-wide" align="right" /></TableHeaderCell>
+              <TableHeaderCell align="right" aria-sort={ariaSort('value')}><SortButton label={t('projects.col.value', 'Value')} columnKey="value" activeKey={activeKey} activeDir={activeDir} onSort={toggle} className="uppercase tracking-wide" align="right" /></TableHeaderCell>
+              <TableHeaderCell aria-sort={ariaSort('status')}><SortButton label={t('projects.col.status', 'Status')} columnKey="status" activeKey={activeKey} activeDir={activeDir} onSort={toggle} className="uppercase tracking-wide" /></TableHeaderCell>
               <TableHeaderCell>{t('projects.col.updated', 'Updated')}</TableHeaderCell>
             </tr>
           </TableHead>
