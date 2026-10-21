@@ -239,15 +239,16 @@ router.delete('/:id',
     let foreign = false;
     // What was checked, so the delete can refuse when something was linked
     // after this census (projectService.deleteProject recounts in its transaction).
-    const checked = { counts: {}, eventIds: [] };
+    const checked = { ids: {}, eventIds: [] };
     for (const [table, perm] of [
       ['quotes', 'quotes.manage'], ['contracts', 'contracts.manage'], ['invoices', 'bills.manage'],
       ['customer_hour_entries', 'customers.edit'], ['customer_documents', 'customers.documents.manage'],
     ]) {
       if (!(await hasColumnCached(table, 'project_id'))) continue;
-      const linked = await withTrustedCrmAccess('project delete: linked-record census',
-        () => count(db(table).where({ project_id: id })));
-      checked.counts[table] = linked;
+      const linkedIds = await withTrustedCrmAccess('project delete: linked-record census',
+        () => db(table).where({ project_id: id }).pluck('id'));
+      checked.ids[table] = linkedIds;
+      const linked = linkedIds.length;
       if (!linked) continue;
       if (!(await userHasAnyPermission(req.admin.id, [perm]))) { needs.push(perm); continue; }
       if (await count(db(table).where({ project_id: id })) < linked) foreign = true;
@@ -342,6 +343,19 @@ router.post('/:id/invoices',
     await assertCascadePermitted(req, 'invoices', invoiceId, 'contracts', 'contracts.manage');
     const result = await projectService.assignInvoice(parseInt(req.params.id, 10), invoiceId, req.admin);
     return successResponse(res, result, 200, 'Invoice attached to project');
+  }),
+);
+
+// Take an invoice back out of the project (it was created in or attached to
+// it). The same guards as attaching it.
+router.delete('/:id/invoices/:invoiceId',
+  requirePermission(['events.edit', 'bills.manage'], { requireAll: true }),
+  requireProjectOwnership,
+  [param('id').isInt({ min: 1 }), param('invoiceId').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await projectService.unassignInvoice(parseInt(req.params.id, 10), parseInt(req.params.invoiceId, 10), req.admin);
+    return successResponse(res, result, 200, 'Invoice taken out of the project');
   }),
 );
 

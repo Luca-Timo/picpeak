@@ -691,35 +691,104 @@ describe('project inquiry flow', () => {
     const invoiceI = await mkInvoice({ dealUuid });
     const res = await post(`/api/admin/projects/${a.id}/invoices`, { invoiceId: invoiceI });
     expect(res.status).toBe(422);
-    expect(res.body.code).toBe('PROJECT_INVOICE_ELSEWHERE');
+    expect(res.body.code).toBe('PROJECT_DEAL_ELSEWHERE');
     expect((await db('quotes').where({ id: quoteQ }).first('project_id')).project_id).toBe(b.id);
     expect((await db('events').where({ id: galleryE }).first('project_id')).project_id).toBe(b.id);
     expect((await db('invoices').where({ id: invoiceI }).first('project_id')).project_id).toBeNull();
   });
 
-  it('says in the invoice list which projects an invoice\'s deal is in, when asked', async () => {
+  it('answers in the invoice list whether each invoice may join a project, with the attach\'s own rule', async () => {
+    const a = await createInquiry();
     const b = await createInquiry();
     const dealUuid = crypto.randomUUID();
     await mkQuote({ projectId: b.id, dealUuid });
     const invoiceI = await mkInvoice({ dealUuid });
-    const res = await get('/api/admin/invoices?withDealProjects=true&pageSize=100');
-    expect(res.status).toBe(200);
-    const row = (res.body.data || res.body).invoices.find((i) => i.id === invoiceI);
-    expect(row.dealProjectIds).toEqual([b.id]);
-    const plain = await get('/api/admin/invoices?pageSize=100');
-    expect((plain.body.data || plain.body).invoices.find((i) => i.id === invoiceI).dealProjectIds).toBeUndefined();
+    const rowFor = async (url) => { const { body } = await get(url); return (body.data || body).invoices.find((i) => i.id === invoiceI); };
+    expect((await rowFor(`/api/admin/invoices?attachTo=${a.id}&pageSize=100`)).attachRefusal).toBe('PROJECT_DEAL_ELSEWHERE');
+    expect((await rowFor(`/api/admin/invoices?attachTo=${b.id}&pageSize=100`)).attachRefusal).toBeNull();
+    expect((await rowFor('/api/admin/invoices?pageSize=100')).attachRefusal).toBeUndefined();
+    // Nothing about projects with the feature off. The flag is cached, so
+    // clear it after each write, as PUT /admin/feature-flags does.
+    const { invalidateFeatureFlagCache } = require('../../src/middleware/requireFeatureFlag');
+    await db('feature_flags').where({ key: 'projects' }).update({ value: 0 });
+    invalidateFeatureFlagCache();
+    try {
+      expect((await rowFor(`/api/admin/invoices?attachTo=${a.id}&pageSize=100`)).attachRefusal).toBeUndefined();
+    } finally {
+      await db('feature_flags').where({ key: 'projects' }).update({ value: 1 });
+      invalidateFeatureFlagCache();
+    }
   });
 
-  // Review round 1, concern 1.
-  it('keeps an invoice with its own project when its deal\'s quote is attached to another', async () => {
+  // Review round 1, concern 1: one deal, one project.
+  it('moves a deal\'s invoice with it when its quote is attached to another project', async () => {
     const a = await createInquiry();
     const b = await createInquiry();
     const dealUuid = crypto.randomUUID();
     const invoiceId = await mkInvoice({ projectId: b.id, dealUuid });
     const quoteId = await mkQuote({ dealUuid });
     expect((await post(`/api/admin/projects/${a.id}/quotes`, { quoteId })).status).toBe(200);
-    expect((await overview(a.id)).invoices.map((i) => i.id)).not.toContain(invoiceId);
-    expect((await overview(b.id)).invoices.map((i) => i.id)).toContain(invoiceId);
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBe(a.id);
+    expect((await overview(a.id)).invoices.map((i) => i.id)).toContain(invoiceId);
+    expect((await overview(b.id)).invoices.map((i) => i.id)).not.toContain(invoiceId);
+    const list = (await get('/api/admin/projects?withStages=1')).body;
+    const rows = list.data?.projects || list.projects || list.data || list;
+    const valueOf = (id) => (rows.find((r) => r.id === id).valuation?.byCurrency || []).reduce((n, x) => n + x.totalMinor, 0);
+    expect(valueOf(b.id)).toBe(0);
+  });
+
+  it('refuses a collected monthly invoice, as creating one in a project does', async () => {
+    const project = await createInquiry();
+    const invoiceId = await mkInvoice({});
+    await db('invoices').where({ id: invoiceId }).update({ is_monthly_draft: true });
+    const res = await post(`/api/admin/projects/${project.id}/invoices`, { invoiceId });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_INVOICE_COLLECTED_BILLING');
+  });
+
+  it('refuses an invoice whose sibling invoice\'s gallery is in another project', async () => {
+    const a = await createInquiry();
+    const b = await createInquiry();
+    const dealUuid = crypto.randomUUID();
+    const galleryInB = await mkEvent({ projectId: b.id });
+    await mkInvoice({ dealUuid, eventId: galleryInB });
+    const invoiceId = await mkInvoice({ dealUuid });
+    const res = await post(`/api/admin/projects/${a.id}/invoices`, { invoiceId });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_DEAL_ELSEWHERE');
+    expect((await db('events').where({ id: galleryInB }).first('project_id')).project_id).toBe(b.id);
+  });
+
+  it('takes an invoice back out of the project, only one tied by its own project_id', async () => {
+    const project = await createInquiry();
+    const invoiceId = await mkInvoice({});
+    expect((await post(`/api/admin/projects/${project.id}/invoices`, { invoiceId })).status).toBe(200);
+    const del = (id) => request(app).delete(`/api/admin/projects/${project.id}/invoices/${id}`).set('Authorization', `Bearer ${superToken}`);
+    expect((await del(invoiceId)).status).toBe(200);
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBeNull();
+    // One that rolls up through its gallery is not tied by project_id.
+    const ev = await mkEvent({ projectId: project.id });
+    const viaGallery = await mkInvoice({ eventId: ev });
+    const res = await del(viaGallery);
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_INVOICE_NOT_DIRECT');
+  });
+
+  it('refuses an invoice made from a quote whose deal is in another project', async () => {
+    const a = await createInquiry();
+    const b = await createInquiry();
+    const dealUuid = crypto.randomUUID();
+    const quoteId = await mkQuote({ dealUuid });
+    await db('contracts').insert({
+      contract_number: `C-DEAL-${a.id}`, customer_account_id: customerId, status: 'fully_signed',
+      issue_date: '2027-02-01', project_id: b.id, deal_uuid: dealUuid, created_at: new Date().toISOString(),
+    });
+    const res = await post('/api/admin/invoices', {
+      customerAccountId: customerId, projectId: a.id, sourceQuoteId: quoteId, currency: 'CHF',
+      lineItems: [{ description: 'Rest', quantity: 1, unitPriceMinor: 1000 }],
+    });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_SOURCE_MISMATCH');
   });
 
   // Review round 1, concern 2. isString already refuses an array (location);
@@ -743,8 +812,12 @@ describe('project inquiry flow', () => {
     const ev = await mkEvent({ projectId: project.id });
     // The census saw one gallery and no invoice; an invoice joined since.
     const invoiceId = await mkInvoice({ projectId: project.id });
-    const checked = { counts: { quotes: 0, contracts: 0, invoices: 0, customer_hour_entries: 0, customer_documents: 0 }, eventIds: [ev] };
+    const checked = { ids: { quotes: [], contracts: [], invoices: [], customer_hour_entries: [], customer_documents: [] }, eventIds: [ev] };
     await expect(projectService.deleteProject(project.id, { id: superId }, { checked }))
+      .rejects.toMatchObject({ code: 'PROJECT_CHANGED' });
+    // Same count, another record: still refused.
+    const swapped = { ...checked, ids: { ...checked.ids, invoices: [invoiceId + 100000] } };
+    await expect(projectService.deleteProject(project.id, { id: superId }, { checked: swapped }))
       .rejects.toMatchObject({ code: 'PROJECT_CHANGED' });
     expect(await db('projects').where({ id: project.id }).first('id')).toBeTruthy();
     expect((await db('events').where({ id: ev }).first('project_id')).project_id).toBe(project.id);

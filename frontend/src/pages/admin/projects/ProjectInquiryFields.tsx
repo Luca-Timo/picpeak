@@ -81,7 +81,7 @@ export const FlowField: React.FC<FieldProps> = ({ draft, onChange, dirty = [], d
 
 /** Anlass: occasion, guests, dates, location. */
 export const OccasionFields: React.FC<FieldProps> = ({ draft, onChange, dirty = [], disabled, layout = 'form' }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data: eventTypes = [] } = useQuery({
     queryKey: ['event-types-active'],
     queryFn: () => eventTypesService.getActiveEventTypes(),
@@ -115,7 +115,7 @@ export const OccasionFields: React.FC<FieldProps> = ({ draft, onChange, dirty = 
           disabled={disabled}
           onChange={(e) => onChange({ guestCount: e.target.value.replace(/[^0-9]/g, '') })}
           className={dirtyClass(isDirty('guestCount'))}
-          error={guestCountError(draft) ? (t('projects.field.tooManyGuests', 'At most {{max}} guests.', { max: MAX_GUESTS.toLocaleString() }) as string) : undefined}
+          error={guestCountError(draft) ? (t('projects.field.tooManyGuests', 'At most {{max}} guests.', { max: MAX_GUESTS.toLocaleString(i18n.language) }) as string) : undefined}
         />
       </div>
       <div className={datesClass(layout)}>

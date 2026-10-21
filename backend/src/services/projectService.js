@@ -503,9 +503,12 @@ async function updateProject(id, { name, customerAccountId, status, ...fields })
 /** Delete a project. Its galleries, documents and hours stay and only lose the
  *  link: done explicitly, because SQLite runs without PRAGMA foreign_keys and
  *  the audited tables have to record the change (accountingHistoryReferences).
- *  `checked` is what the caller vetted (DELETE /projects/:id: the linked-record
- *  counts per table and the gallery ids); the transaction locks the project
- *  and counts again, and refuses when something was linked in between. */
+ *  `checked` is what the caller vetted (DELETE /projects/:id: the ids of the
+ *  linked records per table, and of the galleries); the transaction reads
+ *  them again and refuses when anything differs. On SQLite nothing can write
+ *  in between (one writer); on PostgreSQL the window shrinks to the few
+ *  statements after the re-read, since the attach paths take no lock on the
+ *  project. */
 async function deleteProject(id, actor = null, { checked = null } = {}) {
   const existing = await db('projects').where({ id }).first('id');
   if (!existing) throw new AppError('Project not found', 404);
@@ -515,25 +518,21 @@ async function deleteProject(id, actor = null, { checked = null } = {}) {
   // connection waits for the one the transaction holds.
   const eventsLinked = await hasColumnCached('events', 'project_id');
   const documentsLinked = await hasColumnCached('customer_documents', 'project_id');
-  const tables = checked ? Object.keys(checked.counts) : [];
+  const tables = checked ? Object.keys(checked.ids) : [];
   await db.transaction(async (trx) => {
     if (checked) {
-      // Locks out the CRM writes that link a document (crmAccess locks the
-      // project they link to); SQLite serialises writers anyway.
-      const lock = trx('projects').where({ id }).first('id');
-      if (trx.client.config.client === 'pg') lock.forUpdate();
-      await lock;
       const changed = () => new AppError('Something was added to the project meanwhile. Check it and delete again.', 409, 'PROJECT_CHANGED');
+      const same = (a, b) => {
+        const x = a.map(Number).sort((m, n) => m - n);
+        const y = b.map(Number).sort((m, n) => m - n);
+        return x.length === y.length && x.every((v, i) => v === y[i]);
+      };
       for (const table of tables) {
-        const now = await withTrustedCrmAccess('project delete: recount in the transaction',
-          async () => Number((await trx(table).where({ project_id: id }).count('* as c').first())?.c || 0));
-        if (now !== Number(checked.counts[table])) throw changed();
+        const now = await withTrustedCrmAccess('project delete: re-read in the transaction',
+          () => trx(table).where({ project_id: id }).pluck('id'));
+        if (!same(now, checked.ids[table])) throw changed();
       }
-      if (eventsLinked) {
-        const now = (await trx('events').where({ project_id: id }).pluck('id')).map(Number).sort((a, b) => a - b);
-        const before = checked.eventIds.map(Number).sort((a, b) => a - b);
-        if (now.length !== before.length || now.some((v, i) => v !== before[i])) throw changed();
-      }
+      if (eventsLinked && !same(await trx('events').where({ project_id: id }).pluck('id'), checked.eventIds)) throw changed();
     }
     if (eventsLinked) {
       await trx('events').where({ project_id: id }).update({ project_id: null });
@@ -785,6 +784,14 @@ async function linkDealToProject(dealUuid, projectId, conn = db, actor = null) {
   if (contractsHaveDeal && await hasColumnCached('contracts', 'project_id')) {
     await auditedUpdate(conn, 'contracts', { deal_uuid: dealUuid }, { project_id: projectId }, history);
   }
+  // A deal lives in one project: its invoices tied to a project of their own
+  // (created in or attached to one, migration 315) move with it, or the deal
+  // would count in two projects. Invoices without one follow the deal anyway.
+  if (await hasColumnCached('invoices', 'deal_uuid') && await hasColumnCached('invoices', 'project_id')) {
+    await auditedUpdate(conn, 'invoices',
+      (q) => q.where({ deal_uuid: dealUuid }).whereNotNull('project_id').whereNot('project_id', projectId),
+      { project_id: projectId }, history);
+  }
   if (eventIds.size && await hasColumnCached('events', 'project_id')) {
     await conn('events').whereIn('id', Array.from(eventIds)).update({ project_id: projectId });
   }
@@ -843,25 +850,28 @@ const assignQuote = (projectId, quoteId, actor) => assignDocument('quotes', proj
 const assignContract = (projectId, contractId, actor) => assignDocument('contracts', projectId, contractId, actor);
 
 /**
- * Whether any record of deal `dealUuid` (a quote, contract or invoice, or a
- * gallery one of its quotes or contracts was converted into) is linked to a
- * project other than `projectId`. Unscoped: another admin's records count.
+ * Whether any record of deal `dealUuid` is linked to a project other than
+ * `projectId`: a quote, contract or invoice of it, a gallery one of its quotes
+ * or contracts was converted into, or the gallery of one of its invoices.
+ * linkDealToProject moves every one of those. Unscoped: another admin's
+ * records count. `conn` is a transaction when re-checking inside one.
  */
-async function dealProjectElsewhere(dealUuid, projectId) {
+async function dealProjectElsewhere(dealUuid, projectId, conn = db) {
   const { withTrustedCrmAccess } = require('../database/crmAccess');
   return withTrustedCrmAccess('project attach: deal lineage elsewhere', async () => {
-    const converted = [];
+    const galleries = [];
     for (const tbl of ['quotes', 'contracts', 'invoices']) {
       if (!(await hasColumnCached(tbl, 'deal_uuid')) || !(await hasColumnCached(tbl, 'project_id'))) continue;
-      const elsewhere = await db(tbl).where({ deal_uuid: dealUuid })
+      const elsewhere = await conn(tbl).where({ deal_uuid: dealUuid })
         .whereNotNull('project_id').whereNot('project_id', projectId).first('id');
       if (elsewhere) return true;
-      if (tbl !== 'invoices' && await hasColumnCached(tbl, 'converted_event_id')) {
-        converted.push(...await db(tbl).where({ deal_uuid: dealUuid }).whereNotNull('converted_event_id').pluck('converted_event_id'));
+      const galleryColumn = tbl === 'invoices' ? 'event_id' : 'converted_event_id';
+      if (await hasColumnCached(tbl, galleryColumn)) {
+        galleries.push(...await conn(tbl).where({ deal_uuid: dealUuid }).whereNotNull(galleryColumn).pluck(galleryColumn));
       }
     }
-    if (converted.length && await hasColumnCached('events', 'project_id')) {
-      const moved = await db('events').whereIn('id', converted)
+    if (galleries.length && await hasColumnCached('events', 'project_id')) {
+      const moved = await conn('events').whereIn('id', Array.from(new Set(galleries)))
         .whereNotNull('project_id').whereNot('project_id', projectId).first('id');
       if (moved) return true;
     }
@@ -870,47 +880,51 @@ async function dealProjectElsewhere(dealUuid, projectId) {
 }
 
 /**
- * For the add window: the projects each deal's quotes, contracts and invoices
- * are linked to, as the caller sees them (scoped reads; the attach itself
- * checks unscoped). Map of deal_uuid → project ids.
+ * Why invoice `inv` may not join project `projectId`, or null when it may.
+ * One rule for the attach (before and inside its transaction) and for the
+ * add window (GET /invoices?attachTo=), so the window never offers what the
+ * attach refuses. `inv` needs id, project_id, deal_uuid, event_id and, where
+ * the columns exist, is_monthly_draft and monthly_period_start.
  */
-async function dealProjectIds(dealUuids) {
-  const deals = Array.from(new Set(dealUuids.filter(Boolean)));
-  const out = new Map();
-  if (!deals.length) return out;
-  for (const tbl of ['quotes', 'contracts', 'invoices']) {
-    if (!(await hasColumnCached(tbl, 'deal_uuid')) || !(await hasColumnCached(tbl, 'project_id'))) continue;
-    for (let i = 0; i < deals.length; i += CHUNK) {
-      const rows = await db(tbl).whereIn('deal_uuid', deals.slice(i, i + CHUNK)).whereNotNull('project_id')
-        .distinct('deal_uuid', 'project_id');
-      for (const r of rows) {
-        const ids = out.get(r.deal_uuid) || [];
-        if (!ids.includes(Number(r.project_id))) ids.push(Number(r.project_id));
-        out.set(r.deal_uuid, ids);
-      }
+async function invoiceAttachRefusal(inv, projectId, conn = db) {
+  // A monthly or manual customer's collected invoice spans their galleries,
+  // so it cannot belong to one project (as POST /invoices refuses it).
+  if (truthyFlag(inv.is_monthly_draft) || inv.monthly_period_start != null) {
+    return { status: 422, code: 'PROJECT_INVOICE_COLLECTED_BILLING', message: 'A collected monthly or manual invoice cannot belong to one project' };
+  }
+  if (inv.project_id != null && Number(inv.project_id) !== Number(projectId)) {
+    return { status: 422, code: 'PROJECT_INVOICE_ELSEWHERE', message: 'This invoice belongs to another project' };
+  }
+  if (inv.deal_uuid && await dealProjectElsewhere(inv.deal_uuid, projectId, conn)) {
+    return { status: 422, code: 'PROJECT_DEAL_ELSEWHERE', message: 'Its quote, contract or another invoice of the same deal belongs to another project' };
+  }
+  if (inv.event_id && await hasColumnCached('events', 'project_id')) {
+    const event = await conn('events').where({ id: inv.event_id }).first('project_id');
+    if (event?.project_id != null && Number(event.project_id) !== Number(projectId)) {
+      return { status: 422, code: 'PROJECT_EVENT_MISMATCH', message: 'This invoice’s gallery belongs to another project' };
     }
   }
-  return out;
+  return null;
 }
+
+const truthyFlag = (v) => v === true || v === 1 || v === '1' || v === 't';
+const INVOICE_ATTACH_COLUMNS = ['id', 'event_id', 'deal_uuid', 'customer_account_id', 'project_id'];
 
 /**
  * Attach an existing invoice, e.g. to set up a project for a job that is
  * already finished. Only `project_id` changes, never the issued invoice
- * itself. Its deal comes along (linkDealToProject: quotes, contracts and the
- * galleries they made), and so does its gallery when that is in no project
- * yet. Its Storno and reissue follow through the lineage rollup.
+ * itself. Its deal comes along (linkDealToProject: quotes, contracts, sibling
+ * invoices and the galleries they made), and so does its gallery when that is
+ * in no project yet. Its Storno and reissue follow through the lineage rollup.
  *
- * Refused, before anything is written, when:
- *  - the caller may not tie documents to this project (the CRM write rule,
- *    the same carriedProjectId the cockpit's documentsLinkable reports);
- *  - the invoice, or anything of its deal (quote, contract, sibling invoice,
- *    converted gallery), is already in another project: the deal would be
- *    moved or split (dealProjectElsewhere);
- *  - its gallery is in another project (it rolls up there);
- *  - it, or its gallery, is another customer's.
- * The writes run in one transaction, so a later refusal leaves nothing
- * behind; a customer the empty project adopted is given back. The caller's
- * route vets the gallery owner.
+ * Refused before anything is written when the caller may not tie documents to
+ * this project (the CRM write rule, the same carriedProjectId the cockpit's
+ * documentsLinkable reports), for any reason invoiceAttachRefusal gives, or
+ * when it or its gallery is another customer's. The transaction locks the
+ * invoice row and checks invoiceAttachRefusal again, so two attaches (or an
+ * attach and a quote attach moving the deal) cannot both pass; a refusal
+ * leaves nothing behind, and a customer the empty project adopted is given
+ * back. The caller's route vets the gallery owner.
  */
 async function assignInvoice(projectId, invoiceId, actor = null) {
   if (!(await hasColumnCached('invoices', 'project_id'))) {
@@ -921,26 +935,15 @@ async function assignInvoice(projectId, invoiceId, actor = null) {
   if (actor?.id && !(await carriedProjectId(projectId, actor.id))) {
     throw new AppError('Documents can join only a project you created', 403, 'PROJECT_NOT_LINKABLE');
   }
-  const inv = await db('invoices').where({ id: invoiceId }).first('id', 'event_id', 'deal_uuid', 'customer_account_id', 'project_id');
+  const columns = [...INVOICE_ATTACH_COLUMNS];
+  for (const c of ['is_monthly_draft', 'monthly_period_start']) if (await hasColumnCached('invoices', c)) columns.push(c);
+  const inv = await db('invoices').where({ id: invoiceId }).first(columns);
   if (!inv) throw new AppError('Invoice not found', 404);
-  if (inv.project_id != null && Number(inv.project_id) !== Number(projectId)) {
-    throw new AppError('This invoice belongs to another project', 422, 'PROJECT_INVOICE_ELSEWHERE');
-  }
-  // Its deal may sit in another project through a quote, contract, sibling
-  // invoice or converted gallery: linkDealToProject would move all of them.
-  // Read unscoped, so what the caller may see cannot hide one.
-  if (inv.deal_uuid && await dealProjectElsewhere(inv.deal_uuid, projectId)) {
-    throw new AppError('This invoice’s deal belongs to another project', 422, 'PROJECT_INVOICE_ELSEWHERE');
-  }
+  const refusal = await invoiceAttachRefusal(inv, projectId);
+  if (refusal) throw new AppError(refusal.message, refusal.status, refusal.code);
 
   const eventsLinked = await hasColumnCached('events', 'project_id');
-  let event = null;
-  if (inv.event_id && eventsLinked) {
-    event = await db('events').where({ id: inv.event_id }).first('id', 'project_id');
-    if (event?.project_id != null && Number(event.project_id) !== Number(projectId)) {
-      throw new AppError('This invoice’s gallery belongs to another project', 422, 'PROJECT_EVENT_MISMATCH');
-    }
-  }
+  const event = inv.event_id && eventsLinked ? await db('events').where({ id: inv.event_id }).first('id', 'project_id') : null;
 
   // Projects hold one customer: the invoice's, and its gallery's (as
   // assignEvent checks it). An empty project adopts the first.
@@ -970,12 +973,21 @@ async function assignInvoice(projectId, invoiceId, actor = null) {
 
   // Resolved before the transaction: on SQLite a query on the global
   // connection waits for the one the transaction holds.
-  for (const [table, column] of [['quotes', 'deal_uuid'], ['quotes', 'project_id'], ['contracts', 'deal_uuid'],
-    ['contracts', 'project_id'], ['contracts', 'converted_event_id'], ['invoices', 'deal_uuid']]) {
+  for (const [table, column] of [['quotes', 'deal_uuid'], ['quotes', 'project_id'], ['quotes', 'converted_event_id'],
+    ['contracts', 'deal_uuid'], ['contracts', 'project_id'], ['contracts', 'converted_event_id'], ['invoices', 'deal_uuid'],
+    ['invoices', 'event_id']]) {
     await hasColumnCached(table, column);
   }
   try {
     await db.transaction(async (trx) => {
+      // Lock the invoice and check again: what was read above may have
+      // changed by now (another attach, a quote attach moving the deal).
+      const lock = trx('invoices').where({ id: invoiceId }).first(columns);
+      if (trx.client.config.client === 'pg') lock.forUpdate();
+      const locked = await lock;
+      if (!locked) throw new AppError('Invoice not found', 404);
+      const late = await invoiceAttachRefusal(locked, projectId, trx);
+      if (late) throw new AppError(late.message, late.status, late.code);
       if (inv.deal_uuid) await linkDealToProject(inv.deal_uuid, projectId, trx, actor);
       if (event && event.project_id == null) {
         // Conditional: a gallery moved into another project meanwhile is refused.
@@ -992,6 +1004,29 @@ async function assignInvoice(projectId, invoiceId, actor = null) {
     await release();
     throw err;
   }
+  return { projectId, invoiceId };
+}
+
+/**
+ * Take an invoice out of the project it was created in or attached to
+ * (clears invoices.project_id, audited). Only an invoice tied to this project
+ * by its own project_id: one that rolls up through its gallery or deal leaves
+ * with that gallery or document. The same write rule as attaching.
+ */
+async function unassignInvoice(projectId, invoiceId, actor = null) {
+  if (!(await hasColumnCached('invoices', 'project_id'))) {
+    throw new AppError('This instance has no invoices.project_id column yet — run migrations', 409);
+  }
+  if (actor?.id && !(await carriedProjectId(projectId, actor.id))) {
+    throw new AppError('Documents can join only a project you created', 403, 'PROJECT_NOT_LINKABLE');
+  }
+  const inv = await db('invoices').where({ id: invoiceId }).first('id', 'project_id');
+  if (!inv) throw new AppError('Invoice not found', 404);
+  if (Number(inv.project_id) !== Number(projectId)) {
+    throw new AppError('This invoice is in the project through its gallery or deal; move that instead', 422, 'PROJECT_INVOICE_NOT_DIRECT');
+  }
+  await auditedUpdate(db, 'invoices', { id: invoiceId, project_id: projectId }, { project_id: null },
+    { actor: actor?.id ?? null, source: 'project.unassign_invoice' });
   return { projectId, invoiceId };
 }
 
@@ -1198,8 +1233,18 @@ async function getProjectOverview(id, perms = {}, admin = null) {
   if (perms.bills !== false) {
     const rows = await invoicesForProjects([id], ['id', 'invoice_number', 'status', 'kind', 'issue_date', 'due_date',
       'total_amount_minor', 'paid_amount_minor', 'paid_at', 'currency', 'event_id', 'deal_uuid']);
+    // `direct`: tied by its own project_id, so it can be taken out of the
+    // project (DELETE /projects/:id/invoices/:invoiceId); one that rolls up
+    // through its gallery or deal leaves with that.
+    const direct = new Set();
+    if (rows.length && await hasColumnCached('invoices', 'project_id')) {
+      const ids = rows.map((r) => r.id);
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        for (const r of await db('invoices').whereIn('id', ids.slice(i, i + CHUNK)).where({ project_id: id }).select('id')) direct.add(r.id);
+      }
+    }
     out.invoices = rows
-      .map(({ project_id: _p, ...inv }) => inv)
+      .map(({ project_id: _p, ...inv }) => ({ ...inv, direct: direct.has(inv.id) }))
       // Newest first, as before. Compared as times: PostgreSQL returns Dates.
       .sort((a, b) => (b.issue_date ? new Date(b.issue_date).getTime() : 0) - (a.issue_date ? new Date(a.issue_date).getTime() : 0));
   }
@@ -1473,7 +1518,9 @@ module.exports = {
   assignQuote,
   assignContract,
   assignInvoice,
-  dealProjectIds,
+  unassignInvoice,
+  invoiceAttachRefusal,
+  dealProjectElsewhere,
   linkDealToProject,
   computeValuation,
   getProjectOverview,

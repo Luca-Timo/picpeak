@@ -82,7 +82,7 @@ export const ProjectCockpitPage: React.FC = () => {
 };
 
 const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const { flags } = useFeatureFlags();
   const { hasPermission } = usePermissions();
@@ -213,11 +213,17 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
   const [contractFrom, setContractFrom] = useState<ProjectStep | null>(null);
   // A step's editor starts from the saved project, so unsaved edits (a new
   // date) are saved first rather than lost behind a leave prompt.
+  // Why the draft cannot be saved, said where the field is (UX.md: validate
+  // on Save and jump to the section).
+  const blockedText = (blocked: 'endBeforeStart' | 'tooManyGuests') => (blocked === 'endBeforeStart'
+    ? t('projects.field.endBeforeStart', 'The end date is before the start date.')
+    : t('projects.field.tooManyGuests', 'At most {{max}} guests.', { max: MAX_GUESTS.toLocaleString(i18n.language) })) as string;
   const runStep = async (step: ProjectStep) => {
     if (isDirty) {
       const blocked = draftError(draft);
       if (blocked) {
-        toast.error(t(`projects.field.${blocked}`, blocked === 'endBeforeStart' ? 'The end date is before the start date.' : 'At most {{max}} guests.', { max: MAX_GUESTS.toLocaleString() }) as string);
+        setTab('overview');
+        toast.error(blockedText(blocked));
         return;
       }
       try { await save.mutateAsync(); } catch { return; }
@@ -392,7 +398,7 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
             const blocked = draftError(draft);
             if (blocked) {
               setTab('overview');
-              toast.error(t(`projects.field.${blocked}`, blocked === 'endBeforeStart' ? 'The end date is before the start date.' : 'At most {{max}} guests.', { max: MAX_GUESTS.toLocaleString() }) as string);
+              toast.error(blockedText(blocked));
               return;
             }
             save.mutate();

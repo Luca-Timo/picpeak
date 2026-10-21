@@ -108,7 +108,8 @@ export const MAX_GUESTS = 100000;
 
 /** More guests than the API takes: flagged on the field, not sent. */
 export function guestCountError(d: ProjectDraft): boolean {
-  return d.guestCount.trim() !== '' && Number(d.guestCount) > MAX_GUESTS;
+  // The number fieldsFromDraft would send.
+  return d.guestCount.trim() !== '' && Math.trunc(Number(d.guestCount)) > MAX_GUESTS;
 }
 
 /** What stops the draft from saving, as a message key, or null. */

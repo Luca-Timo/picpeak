@@ -120,6 +120,8 @@ export interface ProjectInvoice {
   currency: string;
   event_id: number | null;
   deal_uuid: string | null;
+  /** Tied by its own project_id, so it can be taken out of the project. */
+  direct?: boolean;
 }
 
 export interface ProjectQuote {
@@ -245,6 +247,10 @@ export const projectsService = {
 
   async assignInvoice(projectId: number, invoiceId: number): Promise<void> {
     await api.post(`/admin/projects/${projectId}/invoices`, { invoiceId });
+  },
+
+  async unassignInvoice(projectId: number, invoiceId: number): Promise<void> {
+    await api.delete(`/admin/projects/${projectId}/invoices/${invoiceId}`);
   },
 
   async emailPreview(emailId: number): Promise<EmailPreview> {

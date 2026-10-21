@@ -6,11 +6,13 @@
  * heading.
  */
 import React from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FileText, Image as ImageIcon, Plus, Receipt, ScrollText } from 'lucide-react';
+import { FileText, Image as ImageIcon, Plus, Receipt, ScrollText, Unlink } from 'lucide-react';
 import { Badge, Card, type BadgeTone } from '../../../components/common';
-import type { ProjectOverview } from '../../../services/projects.service';
+import { projectsService, type ProjectOverview } from '../../../services/projects.service';
 import type { AttachKind } from './AttachDocumentDialog';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { formatMoneyMinor } from '../../../utils/money';
@@ -43,7 +45,9 @@ interface Props {
 
 const Row: React.FC<{
   icon: React.ReactNode; title: string; subtitle?: string; badge?: React.ReactNode; amount?: string; href?: string | null;
-}> = ({ icon, title, subtitle, badge, amount, href }) => {
+  /** A small control next to the row (it cannot sit inside the row's button). */
+  action?: React.ReactNode;
+}> = ({ icon, title, subtitle, badge, amount, href, action }) => {
   const navigate = useNavigate();
   const body = (
     <>
@@ -57,11 +61,12 @@ const Row: React.FC<{
     </>
   );
   const cls = 'w-full flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line px-3 py-2.5 text-left';
-  return href ? (
+  const row = href ? (
     <button type="button" onClick={() => navigate(href)} className={`${cls} hover:bg-hover-soft`}>{body}</button>
   ) : (
     <div className={cls}>{body}</div>
   );
+  return action ? <div className="flex items-stretch gap-1.5">{row}{action}</div> : row;
 };
 
 const Group: React.FC<{ title: string; empty: string; addLabel?: string; onAdd?: () => void; children?: React.ReactNode }> = ({ title, empty, addLabel, onAdd, children }) => {
@@ -95,6 +100,22 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
   const addLabel = t('projects.attach.add', 'Add existing') as string;
+  const qc = useQueryClient();
+  const projectId = data.project.id;
+  // Taking an invoice out is an action (UX.md › Settings vs actions): at once,
+  // with a toast, and undone by adding it again.
+  const takeOut = useMutation({
+    mutationFn: (invoiceId: number) => projectsService.unassignInvoice(projectId, invoiceId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['project-overview', projectId] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      toast.success(t('projects.attach.takenOut', 'Taken out of the project') as string);
+    },
+    onError: (err: unknown) => {
+      const res = (err as { response?: { data?: { error?: string } } })?.response?.data;
+      toast.error(res?.error || (t('projects.attach.takeOutFailed', 'Could not take it out of the project') as string));
+    },
+  });
 
   const link = (flag: string, href: string) => (flags[flag] ? href : null);
   // A group the admin cannot have (feature off, or no view permission: the
@@ -182,6 +203,18 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
               badge={<Badge tone={INVOICE_TONE[inv.status] ?? 'neutral'}>{t(`bills.status.${inv.status}`, inv.status)}</Badge>}
               amount={formatMoneyMinor(Number(inv.total_amount_minor), inv.currency)}
               href={link('bills', `/admin/clients/bills/${inv.id}`)}
+              action={canAttachInvoice && inv.direct ? (
+                <button
+                  type="button"
+                  onClick={() => takeOut.mutate(inv.id)}
+                  disabled={takeOut.isPending}
+                  title={t('projects.attach.takeOut', 'Take out of the project') as string}
+                  aria-label={t('projects.attach.takeOutNamed', 'Take {{number}} out of the project', { number: inv.invoice_number }) as string}
+                  className="shrink-0 w-10 grid place-items-center rounded-xl border border-line text-soft hover:text-heading hover:bg-hover-soft disabled:opacity-60"
+                >
+                  <Unlink className="w-4 h-4" />
+                </button>
+              ) : undefined}
             />
           ))}
         </Group>

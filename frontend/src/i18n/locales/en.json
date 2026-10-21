@@ -8535,7 +8535,13 @@
       "galleryElsewhere": "Its gallery belongs to another project. Add it there, or move the gallery first.",
       "locked": "in another project",
       "invoiceElsewhere": "This invoice already belongs to another project.",
-      "helpGallery": "The newest galleries. Search by name to find any other."
+      "helpGallery": "The newest galleries. Search by name to find any other.",
+      "dealElsewhere": "Its quote, contract or another invoice of the same job belongs to another project.",
+      "collected": "A collected monthly invoice covers several jobs, so it cannot belong to one project.",
+      "takenOut": "Taken out of the project",
+      "takeOutFailed": "Could not take it out of the project",
+      "takeOut": "Take out of the project",
+      "takeOutNamed": "Take {{number}} out of the project"
     }
   },
   "calendar": {

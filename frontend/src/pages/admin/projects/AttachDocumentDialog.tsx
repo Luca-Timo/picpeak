@@ -28,6 +28,8 @@ interface Candidate {
   elsewhere: boolean;
   /** Another project holds it and it cannot move (an invoice). */
   locked?: boolean;
+  /** Why it cannot (the API code). */
+  refusal?: string;
 }
 
 interface Props {
@@ -92,15 +94,13 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
         }));
       }
       if (kind === 'invoice') {
-        // An invoice in another project, itself or through its deal, is listed
-        // but cannot move (its deal would move or split); the server refuses
-        // it too.
-        const res = await billsService.list({ ...scope, pageSize: 20, withDealProjects: true });
-        return res.invoices.filter((x) => x.kind !== 'storno').map((x) => {
-          const elsewhere = (x.projectId != null && x.projectId !== projectId)
-            || (x.dealProjectIds || []).some((id) => id !== projectId);
-          return { id: x.id, title: x.invoiceNumber, date: x.issueDate ?? null, elsewhere, locked: elsewhere };
-        });
+        // The server answers with the attach's own rule (attachRefusal), so
+        // the window never offers what the attach refuses.
+        const res = await billsService.list({ ...scope, pageSize: 20, attachTo: projectId });
+        return res.invoices.filter((x) => x.kind !== 'storno').map((x) => ({
+          id: x.id, title: x.invoiceNumber, date: x.issueDate ?? null,
+          elsewhere: !!x.attachRefusal, locked: !!x.attachRefusal, refusal: x.attachRefusal || undefined,
+        }));
       }
       const res = await eventsService.getEvents({ limit: 20, search: q || undefined, sortBy: 'created_at', sortOrder: 'desc' });
       return (res.events || []).map((ev) => ({
@@ -130,17 +130,30 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
         toast.error(t('projects.error.customerMismatch', 'That belongs to a different customer than this project.') as string);
         return;
       }
-      if (res?.code === 'PROJECT_INVOICE_ELSEWHERE') {
-        toast.error(t('projects.attach.invoiceElsewhere', 'This invoice already belongs to another project.') as string);
-        return;
-      }
-      if (res?.code === 'PROJECT_EVENT_MISMATCH') {
-        toast.error(t('projects.attach.galleryElsewhere', 'Its gallery belongs to another project. Add it there, or move the gallery first.') as string);
+      const why = refusalText(res?.code);
+      if (why) {
+        toast.error(why);
         return;
       }
       toast.error(res?.error || (t('projects.attach.failed', 'Could not add it to the project') as string));
     },
   });
+
+  // What each refusal tells the admin, so they know what to move out.
+  const refusalText = (code?: string | null): string | null => {
+    switch (code) {
+      case 'PROJECT_INVOICE_ELSEWHERE':
+        return t('projects.attach.invoiceElsewhere', 'This invoice already belongs to another project.') as string;
+      case 'PROJECT_DEAL_ELSEWHERE':
+        return t('projects.attach.dealElsewhere', 'Its quote, contract or another invoice of the same job belongs to another project.') as string;
+      case 'PROJECT_EVENT_MISMATCH':
+        return t('projects.attach.galleryElsewhere', 'Its gallery belongs to another project. Add it there, or move the gallery first.') as string;
+      case 'PROJECT_INVOICE_COLLECTED_BILLING':
+        return t('projects.attach.collected', 'A collected monthly invoice covers several jobs, so it cannot belong to one project.') as string;
+      default:
+        return null;
+    }
+  };
 
   const shown = candidates.filter((c) => !held.has(c.id));
   const title = kind === 'quote'
@@ -184,7 +197,7 @@ export const AttachDocumentDialog: React.FC<Props> = ({ kind, data, onClose }) =
             <span className="flex-1 min-w-0">
               <span className="block text-sm font-semibold text-heading truncate">{c.title}</span>
               <span className="block text-xs text-muted truncate">
-                {[c.date ? format(c.date) : '', c.locked ? t('projects.attach.locked', 'in another project') : c.elsewhere ? t('projects.attach.elsewhere', 'in another project, moves here') : '']
+                {[c.date ? format(c.date) : '', c.locked ? (refusalText(c.refusal) || t('projects.attach.locked', 'in another project')) : c.elsewhere ? t('projects.attach.elsewhere', 'in another project, moves here') : '']
                   .filter(Boolean).join(' · ')}
               </span>
             </span>

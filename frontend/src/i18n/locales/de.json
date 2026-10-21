@@ -8500,7 +8500,13 @@
       "galleryElsewhere": "Die Galerie dazu gehört zu einem anderen Projekt. Fügen Sie sie dort hinzu oder verschieben Sie zuerst die Galerie.",
       "locked": "in einem anderen Projekt",
       "invoiceElsewhere": "Diese Rechnung gehört bereits zu einem anderen Projekt.",
-      "helpGallery": "Die neusten Galerien. Suchen Sie nach Namen, um andere zu finden."
+      "helpGallery": "Die neusten Galerien. Suchen Sie nach Namen, um andere zu finden.",
+      "dealElsewhere": "Das Angebot, der Vertrag oder eine andere Rechnung desselben Auftrags gehört zu einem anderen Projekt.",
+      "collected": "Eine Sammelrechnung umfasst mehrere Aufträge und kann deshalb nicht zu einem Projekt gehören.",
+      "takenOut": "Aus dem Projekt genommen",
+      "takeOutFailed": "Konnte nicht aus dem Projekt genommen werden",
+      "takeOut": "Aus dem Projekt nehmen",
+      "takeOutNamed": "{{number}} aus dem Projekt nehmen"
     }
   },
   "calendar": {
