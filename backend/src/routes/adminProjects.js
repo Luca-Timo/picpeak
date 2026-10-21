@@ -136,8 +136,11 @@ router.get('/', requirePermission('events.view'), [
   // project count can't hit the driver's bind-parameter limit; null means
   // unrestricted.
   const projectIds = ownedProjectsSubquery(req.admin);
-  const statuses = String(req.query.status || '').split(',').map((x) => x.trim()).filter(Boolean)
-    .filter((x) => projectService.PROJECT_STATUSES.includes(x));
+  const asked = String(req.query.status || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const statuses = asked.filter((x) => projectService.PROJECT_STATUSES.includes(x));
+  // A filter asked for with no status that exists matches no project, as an
+  // unknown value did before; it is not "no filter".
+  if (asked.length && !statuses.length) return successResponse(res, { projects: [] });
   const withStages = req.query.withStages === '1' || req.query.withStages === 'true';
   if (withStages) perms.contracts = await userHasAnyPermission(req.admin.id, ['contracts.view']);
   const projects = await projectService.listProjects({

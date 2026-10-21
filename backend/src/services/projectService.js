@@ -371,18 +371,42 @@ async function projectLinkedCustomerIds(id, conn = db) {
  *  customer adopts it (first content wins, as assignEvent does), but only when
  *  nothing it already holds belongs to someone else. Atomic: the adoption is a
  *  conditional UPDATE, so two documents for different customers racing on an
- *  empty project cannot both win. Returns true when the project is (now) that
- *  customer's. */
+ *  empty project cannot both win. Returns false when the project is another
+ *  customer's, 'kept' when it already was this one's, 'adopted' when it became
+ *  so now (undo with releaseAdoptedCustomer if the document is not created). */
 async function holdProjectToCustomer(projectId, customerAccountId) {
   const cid = Number(customerAccountId);
   const project = await db('projects').where({ id: projectId }).first('customer_account_id');
   if (!project) return false;
-  if (project.customer_account_id != null) return Number(project.customer_account_id) === cid;
+  if (project.customer_account_id != null) return Number(project.customer_account_id) === cid ? 'kept' : false;
   for (const linked of await projectLinkedCustomerIds(projectId)) if (linked !== cid) return false;
-  await db('projects').where({ id: projectId }).whereNull('customer_account_id')
+  const changed = await db('projects').where({ id: projectId }).whereNull('customer_account_id')
     .update({ customer_account_id: cid, updated_at: new Date() });
   const after = await db('projects').where({ id: projectId }).first('customer_account_id');
-  return Number(after?.customer_account_id) === cid;
+  if (Number(after?.customer_account_id) !== cid) return false;
+  return changed ? 'adopted' : 'kept';
+}
+
+/** Whether the project holds a gallery or a quote, contract or invoice
+ *  (anyone's: the status describes the project, not the caller's view of it). */
+async function projectHoldsAnything(id) {
+  if (await hasColumnCached('events', 'project_id') && await db('events').where({ project_id: id }).first('id')) return true;
+  const { withTrustedCrmAccess } = require('../database/crmAccess');
+  for (const tbl of ['quotes', 'contracts', 'invoices']) {
+    if (!(await hasColumnCached(tbl, 'project_id'))) continue;
+    const row = await withTrustedCrmAccess('project status rule', () => db(tbl).where({ project_id: id }).first('id'));
+    if (row) return true;
+  }
+  return false;
+}
+
+/** Undo an adoption by holdProjectToCustomer when the document it was for was
+ *  not created, unless the project has meanwhile got something of that
+ *  customer's to hold it. */
+async function releaseAdoptedCustomer(projectId, customerAccountId) {
+  if ((await projectLinkedCustomerIds(projectId)).size) return;
+  await db('projects').where({ id: projectId, customer_account_id: Number(customerAccountId) })
+    .update({ customer_account_id: null, updated_at: new Date() });
 }
 
 async function updateProject(id, { name, customerAccountId, status, ...fields }) {
@@ -406,6 +430,12 @@ async function updateProject(id, { name, customerAccountId, status, ...fields })
   }
   if (status !== undefined) {
     if (!PROJECT_STATUSES.includes(status)) throw new AppError('Unknown project status', 400);
+    // An inquiry is a project with nothing attached yet (promoteInquiry turns
+    // it active on the first document); it cannot be set back on one that holds
+    // galleries or documents.
+    if (status === 'inquiry' && existing.status !== 'inquiry' && await projectHoldsAnything(id)) {
+      throw new AppError('A project that holds galleries or documents cannot go back to an inquiry', 422, 'PROJECT_NOT_EMPTY');
+    }
     patch.status = status;
   }
   Object.assign(patch, await inquiryPatch(fields));
@@ -595,15 +625,13 @@ async function linkDealToProject(dealUuid, projectId, conn = db, actor = null) {
     }
   }
 
-  // Every caller has just linked a document to the project.
-  await promoteInquiry(projectId, conn);
-
   // Nothing to cascade without a deal, but the destination above still had
   // to be vetted: every caller writes `project_id` onto its own row BEFORE
   // calling us, and `deal_uuid` is nullable (migration 107). A legacy quote
   // with no deal would otherwise return here having bypassed the check while
-  // its foreign project link stood.
-  if (!dealUuid) return;
+  // its foreign project link stood. The caller linked a document, so an
+  // inquiry turns active, here and after the last check below.
+  if (!dealUuid) { await promoteInquiry(projectId, conn); return; }
 
   // Collect ALL the deal's customers across its quote/contract/invoice lineage
   // AND every event it converted into — BEFORE mutating anything, so a link
@@ -687,6 +715,9 @@ async function linkDealToProject(dealUuid, projectId, conn = db, actor = null) {
     const adopt = [...dealCustomerIds][0];
     await conn('projects').where({ id: projectId }).update({ customer_account_id: adopt, updated_at: new Date() });
   }
+
+  // Every check has passed and the document is linked: an inquiry turns active.
+  await promoteInquiry(projectId, conn);
 }
 
 /** Attach (or, with projectId=null, detach) a quote/contract to a project.
@@ -829,10 +860,15 @@ function deriveStages({ status, quotes = [], contracts = [], events = [], invoic
   let stoppedAt = null;
   const stages = STAGES.map((key, i) => {
     let state;
-    if (hidden[key]) state = 'hidden';
+    // Where a cancelled job stopped is the first stage after the last done one,
+    // whether or not this admin may see it: a hidden stage stays hidden, and the
+    // cross is not moved onto a later stage it never reached.
+    if (cancelled && stoppedAt === null && !done[key] && i > lastDone) {
+      stoppedAt = key;
+      state = hidden[key] ? 'hidden' : 'cancelled';
+    } else if (hidden[key]) state = 'hidden';
     else if (done[key]) state = 'done';
     else if (i < lastDone || (completed && key !== 'done')) state = 'skipped';
-    else if (cancelled && stoppedAt === null) { state = 'cancelled'; stoppedAt = key; }
     else if (!completed && !cancelled && current === null) { state = 'current'; current = key; }
     else state = 'todo';
     return { key, state };
@@ -1185,6 +1221,7 @@ module.exports = {
   promoteInquiry,
   carriedProjectId,
   holdProjectToCustomer,
+  releaseAdoptedCustomer,
   assignEvent,
   assignQuote,
   assignContract,

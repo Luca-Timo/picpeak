@@ -17,6 +17,7 @@ import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { formatMoneyMinor } from '../../../utils/money';
 import { SectionPageHeader } from '../../../components/admin/SectionPageHeader';
 import { usePermissions } from '../../../contexts/PermissionsContext';
+import { STATUS_TONE } from './ProjectCockpitPage';
 
 /** Render a project's rolled-up value (newest stage per deal, cumulative),
  *  one entry per currency. Convention (deliberately differs from the Events
@@ -112,7 +113,7 @@ export const ProjectsListPage: React.FC = () => {
                 <TableCell align="right">{p.eventCount ?? 0}</TableCell>
                 <TableCell align="right" className="font-medium text-heading">{formatValuation(p)}</TableCell>
                 <TableCell>
-                  <Badge>{t(`projects.status.${p.status}`, p.status)}</Badge>
+                  <Badge tone={STATUS_TONE[p.status] ?? 'neutral'}>{t(`projects.status.${p.status}`, p.status)}</Badge>
                 </TableCell>
                 <TableCell className="text-muted">{p.updatedAt ? format(p.updatedAt) : '—'}</TableCell>
               </TableRow>

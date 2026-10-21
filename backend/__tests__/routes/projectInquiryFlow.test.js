@@ -387,6 +387,66 @@ describe('project inquiry flow', () => {
     }
   });
 
+  it('keeps a hidden stage hidden where a cancelled job stopped, and puts no cross on a later stage', async () => {
+    const { deriveStages } = require('../../src/services/projectService');
+    const { stages } = deriveStages({ status: 'cancelled' }, { quotes: false });
+    expect(stages.map((s) => s.state)).toEqual(['done', 'hidden', 'todo', 'todo', 'todo', 'todo']);
+  });
+
+  it('answers an unknown status filter with no projects, not all of them', async () => {
+    const res = await get('/api/admin/projects?status=nonsense');
+    expect(res.status).toBe(200);
+    expect((res.body.data || res.body).projects).toEqual([]);
+  });
+
+  it('refuses an invoice for a gallery that belongs to another project', async () => {
+    const project = await createInquiry();
+    const other = await createInquiry();
+    const eventId = await mkEvent({ projectId: other.id });
+    const res = await post('/api/admin/invoices', {
+      customerAccountId: customerId, projectId: project.id, eventId, currency: 'CHF',
+      lineItems: [{ description: 'Anzahlung', quantity: 1, unitPriceMinor: 1000 }],
+    });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_EVENT_MISMATCH');
+  });
+
+  it('gives back the customer an empty project adopted when the invoice is then refused', async () => {
+    const inactive = idOf(await db('customer_accounts').insert({
+      email: 'inactive@example.com', display_name: 'Inactive', is_active: 0, created_at: new Date(),
+    }).returning('id'));
+    const project = await createInquiry({ customerAccountId: null });
+    const res = await post('/api/admin/invoices', {
+      customerAccountId: inactive, projectId: project.id, currency: 'CHF',
+      lineItems: [{ description: 'Anzahlung', quantity: 1, unitPriceMinor: 1000 }],
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect((await db('projects').where({ id: project.id }).first('customer_account_id')).customer_account_id).toBeNull();
+  });
+
+  it('keeps an inquiry an inquiry when attaching a document is refused late (deal lineage)', async () => {
+    const projectService = require('../../src/services/projectService');
+    // The editor's own empty inquiry; the quote's deal produced another admin's
+    // gallery, so linkDealToProject refuses after vetting the destination.
+    const project = idOf(await db('projects').insert({
+      name: 'Editor inquiry', status: 'inquiry', created_by: editorId, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const foreignEvent = await mkEvent();
+    const quoteId = await mkQuote({ projectId: null, dealUuid: crypto.randomUUID() });
+    await db('quotes').where({ id: quoteId }).update({ converted_event_id: foreignEvent });
+    await expect(projectService.assignQuote(project, quoteId, { id: editorId, roleName: 'editor' }))
+      .rejects.toMatchObject({ code: 'DEAL_EVENT_FORBIDDEN' });
+    expect((await db('projects').where({ id: project }).first('status')).status).toBe('inquiry');
+  });
+
+  it('does not set a project that holds a gallery back to an inquiry', async () => {
+    const project = await createInquiry();
+    await mkEvent({ projectId: project.id });
+    await db('projects').where({ id: project.id }).update({ status: 'active' });
+    const res = await put(`/api/admin/projects/${project.id}`, { status: 'inquiry' });
+    expect(res.status).toBe(422);
+  });
+
   it('answers 403 on every project route with the feature off', async () => {
     await db('feature_flags').where({ key: 'projects' }).update({ value: 0 });
     try {

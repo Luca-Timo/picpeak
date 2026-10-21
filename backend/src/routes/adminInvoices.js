@@ -489,9 +489,20 @@ async function projectLinkRefusal(req, projectId) {
   // something it holds is another customer's (holdProjectToCustomer is atomic,
   // so two invoices racing on an empty project cannot both win). Done before
   // the invoice exists, so a refused link never leaves an invoice behind.
-  if (!(await projectService.holdProjectToCustomer(project.id, req.body.customerAccountId))) {
+  // The gallery the invoice is for has to be in the same project, or the
+  // invoice would count in the gallery's project and not in this one.
+  const eventId = parseInt(req.body.eventId, 10);
+  if (eventId) {
+    const event = await db('events').where({ id: eventId }).first('project_id');
+    if (event?.project_id != null && Number(event.project_id) !== Number(project.id)) {
+      return { status: 422, body: { error: 'That gallery belongs to another project', code: 'PROJECT_EVENT_MISMATCH' } };
+    }
+  }
+  const held = await projectService.holdProjectToCustomer(project.id, req.body.customerAccountId);
+  if (!held) {
     return { status: 422, body: { error: 'That project belongs to a different customer', code: 'PROJECT_CUSTOMER_MISMATCH' } };
   }
+  req.projectCustomerAdopted = held === 'adopted';
   return null;
 }
 
@@ -518,7 +529,18 @@ router.post(
     // spawnInstallmentInvoices). The response surfaces the first
     // invoice's payload (the one the editor redirects to) plus the
     // full id list so the editor can show "N invoices created".
-    const { invoiceIds } = await invoiceService.createInvoice(mapPayloadToService(req.body), req.admin.id);
+    let created;
+    try {
+      created = await invoiceService.createInvoice(mapPayloadToService(req.body), req.admin.id);
+    } catch (err) {
+      // The invoice was refused after the project adopted its customer: give
+      // the project back, so the next document for the right customer fits.
+      if (linkedProject && req.projectCustomerAdopted) {
+        await require('../services/projectService').releaseAdoptedCustomer(linkedProject, req.body.customerAccountId);
+      }
+      throw err;
+    }
+    const { invoiceIds } = created;
     if (linkedProject) {
       await require('../services/projectService').promoteInquiry(linkedProject);
     }
