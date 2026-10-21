@@ -58,7 +58,7 @@ export function useStepHint() {
       case 'openGallery': return t('projects.stepHint.openGallery', 'Upload the photos and publish the gallery.');
       case 'createInvoice': return t('projects.stepHint.createInvoice', 'The invoice is made for this project\'s customer and stays in this project.');
       case 'openInvoice': return t('projects.stepHint.openInvoice', 'An invoice is still open.');
-      case 'complete': return t('projects.stepHint.complete', 'Everything is paid. Complete the project to take it off the dashboard.');
+      case 'complete': return t('projects.stepHint.complete', 'Every step is done or skipped. Complete the project to take it off the dashboard.');
       default: return '';
     }
   };

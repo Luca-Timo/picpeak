@@ -8433,7 +8433,7 @@
       "openQuote": "Angebot öffnen"
     },
     "stepHint": {
-      "complete": "Alles ist bezahlt. Schliessen Sie das Projekt ab, damit es vom Dashboard verschwindet.",
+      "complete": "Alle Schritte sind erledigt oder übersprungen. Schliessen Sie das Projekt ab, damit es vom Dashboard verschwindet.",
       "convertContract": "Die Galerie entsteht aus dem unterschriebenen Vertrag, mit seinem Zahlungsplan.",
       "convertQuote": "Die Galerie entsteht aus dem angenommenen Angebot, mit seinem Zahlungsplan.",
       "createContract": "Der Vertrag entsteht aus dem angenommenen Angebot und bleibt in diesem Projekt.",

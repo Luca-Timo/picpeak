@@ -8475,7 +8475,7 @@
       "openGallery": "Upload the photos and publish the gallery.",
       "createInvoice": "The invoice is made for this project's customer and stays in this project.",
       "openInvoice": "An invoice is still open.",
-      "complete": "Everything is paid. Complete the project to take it off the dashboard."
+      "complete": "Every step is done or skipped. Complete the project to take it off the dashboard."
     },
     "dashboard": {
       "title": "Projects",
