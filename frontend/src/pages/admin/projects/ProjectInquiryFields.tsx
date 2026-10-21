@@ -48,7 +48,9 @@ export const FlowField: React.FC<FieldProps> = ({ draft, onChange, dirty = [], d
         {dirty.includes('flow') && <span className="w-2 h-2 rounded-full bg-warning" aria-hidden />}
       </div>
       <div
-        className={layout === 'card' ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-1 md:grid-cols-3 gap-3'}
+        // The card sits in the 380px side column from xl up (ProjectCockpitPage)
+        // and spans the page below it, where the tiles fit in one row.
+        className={layout === 'card' ? 'grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-1 gap-2' : 'grid grid-cols-1 md:grid-cols-3 gap-3'}
         role="radiogroup"
         aria-labelledby="project-flow-label"
         onKeyDown={radioGroupKeyDown}
