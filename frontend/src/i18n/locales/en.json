@@ -8034,7 +8034,6 @@
       "body": "Enable Accounts (or another CRM sub-feature) under Settings → Features to get started."
     },
     "subnav": {
-      "overview": "Overview",
       "accounts": "Accounts",
       "quotes": "Quotes",
       "contracts": "Contracts",
@@ -8043,7 +8042,8 @@
       "bills": "Invoices",
       "taxReport": "Tax",
       "development": "Development",
-      "newsletters": "Newsletters"
+      "newsletters": "Newsletters",
+      "projects": "Projects"
     }
   },
   "accounting": {
@@ -8251,7 +8251,7 @@
     }
   },
   "projects": {
-    "title": "Project Overview",
+    "title": "Projects",
     "subtitle": "Group galleries into projects and see every email, document and hour in one cockpit.",
     "search": "Search by name or customer…",
     "empty": "Start one with New inquiry, or galleries you already have were grouped automatically.",

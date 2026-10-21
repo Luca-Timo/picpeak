@@ -48,7 +48,7 @@ export function useClientsNavItems(): ClientsNavItem[] {
     {
       key: 'overview',
       to: '/admin/clients/projects',
-      label: t('clients.subnav.overview', 'Overview'),
+      label: t('clients.subnav.projects', 'Projects'),
       icon: FolderKanban,
       featureFlag: 'projects',
     },

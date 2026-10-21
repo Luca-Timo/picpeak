@@ -46,7 +46,7 @@ export const ProjectsListPage: React.FC = () => {
       <SectionPageHeader
         feature="projects"
         icon={FolderKanban}
-        title={t('projects.title', 'Project Overview')}
+        title={t('projects.title', 'Projects')}
         description={t('projects.subtitle', 'Group galleries into projects and see every email, document and hour in one cockpit.')}
         actions={hasPermission('events.edit') ? (
           <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/admin/clients/projects/new')}>

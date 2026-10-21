@@ -7999,7 +7999,6 @@
       "body": "Aktivieren Sie „Konten\" (oder eine andere CRM-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
     },
     "subnav": {
-      "overview": "Übersicht",
       "accounts": "Konten",
       "quotes": "Angebote",
       "contracts": "Verträge",
@@ -8008,7 +8007,8 @@
       "bills": "Rechnungen",
       "taxReport": "Steuer",
       "development": "Entwicklung",
-      "newsletters": "Newsletter"
+      "newsletters": "Newsletter",
+      "projects": "Projekte"
     }
   },
   "accounting": {
@@ -8216,7 +8216,7 @@
     }
   },
   "projects": {
-    "title": "Projektübersicht",
+    "title": "Projekte",
     "subtitle": "Fasse Galerien zu Projekten zusammen und sieh jede E-Mail, jedes Dokument und jede Stunde in einem Cockpit.",
     "search": "Nach Name oder Kunde suchen…",
     "empty": "Starten Sie eines mit „Neue Anfrage“, oder bestehende Galerien wurden automatisch gruppiert.",

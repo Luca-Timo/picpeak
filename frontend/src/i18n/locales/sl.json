@@ -7279,7 +7279,6 @@
       "body": "Za začetek omogočite Račune (ali drugo podfunkcijo Stranke) v Nastavitve → Funkcije."
     },
     "subnav": {
-      "overview": "Pregled",
       "accounts": "Računi",
       "quotes": "Ponudbe",
       "contracts": "Pogodbe",
@@ -7288,7 +7287,8 @@
       "bills": "Računi",
       "taxReport": "Davek",
       "development": "Razvoj",
-      "newsletters": "E-novice"
+      "newsletters": "E-novice",
+      "projects": "Projekti"
     }
   },
   "accounting": {
@@ -7492,7 +7492,7 @@
     }
   },
   "projects": {
-    "title": "Pregled projektov",
+    "title": "Projekti",
     "subtitle": "Združite dogodke v projekte in si v enem nadzornem središču oglejte vso e-pošto, dokumente, galerije in ure.",
     "search": "Išči po imenu ali stranki…",
     "notFound": "Projekt ni najden",
