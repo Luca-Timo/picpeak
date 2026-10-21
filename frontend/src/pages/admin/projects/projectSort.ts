@@ -8,16 +8,20 @@ import type { ProjectStatus, ProjectSummary } from '../../../services/projects.s
 
 export type ProjectSort =
   | 'none'
+  | 'name_asc' | 'name_desc'
   | 'customer_asc' | 'customer_desc'
   | 'galleries_asc' | 'galleries_desc'
   | 'status_asc' | 'status_desc'
-  | 'value_asc' | 'value_desc';
+  | 'value_asc' | 'value_desc'
+  | 'updated_asc' | 'updated_desc';
 
 export const PROJECT_SORT_COLUMNS: SortColumnMap = {
+  name: { asc: 'name_asc', desc: 'name_desc' },
   customer: { asc: 'customer_asc', desc: 'customer_desc' },
   galleries: { asc: 'galleries_asc', desc: 'galleries_desc', defaultDir: 'desc' },
   status: { asc: 'status_asc', desc: 'status_desc' },
   value: { asc: 'value_asc', desc: 'value_desc', defaultDir: 'desc' },
+  updated: { asc: 'updated_asc', desc: 'updated_desc', defaultDir: 'desc' },
 };
 
 /** The order a job moves through, not the alphabet. */
@@ -36,6 +40,12 @@ export function sortProjects(list: ProjectSummary[], sort: ProjectSort, locale?:
   const sign = dir === 'asc' ? 1 : -1;
   const collator = new Intl.Collator(locale, { sensitivity: 'base', numeric: true });
   const cmp = (a: ProjectSummary, b: ProjectSummary): number => {
+    if (col === 'name') return sign * collator.compare(a.name, b.name);
+    if (col === 'updated') {
+      // Never updated goes last, either way round. Compared as times.
+      if (!a.updatedAt || !b.updatedAt) return (a.updatedAt ? 0 : 1) - (b.updatedAt ? 0 : 1);
+      return sign * (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+    }
     if (col === 'customer') {
       // Projects without a customer go last, either way round.
       if (!a.customerEmail || !b.customerEmail) return (a.customerEmail ? 0 : 1) - (b.customerEmail ? 0 : 1);

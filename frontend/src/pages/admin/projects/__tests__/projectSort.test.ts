@@ -34,6 +34,20 @@ describe('sortProjects', () => {
     expect(ids(sortProjects(list, 'status_asc'))).toEqual([2, 4, 3, 1]);
   });
 
+  it('sorts by name, ignoring case, numbers in order', () => {
+    const named = [p(1, { name: 'hochzeit 10' }), p(2, { name: 'Alpenbau' }), p(3, { name: 'Hochzeit 9' })];
+    expect(ids(sortProjects(named, 'name_asc'))).toEqual([2, 3, 1]);
+    expect(ids(sortProjects(named, 'name_desc'))).toEqual([1, 3, 2]);
+  });
+
+  it('sorts by last update, never-updated last both ways', () => {
+    const dated = [
+      p(1, { updatedAt: '2026-10-01T10:00:00Z' }), p(2, { updatedAt: null }), p(3, { updatedAt: '2026-10-21T08:00:00Z' }),
+    ];
+    expect(ids(sortProjects(dated, 'updated_desc'))).toEqual([3, 1, 2]);
+    expect(ids(sortProjects(dated, 'updated_asc'))).toEqual([1, 3, 2]);
+  });
+
   it('sorts by value, a project without one counting as zero', () => {
     expect(ids(sortProjects(list, 'value_desc'))).toEqual([3, 4, 1, 2]);
     expect(ids(sortProjects(list, 'value_asc'))).toEqual([2, 1, 4, 3]);
