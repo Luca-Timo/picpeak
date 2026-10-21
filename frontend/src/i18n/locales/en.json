@@ -8278,7 +8278,8 @@
       "paid": "paid",
       "quoted": "Quoted",
       "total": "Value",
-      "paidShare": "{{share}} % paid · {{open}} open"
+      "paidShare": "{{share}} % paid · {{open}} open",
+      "paidLabel": "Paid"
     },
     "events": {
       "title": "Galleries",

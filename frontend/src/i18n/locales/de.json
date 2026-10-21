@@ -8243,7 +8243,8 @@
       "paid": "bezahlt",
       "paidShare": "{{share}} % bezahlt · {{open}} offen",
       "quoted": "Angeboten",
-      "total": "Wert"
+      "total": "Wert",
+      "paidLabel": "Bezahlt"
     },
     "events": {
       "title": "Galerien",

@@ -39,7 +39,7 @@ export const ProjectValueCard: React.FC<{ valuation?: ProjectValuation; quotedMi
               )}
               <dt className="text-muted">{t('projects.value.total', 'Value')}</dt>
               <dd className="text-right font-semibold text-heading tabular-nums">{formatMoneyMinor(b.totalMinor, b.currency)}</dd>
-              <dt className="text-muted">{t('projects.value.paid', 'paid')}</dt>
+              <dt className="text-muted">{t('projects.value.paidLabel', 'Paid')}</dt>
               <dd className="text-right font-semibold text-heading tabular-nums">{formatMoneyMinor(b.paidMinor, b.currency)}</dd>
             </dl>
             <div className="h-1.5 rounded-full bg-fill overflow-hidden mt-3 mb-1" aria-hidden>
