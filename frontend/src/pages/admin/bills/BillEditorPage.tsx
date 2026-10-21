@@ -36,6 +36,7 @@ import { settingsService } from '../../../services/settings.service';
 import { useAdminAuth } from '../../../contexts/AdminAuthContext';
 import { toast } from 'react-toastify';
 import { todayIsoDate } from '../../../utils/localDate';
+import { useProjectPrefill } from '../projects/useProjectPrefill';
 
 function toMinor(amount: number) {
   return Math.round((Number(amount) || 0) * 100);
@@ -125,6 +126,8 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
   // an actual events row, and it carries through to the customer
   // portal + tax report + email templates.
   const [eventId, setEventId] = useState<number | null>(null);
+  // Created from a project's "Create invoice" (`?projectId=`). Create only.
+  const [projectId, setProjectId] = useState<number | null>(null);
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventTimeStart, setEventTimeStart] = useState('');
@@ -297,6 +300,14 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
     if (ed) setEventDate((prev) => prev || ed);
   }, [isEdit, searchParams]);
 
+  // The project link itself; the customer and gallery come through the
+  // query string above, the date from the project when no gallery has one.
+  useProjectPrefill((project) => {
+    setProjectId(project.id);
+    setEventName((prev) => prev || project.name);
+    setEventDate((prev) => prev || project.eventDate || '');
+  }, { enabled: !isEdit });
+
   // Pre-fill from a fully-signed contract when the editor is opened
   // via `?fromContractId=<id>` (the "New invoice" link on
   // ContractDetailPage's header, used after the contract has been
@@ -464,6 +475,7 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
     // and the PUT handler kept the old value. The route's
     // `optional({ values: 'falsy' })` lets null through unvalidated.
     eventId: eventId ?? undefined,
+    projectId: !isEdit && projectId ? projectId : undefined,
     eventName: eventName || null,
     eventDate: eventDate || null,
     eventTimeStart: eventTimeStart || null,

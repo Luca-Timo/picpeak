@@ -46,6 +46,8 @@ import { ThemeDisplay } from '../../components/admin';
 import { Code } from 'lucide-react';
 import { todayIsoDate } from '../../utils/localDate';
 import { radioGroupKeyDown } from '../../utils/ariaKeyboard';
+import { useProjectPrefill } from './projects/useProjectPrefill';
+import { projectsService } from '../../services/projects.service';
 
 interface FormData {
   event_type: string;
@@ -484,9 +486,33 @@ export const CreateEventPage: React.FC = () => {
     }));
   }, [formData.event_type, availableEventTypes]);
 
+  // Opened from a project's "Create gallery" (`?projectId=`): start from the
+  // project's name, occasion, date and customer, and attach the new gallery
+  // to the project once it exists (POST /projects/:id/events, which checks
+  // ownership and that the customers match).
+  const projectId = useProjectPrefill((project) => {
+    setFormData((prev) => ({
+      ...prev,
+      event_name: prev.event_name || project.name,
+      event_type: project.eventType || prev.event_type,
+      event_date: project.eventDate || prev.event_date,
+      customer_accounts: prev.customer_accounts.length || !project.customerAccountId || !project.customerEmail
+        || !portalEnabled || !canAnnounceToAccounts
+        ? prev.customer_accounts
+        : [{ id: project.customerAccountId, email: project.customerEmail, displayName: null }],
+    }));
+  });
+
   const createMutation = useMutation({
     mutationFn: eventsService.createEvent,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      if (projectId) {
+        try {
+          await projectsService.assignEvent(projectId, data.id);
+        } catch {
+          toast.error(t('projects.events.attachAfterCreateFailed', 'The gallery was created but could not be attached to the project. Attach it on the project page.'));
+        }
+      }
       if (isMountedRef.current) {
         toast.success(t('toast.eventCreated'));
         // An import started with the gallery is followed on the Photos tab.

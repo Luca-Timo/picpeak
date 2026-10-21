@@ -8,7 +8,34 @@
 import { api } from '../config/api';
 import type { CustomerGroup } from './customerAdmin.service';
 
-export type ProjectStatus = 'active' | 'archived' | string;
+/** `inquiry` → `active` → `completed`, plus `cancelled` (no job came of it).
+ *  `archived` is what older versions could set. */
+export type ProjectStatus = 'inquiry' | 'active' | 'completed' | 'cancelled' | 'archived';
+
+/** Where an inquiry came from. Keys only; the UI translates them. */
+export const INQUIRY_SOURCES = ['referral', 'website', 'social', 'returning', 'fair', 'other'] as const;
+export type InquirySource = typeof INQUIRY_SOURCES[number];
+
+export type ProjectStageKey = 'inquiry' | 'quote' | 'contract' | 'gallery' | 'invoice' | 'done';
+/** Derived on the server from what the project holds (projectService.deriveStages). */
+export type ProjectStageState = 'done' | 'current' | 'skipped' | 'todo' | 'hidden';
+export interface ProjectStage {
+  stages: Array<{ key: ProjectStageKey; state: ProjectStageState }>;
+  current: ProjectStageKey | null;
+}
+
+/** The inquiry a project starts from (migration 315). Dates are YYYY-MM-DD. */
+export interface ProjectInquiryFields {
+  eventType: string | null;
+  eventDate: string | null;
+  eventEndDate: string | null;
+  location: string | null;
+  guestCount: number | null;
+  budgetMinor: number | null;
+  currency: string | null;
+  source: InquirySource | null;
+  notes: string | null;
+}
 
 /** Rolled-up project value: newest stage wins per deal (invoice > quote;
  *  contracts carry no total), cumulative across events, split by currency. */
@@ -16,7 +43,7 @@ export interface ProjectValuation {
   byCurrency: Array<{ currency: string; totalMinor: number; paidMinor: number }>;
 }
 
-export interface ProjectSummary {
+export interface ProjectSummary extends Partial<ProjectInquiryFields> {
   id: number;
   name: string;
   customerAccountId: number | null;
@@ -26,6 +53,8 @@ export interface ProjectSummary {
   status: ProjectStatus;
   eventCount?: number;
   valuation?: ProjectValuation;
+  /** Only on the list with `withStages`. */
+  stage?: ProjectStage;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -82,6 +111,7 @@ export interface ProjectQuote {
   total_amount_minor: number;
   currency: string;
   deal_uuid: string | null;
+  source_template_id?: number | null;
 }
 
 export interface ProjectContract {
@@ -119,7 +149,14 @@ export interface ProjectOverview {
   hours: { entries: ProjectHourEntry[]; totalMinutes: number };
   milestones: ProjectMilestone[];
   valuation: ProjectValuation;
+  stage: ProjectStage;
 }
+
+export type ProjectWritePayload = Partial<ProjectInquiryFields> & {
+  name?: string;
+  customerAccountId?: number | null;
+  status?: ProjectStatus;
+};
 
 export interface EmailPreview {
   id: number;
@@ -134,7 +171,11 @@ export interface EmailPreview {
 }
 
 export const projectsService = {
-  async list(params: { q?: string; status?: string } = {}): Promise<ProjectSummary[]> {
+  /** `status` takes a comma list (`inquiry,active`); `withStages` adds each
+   *  project's stage (the dashboard). */
+  async list({ withStages, ...rest }: { q?: string; status?: string; withStages?: boolean } = {}): Promise<ProjectSummary[]> {
+    const params: Record<string, string> = { ...rest };
+    if (withStages) params.withStages = '1';
     const { data } = await api.get('/admin/projects', { params });
     const body = data.data || data;
     return body.projects || [];
@@ -146,19 +187,21 @@ export const projectsService = {
     return body.project;
   },
 
-  async create(payload: { name: string; customerAccountId?: number | null }): Promise<ProjectSummary> {
+  async create(payload: ProjectWritePayload & { name: string }): Promise<ProjectSummary> {
     const { data } = await api.post('/admin/projects', payload);
     const body = data.data || data;
     return body.project;
   },
 
-  async update(
-    id: number,
-    payload: { name?: string; customerAccountId?: number | null; status?: string },
-  ): Promise<ProjectSummary> {
+  async update(id: number, payload: ProjectWritePayload): Promise<ProjectSummary> {
     const { data } = await api.put(`/admin/projects/${id}`, payload);
     const body = data.data || data;
     return body.project;
+  },
+
+  /** Galleries, documents and hours stay; they only lose the link. */
+  async remove(id: number): Promise<void> {
+    await api.delete(`/admin/projects/${id}`);
   },
 
   async overview(id: number): Promise<ProjectOverview> {

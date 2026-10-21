@@ -34,6 +34,7 @@ import { contractTemplatesService } from '../../../services/contractTemplates.se
 import { AttachmentListEditor, type AttachmentRow } from '../../../components/admin/AttachmentListEditor';
 import { SignersEditorCard } from './SignersEditorCard';
 import { todayIsoDate } from '../../../utils/localDate';
+import { useProjectPrefill } from '../projects/useProjectPrefill';
 
 const CRM_DISCLAIMER_URL = 'https://docs.picpeak.app/features/crm/disclaimers';
 
@@ -179,6 +180,14 @@ export const ContractForm = forwardRef<ContractFormHandle, ContractFormProps>(({
     })();
     return () => { cancelled = true; };
   }, [isEdit, searchParams, customerAccountId]);
+
+  // Opened from a project (`?projectId=`): the contract joins the project and
+  // starts from its name and date. The customer comes through the effect above.
+  useProjectPrefill((project) => {
+    setProjectId((prev) => prev ?? project.id);
+    setEventName((prev) => prev || project.name);
+    setEventDate((prev) => prev || project.eventDate || '');
+  }, { enabled: !isEdit });
 
   // Load existing contract on edit.
   const { data: existing, isLoading: existingLoading } = useQuery({

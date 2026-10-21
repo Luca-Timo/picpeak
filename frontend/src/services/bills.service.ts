@@ -193,6 +193,8 @@ export interface InvoiceCreatePayload {
   customerAccountId: number;
   sourceQuoteId?: number;
   eventId?: number;
+  /** Create only: the project the invoice is made from (migration 315). */
+  projectId?: number;
   language?: string;
   currency?: string;
   issueDate?: string;

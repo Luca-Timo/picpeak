@@ -41,6 +41,7 @@ import { vatCodesService } from '../../../services/vatCodes.service';
 import { eventTypesService } from '../../../services/eventTypes.service';
 import { workflowsService } from '../../../services/workflows.service';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
+import { useProjectPrefill } from '../projects/useProjectPrefill';
 import { InstallmentsPanel } from '../../../components/admin/InstallmentsPanel';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
@@ -280,6 +281,17 @@ export const QuoteForm = forwardRef<QuoteFormHandle, QuoteFormProps>(({ quoteId,
       }
     })();
   }, [isEdit, searchParams]);
+
+  // Opened from a project's "Create quote" (`?projectId=`): the quote joins
+  // the project and starts from its occasion, name and date. The customer
+  // comes through `?customerAccountId=` above.
+  useProjectPrefill((project) => setForm((prev) => ({
+    ...prev,
+    projectId: prev.projectId ?? project.id,
+    eventName: prev.eventName || project.name,
+    eventDate: prev.eventDate || project.eventDate || '',
+    eventType: prev.eventType || project.eventType || '',
+  })), { enabled: !isEdit });
 
   // Seed the VAT from the configured default OUTPUT code (Settings →
   // Accounting) on a brand-new, blank quote — so quotes (and the invoices they

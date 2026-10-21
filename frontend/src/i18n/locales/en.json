@@ -8280,14 +8280,18 @@
     },
     "value": {
       "label": "Project value",
-      "paid": "paid"
+      "paid": "paid",
+      "quoted": "Quoted",
+      "total": "Value",
+      "paidShare": "{{share}} % paid · {{open}} open"
     },
     "events": {
       "title": "Galleries",
       "none": "No galleries grouped under this project yet.",
       "searchPlaceholder": "Attach a gallery — search by name…",
       "attached": "Gallery attached",
-      "attachFailed": "Could not attach gallery"
+      "attachFailed": "Could not attach gallery",
+      "attachAfterCreateFailed": "The gallery was created but could not be attached to the project. Attach it on the project page."
     },
     "feed": {
       "title": "Activity",
@@ -8317,20 +8321,185 @@
       "saveFailed": "Save failed",
       "emailAction": "Done",
       "emailActionFailed": "Action failed",
-      "previewFailed": "Could not load preview"
+      "previewFailed": "Could not load preview",
+      "renamed": "Project renamed",
+      "cancelled": "Project marked as cancelled.",
+      "reopened": "Project reopened.",
+      "completed": "Project completed.",
+      "deleted": "Project deleted. Its galleries and documents are kept.",
+      "deleteFailed": "Could not delete the project",
+      "contractCreated": "Contract created from the quote.",
+      "galleryCreated": "Gallery created as a draft.",
+      "stepFailed": "That did not work. Try again."
     },
     "error": {
       "customerMismatch": "That belongs to a different customer than this project."
     },
     "status": {
       "active": "Active",
-      "archived": "Archived"
+      "archived": "Archived",
+      "inquiry": "Inquiry",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
     },
     "eventCount_one": "{{count}} events",
     "eventCount_other": "{{count}} events",
     "loadFailed": "Could not load the projects",
     "noMatches": "No projects match this search",
-    "emptyTitle": "No projects yet"
+    "emptyTitle": "No projects yet",
+    "loadOneFailed": "Could not load the project.",
+    "renameLabel": "Project name",
+    "menu": {
+      "attach": "Attach a gallery",
+      "more": "More actions"
+    },
+    "settings": {
+      "cancel": "Mark as cancelled",
+      "reopen": "Reopen",
+      "readOnly": "You can see this project but not change it.",
+      "statusTitle": "Status",
+      "statusHelp": "The stage follows the quote, contract and invoices. Change the status by hand only when no job comes of it or you finish early.",
+      "reopenTitle": "Reopen",
+      "reopenCancelled": "This project is cancelled. Reopen it to show it on the dashboard again.",
+      "reopenCompleted": "This project is completed. Reopen it to keep working on it.",
+      "cancelTitle": "Mark as cancelled",
+      "cancelHelp": "No job comes of it? The project leaves the dashboard but stays in the project list under “Cancelled”. Undo with Reopen.",
+      "completeTitle": "Complete",
+      "completeHelp": "For a project with nothing left open, even when a stage was skipped.",
+      "complete": "Complete",
+      "dangerTitle": "Danger zone",
+      "dangerHelp": "Galleries, quotes, contracts and invoices are kept and only lose the link to the project.",
+      "deleteHelp": "Cannot be undone. The project data and notes are lost."
+    },
+    "tabs": {
+      "overview": "Overview",
+      "activity": "Activity",
+      "settings": "Settings"
+    },
+    "field": {
+      "endBeforeStart": "The end date is before the start date.",
+      "eventType": "Occasion",
+      "eventTypeNone": "— Not set —",
+      "guestCount": "Guests",
+      "eventDate": "Date from",
+      "eventEndDate": "to",
+      "eventEndDateHelp": "Only for events over several days.",
+      "location": "Location",
+      "budget": "Budget",
+      "currency": "Currency",
+      "budgetHelp": "Comma or point, both work.",
+      "source": "Where did the inquiry come from?",
+      "sourceNone": "— Not set —",
+      "notes": "Notes"
+    },
+    "inquiry": {
+      "title": "New inquiry",
+      "created": "Inquiry saved.",
+      "createFailed": "Could not save the inquiry",
+      "subtitle": "Write down what the customer asked for. Quote, contract, gallery and invoice take this data later.",
+      "customerHelp": "Who asked? Pick an existing customer or add a new one. A new customer gets no email until you invite them.",
+      "noCustomerPermission": "You cannot pick customers. The project is saved without one; someone with access to customers can add it later.",
+      "customerRequired": "Pick or add the customer.",
+      "occasionTitle": "Occasion",
+      "occasionHelp": "What is it about, when and where?",
+      "nameRequired": "Give the project a name.",
+      "nameHelp": "Suggested from the occasion and the customer. Only shown in the admin, never to the customer.",
+      "frameTitle": "Scope",
+      "frameHelp": "What you need to know for the quote.",
+      "save": "Save inquiry"
+    },
+    "stage": {
+      "title": "Progress",
+      "position": "Stage {{n}} of {{total}}",
+      "cancelledNote": "This project is cancelled. Reopen it in Settings to continue.",
+      "completedNote": "This project is completed.",
+      "next": "Next step",
+      "orJump": "Or skip ahead:",
+      "noStep": "Nothing for you to do here right now.",
+      "quote": "Quote",
+      "contract": "Contract",
+      "gallery": "Gallery",
+      "inquiry": "Inquiry",
+      "invoice": "Invoice",
+      "done": "Done"
+    },
+    "documents": {
+      "title": "Documents & galleries",
+      "noQuote": "No quote yet.",
+      "noContract": "No contract yet.",
+      "signedOn": "signed on {{date}}",
+      "noGallery": "No gallery yet.",
+      "draft": "Draft",
+      "published": "Published",
+      "invoices": "Invoices",
+      "noInvoice": "No invoice yet.",
+      "paidOn": "paid on {{date}}"
+    },
+    "data": {
+      "title": "Project data",
+      "notSaved": "not saved yet",
+      "help": "New quotes, contracts and galleries take these values. Documents already made stay as they are.",
+      "readOnly": "You can see this data but not change it."
+    },
+    "customer": {
+      "invited": "Invitation queued to {{email}}.",
+      "inviteFailed": "Could not send the invitation",
+      "title": "Customer",
+      "open": "Open account",
+      "invite": "Invite to the portal"
+    },
+    "delete": {
+      "title": "Delete project?",
+      "confirm": "Delete “{{name}}”? Its galleries, quotes, contracts and invoices are kept and only lose the link. The project data and notes are lost. This cannot be undone.",
+      "button": "Delete project"
+    },
+    "step": {
+      "createQuote": "Create quote",
+      "openQuote": "Open quote",
+      "createContract": "Create contract",
+      "openContract": "Open contract",
+      "createGallery": "Create gallery",
+      "openGallery": "Open gallery",
+      "createInvoice": "Create invoice",
+      "openInvoice": "Open invoice",
+      "complete": "Complete project"
+    },
+    "stepHint": {
+      "createQuote": "Customer, occasion, date and the project link are taken into the quote.",
+      "openQuote": "The quote is waiting to be sent or accepted.",
+      "createContract": "The contract is made from the accepted quote and stays in this project.",
+      "openContract": "The contract is waiting for its signatures.",
+      "convertContract": "The gallery is made from the signed contract, with its payment plan.",
+      "convertQuote": "The gallery is made from the accepted quote, with its payment plan.",
+      "createGallery": "Name, occasion, date and customer are taken into the new gallery.",
+      "openGallery": "Upload the photos and publish the gallery.",
+      "createInvoice": "The invoice is made for this project's customer and stays in this project.",
+      "openInvoice": "An invoice is still open.",
+      "complete": "Everything is paid. Complete the project to take it off the dashboard."
+    },
+    "dashboard": {
+      "title": "Projects",
+      "all": "All projects",
+      "empty": "No open projects. A new inquiry starts one.",
+      "byStage": "By stage",
+      "noneAtStage": "No project at this stage.",
+      "next": "Next: {{stage}}"
+    },
+    "stageState": {
+      "done": "done",
+      "current": "now",
+      "skipped": "skipped",
+      "todo": "open",
+      "hidden": "not visible to you"
+    },
+    "source": {
+      "referral": "Referral",
+      "website": "Website",
+      "social": "Social media",
+      "returning": "Returning customer",
+      "fair": "Fair or event",
+      "other": "Other"
+    }
   },
   "calendar": {
     "pageTitle": "Calendar",

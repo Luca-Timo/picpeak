@@ -30,6 +30,7 @@ import { UpdateNotification } from '../../components/admin/UpdateNotification';
 import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
 import { WhatsNewBanner } from '../../components/admin/WhatsNewBanner';
 import { CrmOverviewSection } from '../../components/admin/CrmOverviewSection';
+import { ProjectsDashboardCard } from '../../components/admin/ProjectsDashboardCard';
 import { useQuery } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
 import { useDeliveryDue } from './event-details/deliveryStatus';
@@ -38,6 +39,7 @@ import { mediaSplitLabel, splitMediaCount } from '../../utils/mediaCounts';
 import { workflowsService } from '../../services/workflows.service';
 import { approvalEntityHref, approvalPrompt } from '../../utils/workflowApprovals';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { usePermissions } from '../../contexts/PermissionsContext';
 
 interface StatCard {
   title: string;
@@ -167,6 +169,10 @@ export const AdminDashboard: React.FC = () => {
   // Pending workflow approvals — only when the workflow engine is live. These
   // are the human-in-the-loop gates (e.g. "review invoice before sending").
   const { flags } = useFeatureFlags();
+  const { hasPermission } = usePermissions();
+  // NewInquiryPage: the projects routes sit under the CRM (`clients`) gate,
+  // and creating a project needs events.edit (adminProjects.js).
+  const canStartInquiry = !!flags.clients && !!flags.projects && hasPermission('events.edit');
   const { data: pendingApprovals } = useQuery({
     queryKey: ['workflow-approvals'],
     queryFn: () => workflowsService.approvals(),
@@ -292,7 +298,18 @@ export const AdminDashboard: React.FC = () => {
         title={t('navigation.dashboard')}
         description={t('admin.dashboardSubtitle')}
         className="mb-8"
-        actions={(
+        actions={canStartInquiry ? (
+          // With projects on, a new inquiry is the primary action and a new
+          // gallery the secondary one (one primary per view).
+          <>
+            <Button variant="outline" leftIcon={<Plus className="w-5 h-5" />} onClick={() => navigate('/admin/events/new')}>
+              {t('events.createEvent')}
+            </Button>
+            <Button variant="primary" leftIcon={<Inbox className="w-5 h-5" />} onClick={() => navigate('/admin/clients/projects/new')}>
+              {t('projects.inquiry.title', 'New inquiry')}
+            </Button>
+          </>
+        ) : (
           <Button
             variant="primary"
             leftIcon={<Plus className="w-5 h-5" />}
@@ -322,6 +339,8 @@ export const AdminDashboard: React.FC = () => {
           </Card>
         ))}
       </div>
+
+      <ProjectsDashboardCard />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

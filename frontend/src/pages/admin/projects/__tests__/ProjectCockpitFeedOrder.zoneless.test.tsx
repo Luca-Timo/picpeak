@@ -80,15 +80,18 @@ const feedOrder = async (emails: ReturnType<typeof mail>[]) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { unmount } = render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/admin/projects/1']}>
+      <MemoryRouter initialEntries={['/admin/projects/1?tab=activity']}>
         <Routes>
           <Route path="/admin/projects/:id" element={<ProjectCockpitPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  await waitFor(() => expect(screen.getAllByText(/@example\.com$/).length).toBe(emails.length));
-  const order = screen.getAllByText(/@example\.com$/).map((node) => node.textContent);
+  // The page header shows the project's customer (kunde@example.com) too;
+  // only the feed rows count.
+  const rows = () => screen.getAllByText(/@example\.com$/).filter((node) => node.textContent !== 'kunde@example.com');
+  await waitFor(() => expect(rows().length).toBe(emails.length));
+  const order = rows().map((node) => node.textContent);
   unmount();
   return order;
 };

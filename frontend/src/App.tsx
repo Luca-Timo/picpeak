@@ -57,6 +57,7 @@ import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { ContractResponsePage, ContractSigningSessionPage } from './pages/public/ContractResponsePage';
 import { ProjectsListPage } from './pages/admin/projects/ProjectsListPage';
 import { ProjectCockpitPage } from './pages/admin/projects/ProjectCockpitPage';
+import { NewInquiryPage } from './pages/admin/projects/NewInquiryPage';
 import { WorkflowsListPage } from './pages/admin/workflows/WorkflowsListPage';
 import { WorkflowApprovalsPage } from './pages/admin/workflows/WorkflowApprovalsPage';
 import { WorkflowEditorPage } from './pages/admin/workflows/WorkflowEditorPage';
@@ -290,6 +291,10 @@ const router = createBrowserRouter(
                 layer above events, gated by `projects`. */}
             <Route element={<RequireFeature flag="projects" />}>
               <Route path="projects" element={<ProjectsListPage />} />
+              {/* New inquiry: creates a project (POST /projects, events.edit). */}
+              <Route element={<RequirePermission permission="events.edit" />}>
+                <Route path="projects/new" element={<NewInquiryPage />} />
+              </Route>
               <Route path="projects/:id" element={<ProjectCockpitPage />} />
             </Route>
             {/* Bills / invoices (CRM) — gated by `bills`. */}

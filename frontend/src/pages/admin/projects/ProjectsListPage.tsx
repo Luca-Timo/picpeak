@@ -2,22 +2,21 @@
  * Admin → Project Overview list page.
  *
  * Lists every project (the admin-only grouping layer above events) with a
- * search box, an inline "new project" creator, and a click-through to each
+ * search box, a "New inquiry" action (NewInquiryPage), and a click-through to each
  * project's cockpit. Visual shape mirrors the other /admin/clients lists so
  * the CRM area feels like one product. Admin-only — customers never see it.
  */
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-toastify';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, FolderKanban } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, ErrorState, Input, Loading, Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '../../../components/common';
 import { projectsService, type ProjectSummary } from '../../../services/projects.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { formatMoneyMinor } from '../../../utils/money';
 import { SectionPageHeader } from '../../../components/admin/SectionPageHeader';
-import { isImeComposing } from '../../../utils/imeComposition';
+import { usePermissions } from '../../../contexts/PermissionsContext';
 
 /** Render a project's rolled-up value (newest stage per deal, cumulative),
  *  one entry per currency. Convention (deliberately differs from the Events
@@ -33,27 +32,13 @@ function formatValuation(p: ProjectSummary): string {
 export const ProjectsListPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
   const { format } = useLocalizedDate();
   const [search, setSearch] = useState('');
-  const [newName, setNewName] = useState('');
 
   const { data: projects, isLoading, isError, isRefetching, refetch } = useQuery({
     queryKey: ['projects', { search }],
     queryFn: () => projectsService.list({ q: search || undefined }),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () => projectsService.create({ name: newName.trim() }),
-    onSuccess: (project) => {
-      qc.invalidateQueries({ queryKey: ['projects'] });
-      setNewName('');
-      toast.success(t('projects.toast.created', 'Project created') as string);
-      navigate(`/admin/clients/projects/${project.id}`);
-    },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.error || err?.message || (t('projects.toast.createFailed', 'Could not create project') as string));
-    },
   });
 
   return (
@@ -63,32 +48,12 @@ export const ProjectsListPage: React.FC = () => {
         icon={FolderKanban}
         title={t('projects.title', 'Project Overview')}
         description={t('projects.subtitle', 'Group galleries into projects and see every email, document and hour in one cockpit.')}
-      />
-
-      {/* Inline create */}
-      <Card className="mb-4">
-        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-body mb-1">
-              {t('projects.create.label', 'New project name')}
-            </label>
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !isImeComposing(e) && newName.trim()) createMutation.mutate(); }}
-              placeholder={t('projects.create.placeholder', 'e.g. Müller wedding 2026') as string}
-            />
-          </div>
-          <Button
-            variant="primary"
-            disabled={!newName.trim() || createMutation.isPending}
-            isLoading={createMutation.isPending}
-            onClick={() => createMutation.mutate()}
-          >
-            <Plus className="w-4 h-4 mr-1" />{t('projects.create.button', 'Create project')}
+        actions={hasPermission('events.edit') ? (
+          <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={() => navigate('/admin/clients/projects/new')}>
+            {t('projects.inquiry.title', 'New inquiry')}
           </Button>
-        </div>
-      </Card>
+        ) : undefined}
+      />
 
       {/* Search */}
       <div className="relative mb-3 max-w-sm">

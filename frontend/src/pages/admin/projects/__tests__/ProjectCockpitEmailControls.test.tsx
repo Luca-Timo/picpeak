@@ -100,7 +100,7 @@ const renderPage = async () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/admin/projects/1']}>
+      <MemoryRouter initialEntries={['/admin/projects/1?tab=activity']}>
         <Routes>
           <Route path="/admin/projects/:id" element={<ProjectCockpitPage />} />
         </Routes>

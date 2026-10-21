@@ -836,8 +836,12 @@ async function getProjectOverview(id, perms = {}, admin = null) {
   const contractsHaveProjectId = await hasColumnCached('contracts', 'project_id');
 
   if (perms.quotes !== false && (quotesHaveProjectId || project.customerAccountId)) {
+    // source_template_id preselects the contract template when the project
+    // page converts an accepted quote (ConvertToContractDialog).
+    const quoteCols = ['id', 'quote_number', 'status', 'issue_date', 'valid_until', 'total_amount_minor', 'currency', 'deal_uuid'];
+    if (await hasColumnCached('quotes', 'source_template_id')) quoteCols.push('source_template_id');
     let q = db('quotes')
-      .select('id', 'quote_number', 'status', 'issue_date', 'valid_until', 'total_amount_minor', 'currency', 'deal_uuid')
+      .select(quoteCols)
       .orderBy('issue_date', 'desc');
     if (quotesHaveProjectId) q = q.where({ project_id: id });
     else q = q.where({ customer_account_id: project.customerAccountId });
