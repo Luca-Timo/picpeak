@@ -108,9 +108,11 @@ const inquiryValidators = [
   optionalField('source').isIn(INQUIRY_SOURCES),
   optionalField('notes').isString().isLength({ max: 10000 }),
   optionalField('flow').isIn(Object.keys(projectService.PROJECT_FLOWS)),
-  body('skippedStages').optional().isArray({ max: projectService.SKIPPABLE_STAGES.length }),
+  body('skippedStages').optional({ values: 'null' }).isArray({ max: projectService.SKIPPABLE_STAGES.length }),
   body('skippedStages.*').isIn(projectService.SKIPPABLE_STAGES),
-  body('status').optional().isIn(projectService.PROJECT_STATUSES),
+  // `reopen` (PUT only): the server picks inquiry or active, because it sees
+  // documents the caller's overview may not show.
+  body('status').optional().isIn([...projectService.PROJECT_STATUSES, 'reopen']),
 ];
 
 const INQUIRY_KEYS = ['flow', 'skippedStages', 'eventType', 'eventDate', 'eventEndDate', 'location', 'guestCount',
@@ -246,15 +248,15 @@ router.delete('/:id',
       if (await count(db(table).where({ project_id: id })) < linked) foreign = true;
     }
     if (needs.length) {
-      return res.status(403).json({ error: `This project holds records you cannot change; ${needs.join(', ')} is required to delete it` });
+      return res.status(403).json({ error: `This project holds records you cannot change; ${needs.join(', ')} is required to delete it`, code: 'PROJECT_DELETE_NEEDS_PERMISSION', permissions: needs });
     }
     if (foreign) {
-      return res.status(403).json({ error: 'This project holds documents that are not yours; they have to be moved out before it can be deleted' });
+      return res.status(403).json({ error: 'This project holds documents that are not yours; they have to be moved out before it can be deleted', code: 'PROJECT_DELETE_FOREIGN_DOCUMENTS' });
     }
     const eventIds = (await db('events').where({ project_id: id }).select('id')).map((e) => e.id);
     const { denied } = await filterOwnedEventIds(req.admin, eventIds);
     if (denied.length) {
-      return res.status(403).json({ error: 'This project holds galleries that are not yours; they have to be moved out before it can be deleted' });
+      return res.status(403).json({ error: 'This project holds galleries that are not yours; they have to be moved out before it can be deleted', code: 'PROJECT_DELETE_FOREIGN_GALLERIES' });
     }
     const result = await projectService.deleteProject(id, req.admin);
     return successResponse(res, result, 200, 'Project deleted');

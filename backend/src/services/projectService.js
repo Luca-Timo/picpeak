@@ -450,6 +450,12 @@ async function updateProject(id, { name, customerAccountId, status, ...fields })
     }
     patch.customer_account_id = next;
   }
+  if (status === 'reopen') {
+    // Back to where it was before it closed: an inquiry while it holds
+    // nothing, active otherwise. Decided here, on every linked record, not
+    // from the caller's overview, which leaves out what they may not see.
+    status = (await projectHoldsAnything(id)) ? 'active' : 'inquiry';
+  }
   if (status !== undefined) {
     if (!PROJECT_STATUSES.includes(status)) throw new AppError('Unknown project status', 400);
     // An inquiry is a project with nothing attached yet (promoteInquiry turns
@@ -976,13 +982,28 @@ async function getProjectOverview(id, perms = {}, admin = null) {
     );
   }
 
+  // Whether new quotes, contracts and invoices may join this project: the
+  // CRM write rule ties project_id to the project's creator (or a super
+  // admin), so a legacy ownerless project can show them but not take new ones.
+  project.documentsLinkable = admin?.id != null && (await carriedProjectId(id, admin.id)) != null;
+
   const out = { project, events, emails: [], quotes: [], contracts: [], invoices: [], hours: { entries: [], totalMinutes: 0 } };
 
   // Invoices (by event, own project_id or deal) incl. storno.
   if (perms.bills !== false) {
     const rows = await invoicesForProjects([id], ['id', 'invoice_number', 'status', 'kind', 'issue_date', 'due_date',
       'total_amount_minor', 'paid_amount_minor', 'paid_at', 'currency', 'event_id', 'deal_uuid']);
+    // An invoice whose gallery sits in another project belongs to that one,
+    // as on the list (invoicesForProjects attributes the event path first),
+    // even when its own project_id or deal points here.
+    const otherEventIds = Array.from(new Set(rows.map((r) => r.event_id).filter((e) => e != null && !eventIds.includes(e))));
+    const elsewhere = new Set();
+    for (let i = 0; i < otherEventIds.length; i += CHUNK) {
+      const evs = await db('events').whereIn('id', otherEventIds.slice(i, i + CHUNK)).whereNotNull('project_id').select('id');
+      for (const e of evs) elsewhere.add(e.id);
+    }
     out.invoices = rows
+      .filter((r) => !elsewhere.has(r.event_id))
       .map(({ project_id: _p, ...inv }) => inv)
       // Newest first, as before. Compared as times: PostgreSQL returns Dates.
       .sort((a, b) => (b.issue_date ? new Date(b.issue_date).getTime() : 0) - (a.issue_date ? new Date(a.issue_date).getTime() : 0));

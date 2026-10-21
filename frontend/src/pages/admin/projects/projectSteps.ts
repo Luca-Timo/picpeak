@@ -46,12 +46,15 @@ function prefill(data: ProjectOverview, extra: Record<string, string | number | 
 /** The step for `stage`, or null when there is none the admin may take. */
 export function stepFor(stage: ProjectStageKey, data: ProjectOverview, { flags, can }: Ctx): ProjectStep | null {
   const { quotes, contracts, events, invoices } = data;
+  // New quotes, contracts and invoices can only join a project the admin
+  // created (the CRM write rule); opening existing ones is still offered.
+  const linkable = data.project.documentsLinkable !== false;
   switch (stage) {
     case 'quote': {
       if (!flags.quotes) return null;
       const open = quotes.find((q) => QUOTE_OPEN.has(q.status));
       if (open && can('quotes.view')) return { kind: 'openQuote', stage, href: `/admin/clients/quotes/${open.id}` };
-      if (can('quotes.manage')) return { kind: 'createQuote', stage, href: `/admin/clients/quotes/new?${prefill(data)}` };
+      if (linkable && can('quotes.manage')) return { kind: 'createQuote', stage, href: `/admin/clients/quotes/new?${prefill(data)}` };
       return null;
     }
     case 'contract': {
@@ -60,7 +63,7 @@ export function stepFor(stage: ProjectStageKey, data: ProjectOverview, { flags, 
       if (open && can('contracts.view')) return { kind: 'openContract', stage, href: `/admin/clients/contracts/${open.id}` };
       const accepted = quotes.find((q) => QUOTE_ACCEPTED.has(q.status));
       // POST /quotes/:id/convert-to-contract: quotes.manage + contracts.manage.
-      if (accepted && can('quotes.manage') && can('contracts.manage')) {
+      if (linkable && accepted && can('quotes.manage') && can('contracts.manage')) {
         return { kind: 'createContract', stage, sourceId: accepted.id };
       }
       return null;
@@ -87,7 +90,7 @@ export function stepFor(stage: ProjectStageKey, data: ProjectOverview, { flags, 
       if (!flags.bills) return null;
       const unpaid = invoices.find((i) => i.kind !== 'storno' && !['paid', 'cancelled', 'skipped'].includes(i.status));
       if (unpaid && can('bills.view')) return { kind: 'openInvoice', stage, href: `/admin/clients/bills/${unpaid.id}` };
-      if (!can('bills.manage') || !data.project.customerAccountId) return null;
+      if (!linkable || !can('bills.manage') || !data.project.customerAccountId) return null;
       // A monthly or manual customer's invoices go into one collected draft,
       // which POST /invoices refuses to tie to a project (422).
       if (['monthly', 'manual'].includes(data.project.customerBillingCadence || '')) return null;

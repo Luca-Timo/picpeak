@@ -32,6 +32,9 @@ export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, bu
   const hint = useStepHint();
   const stages = data.stage?.stages || [];
   const position = stages.findIndex((s) => s.state === 'current');
+  const lastReached = stages.reduce((last, s, i) => (['done', 'current', 'cancelled'].includes(s.state) ? i : last), -1);
+  const lastDone = stages.reduce((last, s, i) => (['done', 'current'].includes(s.state) ? i : last), -1);
+  const stoppedAt = stages.findIndex((s) => s.state === 'cancelled');
   const status = data.project.status;
   const skippedByHand = new Set(data.project.skippedStages || []);
   const currentKey = data.stage?.current ?? null;
@@ -53,6 +56,11 @@ export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, bu
 
       <ol className="grid grid-cols-1 sm:grid-cols-6 gap-3 sm:gap-0 mb-4" aria-label={t('projects.stage.title', 'Progress') as string}>
         {stages.map((s, i) => {
+          // The line runs green up to the furthest stage reached, through a
+          // skipped one on the way, so a skip does not read as a gap; from the
+          // last finished stage to where a cancelled project stopped it is red.
+          const reached = i <= lastReached;
+          const intoStop = stoppedAt >= 0 && i > lastDone && i <= stoppedAt;
           const done = s.state === 'done';
           const current = s.state === 'current';
           const stopped = s.state === 'cancelled';
@@ -73,7 +81,7 @@ export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, bu
               {i > 0 && (
                 <span
                   aria-hidden
-                  className={`hidden sm:block absolute top-4 right-1/2 w-full h-0.5 ${stopped ? 'bg-danger' : done || current ? 'bg-success' : 'bg-fill'}`}
+                  className={`hidden sm:block absolute top-4 right-1/2 w-full h-0.5 ${intoStop ? 'bg-danger' : reached ? 'bg-success' : 'bg-fill'}`}
                 />
               )}
               <span className={`relative z-10 w-8 h-8 shrink-0 rounded-full border-2 grid place-items-center text-sm font-semibold ${circle}`}>

@@ -72,6 +72,9 @@ export interface ProjectSummary extends Partial<ProjectInquiryFields> {
   stage?: ProjectStage;
   /** Stages skipped by hand on this project. */
   skippedStages?: ProjectStageKey[];
+  /** Cockpit only: new quotes, contracts and invoices may join this project
+   *  (its creator or a super admin; not a legacy ownerless project). */
+  documentsLinkable?: boolean;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -173,7 +176,8 @@ export type ProjectWritePayload = Partial<ProjectInquiryFields> & {
   skippedStages?: ProjectStageKey[];
   name?: string;
   customerAccountId?: number | null;
-  status?: ProjectStatus;
+  /** `reopen` (update only): the server picks inquiry or active. */
+  status?: ProjectStatus | 'reopen';
 };
 
 export interface EmailPreview {

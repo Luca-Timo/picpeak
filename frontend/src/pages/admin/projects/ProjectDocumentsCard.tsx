@@ -108,13 +108,18 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
   // A group the admin cannot have (feature off, or no view permission: the
   // overview leaves those documents out) is not shown as "none yet".
   const shows = (flag: string, perm: string) => !!flags[flag] && can(perm);
+  // Nor is a group whose stage this project skips, while it holds nothing:
+  // the stage strip already says "skipped". The gallery group stays for its
+  // attach search.
+  const skipped = (key: string, count: number) => count === 0
+    && data.stage?.stages.some((s) => s.key === key && s.state === 'skipped');
   const date = (d: string | null | undefined) => (d ? format(d) : '');
 
   return (
     <Card>
       <h2 className="text-base font-semibold text-heading mb-4">{t('projects.documents.title', 'Documents & galleries')}</h2>
       <div className="space-y-5">
-        {shows('quotes', 'quotes.view') && (
+        {shows('quotes', 'quotes.view') && !skipped('quote', data.quotes.length) && (
         <Group title={t('projects.stage.quote', 'Quote')} empty={t('projects.documents.noQuote', 'No quote yet.')}>
           {data.quotes.map((q) => (
             <Row
@@ -130,7 +135,7 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
         </Group>
         )}
 
-        {shows('contracts', 'contracts.view') && (
+        {shows('contracts', 'contracts.view') && !skipped('contract', data.contracts.length) && (
         <Group title={t('projects.stage.contract', 'Contract')} empty={t('projects.documents.noContract', 'No contract yet.')}>
           {data.contracts.map((c) => (
             <Row
@@ -197,7 +202,7 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
           ))}
         </Group>
 
-        {shows('bills', 'bills.view') && (
+        {shows('bills', 'bills.view') && !skipped('invoice', data.invoices.length) && (
         <Group title={t('projects.documents.invoices', 'Invoices')} empty={t('projects.documents.noInvoice', 'No invoice yet.')}>
           {data.invoices.map((inv) => (
             <Row

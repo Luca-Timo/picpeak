@@ -37,7 +37,7 @@ import { ProjectActivityFeed, minutesToHours } from './ProjectActivityFeed';
 import { ProjectStageCard } from './ProjectStageCard';
 import { ProjectDocumentsCard } from './ProjectDocumentsCard';
 import { ProjectCustomerCard, ProjectDataCard, ProjectValueCard, type CustomerChoice } from './ProjectSideCards';
-import { ProjectSettingsTab, reopenStatus } from './ProjectSettingsTab';
+import { ProjectSettingsTab } from './ProjectSettingsTab';
 import { projectSteps, type ProjectStep } from './projectSteps';
 import { StepIcon, useRunStep, useStepLabel } from './useProjectSteps';
 import {
@@ -180,7 +180,7 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
   };
 
   const setStatus = useMutationWithToast({
-    mutationFn: (status: ProjectStatus) => projectsService.update(projectId, { status }),
+    mutationFn: (status: ProjectStatus | 'reopen') => projectsService.update(projectId, { status }),
     successMessage: (_r, status) => (status === 'cancelled'
       ? t('projects.toast.cancelled', 'Project marked as cancelled.')
       : t('projects.toast.reopened', 'Project reopened.')) as string,
@@ -253,7 +253,7 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
       key: 'reopen',
       label: t('projects.settings.reopen', 'Reopen'),
       icon: <RotateCcw className="w-4 h-4" />,
-      onSelect: () => setStatus.mutate(reopenStatus(data)),
+      onSelect: () => setStatus.mutate('reopen'),
     });
   }
 

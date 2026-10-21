@@ -48,6 +48,15 @@ describe('project steps', () => {
     expect(step?.href).toContain('/admin/events/new?projectId=7');
   });
 
+  it('offers no new quote, contract or invoice on a project new documents cannot join, but still opens existing ones', () => {
+    const base = overview('quote');
+    const locked = (extra: Partial<ProjectOverview> = {}) => ({ ...base, ...extra, project: { ...base.project, documentsLinkable: false } });
+    expect(stepFor('quote', locked(), everything)).toBeNull();
+    expect(stepFor('contract', locked({ quotes: [quote(5, 'accepted')] }), everything)).toBeNull();
+    expect(stepFor('invoice', locked(), everything)).toBeNull();
+    expect(stepFor('quote', locked({ quotes: [quote(5, 'sent')] }), everything)?.kind).toBe('openQuote');
+  });
+
   it('leaves out a step whose feature is off', () => {
     expect(stepFor('quote', overview('quote'), { flags: { ...ALL_FLAGS, quotes: false }, can: () => true })).toBeNull();
   });

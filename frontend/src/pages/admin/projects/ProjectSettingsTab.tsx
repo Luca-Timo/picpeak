@@ -8,6 +8,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Ban, CheckCircle2, Flag, RotateCcw, Trash2 } from 'lucide-react';
 import { Button, Card, useConfirm } from '../../../components/common';
 import { useMutationWithToast } from '../../../hooks';
@@ -19,10 +20,20 @@ interface Props {
   canEdit: boolean;
 }
 
-/** Reopening returns an untouched inquiry to `inquiry`, anything else to `active`. */
-export function reopenStatus(data: ProjectOverview): ProjectStatus {
-  const holdsSomething = data.quotes.length || data.contracts.length || data.events.length || data.invoices.length;
-  return holdsSomething ? 'active' : 'inquiry';
+/** Why the server refused the delete, by its code; it names what to move
+ *  out or which permission is missing. */
+function deleteRefusal(error: unknown, t: TFunction): string {
+  const data = (error as { response?: { data?: { code?: string; permissions?: string[] } } })?.response?.data;
+  switch (data?.code) {
+    case 'PROJECT_DELETE_NEEDS_PERMISSION':
+      return t('projects.toast.deleteNeedsPermission', 'This project holds records you cannot change. Deleting it needs: {{permissions}}.', { permissions: (data.permissions || []).join(', ') });
+    case 'PROJECT_DELETE_FOREIGN_DOCUMENTS':
+      return t('projects.toast.deleteForeignDocuments', 'This project holds documents of another admin. Move them out of the project first.');
+    case 'PROJECT_DELETE_FOREIGN_GALLERIES':
+      return t('projects.toast.deleteForeignGalleries', 'This project holds galleries of another admin. Move them out of the project first.');
+    default:
+      return t('projects.toast.deleteFailed', 'Could not delete the project');
+  }
 }
 
 const ActionRow: React.FC<{ title: string; text: string; danger?: boolean; children: React.ReactNode }> = ({ title, text, danger, children }) => (
@@ -45,7 +56,7 @@ export const ProjectSettingsTab: React.FC<Props> = ({ data, canEdit }) => {
   const closed = status === 'cancelled' || status === 'completed';
 
   const setStatus = useMutationWithToast({
-    mutationFn: (next: ProjectStatus) => projectsService.update(id, { status: next }),
+    mutationFn: (next: ProjectStatus | 'reopen') => projectsService.update(id, { status: next }),
     successMessage: (_r, next) => (next === 'cancelled'
       ? t('projects.toast.cancelled', 'Project marked as cancelled.')
       : next === 'completed'
@@ -58,7 +69,7 @@ export const ProjectSettingsTab: React.FC<Props> = ({ data, canEdit }) => {
   const remove = useMutationWithToast({
     mutationFn: () => projectsService.remove(id),
     successMessage: t('projects.toast.deleted', 'Project deleted. Its galleries and documents are kept.') as string,
-    errorMessage: t('projects.toast.deleteFailed', 'Could not delete the project') as string,
+    errorMessage: (error) => deleteRefusal(error, t),
     invalidateKeys: [['projects']],
     // The project is gone, so its unsaved draft goes with it: no leave prompt.
     onSuccess: () => unguarded(() => navigate('/admin/clients/projects')),
@@ -100,7 +111,7 @@ export const ProjectSettingsTab: React.FC<Props> = ({ data, canEdit }) => {
                 : t('projects.settings.reopenCompleted', 'This project is completed. Reopen it to keep working on it.')}
             >
               <Button variant="outline" size="sm" leftIcon={<RotateCcw className="w-4 h-4" />} isLoading={setStatus.isPending}
-                onClick={() => setStatus.mutate(reopenStatus(data))}>
+                onClick={() => setStatus.mutate('reopen')}>
                 {t('projects.settings.reopen', 'Reopen')}
               </Button>
             </ActionRow>

@@ -332,6 +332,7 @@ describe('project inquiry flow', () => {
     const foreignEvent = await mkEvent({ projectId: own });
     const res = await request(app).delete(`/api/admin/projects/${own}`).set('Authorization', `Bearer ${editorToken}`);
     expect(res.status).toBe(403);
+    expect(res.body.code).toBe('PROJECT_DELETE_FOREIGN_GALLERIES');
     expect((await db('events').where({ id: foreignEvent }).first('project_id')).project_id).toBe(own);
   });
 
@@ -345,7 +346,7 @@ describe('project inquiry flow', () => {
     const res = await request(app).delete(`/api/admin/projects/${own}`).set('Authorization', `Bearer ${editorToken}`);
     expect(res.status).toBe(403);
     // The route's own answer, not a refusal further down: it saw the quote.
-    expect(res.body.error).toMatch(/records you cannot change|documents that are not yours/);
+    expect(['PROJECT_DELETE_NEEDS_PERMISSION', 'PROJECT_DELETE_FOREIGN_DOCUMENTS']).toContain(res.body.code);
     expect((await db('quotes').where({ id: quoteId }).first('project_id')).project_id).toBe(own);
   });
 
@@ -485,6 +486,60 @@ describe('project inquiry flow', () => {
     });
     const { stage } = await overview(project.id);
     expect(stage.stages.find((s) => s.key === 'contract').state).toBe('done');
+  });
+
+  it('clears the skipped stages with null as with an empty list', async () => {
+    const project = await createInquiry({ skippedStages: ['quote'] });
+    const res = await put(`/api/admin/projects/${project.id}`, { skippedStages: null });
+    expect(res.status).toBe(200);
+    expect((res.body.data || res.body).project.skippedStages).toEqual([]);
+  });
+
+  it('reopens to an inquiry or to active by what the project holds, decided on the server', async () => {
+    const empty = await createInquiry();
+    await put(`/api/admin/projects/${empty.id}`, { status: 'cancelled' });
+    let res = await put(`/api/admin/projects/${empty.id}`, { status: 'reopen' });
+    expect(res.status).toBe(200);
+    expect((res.body.data || res.body).project.status).toBe('inquiry');
+
+    // A quote of another admin's, which the caller's overview may not list.
+    const holding = await createInquiry();
+    const quoteId = await mkQuote({ projectId: holding.id, dealUuid: crypto.randomUUID() });
+    await db('quotes').where({ id: quoteId }).update({ created_by_admin_id: editorId });
+    await db('projects').where({ id: holding.id }).update({ status: 'cancelled' });
+    res = await put(`/api/admin/projects/${holding.id}`, { status: 'reopen' });
+    expect(res.status).toBe(200);
+    expect((res.body.data || res.body).project.status).toBe('active');
+
+    // Only an update reopens; a new project needs a real status.
+    expect((await post('/api/admin/projects', { name: 'Reopen on create', status: 'reopen' })).status).toBe(400);
+  });
+
+  it('shows an invoice in the project of its gallery only, even when its own project_id points elsewhere', async () => {
+    const a = await createInquiry();
+    const b = await createInquiry();
+    const eventInB = await mkEvent({ projectId: b.id });
+    const invoiceId = await mkInvoice({ projectId: a.id, eventId: eventInB });
+    expect((await overview(a.id)).invoices.map((i) => i.id)).not.toContain(invoiceId);
+    expect((await overview(b.id)).invoices.map((i) => i.id)).toContain(invoiceId);
+  });
+
+  it('tells the cockpit whether new documents may join the project', async () => {
+    const ownerless = idOf(await db('projects').insert({
+      name: 'Legacy ownerless', status: 'active', created_by: null, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const ev = await mkEvent({ projectId: ownerless });
+    await db('events').where({ id: ev }).update({ created_by: editorId });
+    const asEditor = await get(`/api/admin/projects/${ownerless}/overview`, editorToken);
+    expect(asEditor.status).toBe(200);
+    expect((asEditor.body.data || asEditor.body).project.documentsLinkable).toBe(false);
+    expect((await overview(ownerless)).project.documentsLinkable).toBe(true);
+
+    const own = idOf(await db('projects').insert({
+      name: 'Editor own', status: 'active', created_by: editorId, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const ownRes = await get(`/api/admin/projects/${own}/overview`, editorToken);
+    expect((ownRes.body.data || ownRes.body).project.documentsLinkable).toBe(true);
   });
 
   it.each([
