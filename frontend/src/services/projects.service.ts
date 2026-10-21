@@ -18,7 +18,8 @@ export type InquirySource = typeof INQUIRY_SOURCES[number];
 
 export type ProjectStageKey = 'inquiry' | 'quote' | 'contract' | 'gallery' | 'invoice' | 'done';
 /** Derived on the server from what the project holds (projectService.deriveStages). */
-export type ProjectStageState = 'done' | 'current' | 'skipped' | 'todo' | 'hidden';
+/** `cancelled`: where a cancelled project stopped. */
+export type ProjectStageState = 'done' | 'current' | 'skipped' | 'cancelled' | 'todo' | 'hidden';
 export interface ProjectStage {
   stages: Array<{ key: ProjectStageKey; state: ProjectStageState }>;
   current: ProjectStageKey | null;

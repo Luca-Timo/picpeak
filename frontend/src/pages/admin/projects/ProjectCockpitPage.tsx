@@ -49,7 +49,7 @@ const TABS: ProjectTab[] = ['overview', 'activity', 'settings'];
 const isTab = (v: string | null): v is ProjectTab => !!v && (TABS as string[]).includes(v);
 
 export const STATUS_TONE: Record<ProjectStatus, BadgeTone> = {
-  inquiry: 'info', active: 'success', completed: 'neutral', cancelled: 'neutral', archived: 'neutral',
+  inquiry: 'info', active: 'success', completed: 'neutral', cancelled: 'danger', archived: 'neutral',
 };
 
 const customerFromProject = (data: ProjectOverview): CustomerChoice => ({

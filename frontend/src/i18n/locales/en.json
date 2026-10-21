@@ -8485,7 +8485,8 @@
       "current": "now",
       "skipped": "skipped",
       "todo": "open",
-      "hidden": "not visible to you"
+      "hidden": "not visible to you",
+      "cancelled": "cancelled"
     },
     "source": {
       "referral": "Referral",

@@ -210,10 +210,13 @@ describe('project inquiry flow', () => {
     ]);
   });
 
-  it('reports no current stage on a cancelled project', async () => {
+  it('marks where a cancelled project stopped, with nothing current', async () => {
     const project = await createInquiry({ status: 'cancelled' });
+    await mkQuote({ projectId: project.id, dealUuid: crypto.randomUUID() });
     const { stage } = await overview(project.id);
     expect(stage.current).toBeNull();
+    // Inquiry and quote done; it stopped at the contract; the rest never came.
+    expect(stage.stages.map((s) => s.state)).toEqual(['done', 'done', 'cancelled', 'todo', 'todo', 'todo']);
   });
 
   it('rolls up invoices by their own project_id and by the deal of a linked quote', async () => {

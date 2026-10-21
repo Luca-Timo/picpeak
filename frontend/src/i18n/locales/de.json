@@ -8450,7 +8450,8 @@
       "current": "jetzt",
       "skipped": "übersprungen",
       "todo": "offen",
-      "hidden": "für Sie nicht sichtbar"
+      "hidden": "für Sie nicht sichtbar",
+      "cancelled": "abgesagt"
     },
     "source": {
       "referral": "Empfehlung",

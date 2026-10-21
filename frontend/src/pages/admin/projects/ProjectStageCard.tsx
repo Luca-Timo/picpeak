@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, EyeOff } from 'lucide-react';
+import { Check, EyeOff, X } from 'lucide-react';
 import { Button, Card } from '../../../components/common';
 import type { ProjectOverview, ProjectStageKey, ProjectStageState } from '../../../services/projects.service';
 import type { ProjectStep } from './projectSteps';
@@ -48,12 +48,15 @@ export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, bu
         {stages.map((s, i) => {
           const done = s.state === 'done';
           const current = s.state === 'current';
+          const stopped = s.state === 'cancelled';
           const circle = done
             ? 'bg-success border-success text-white'
-            : current
+            : stopped
+              ? 'bg-danger border-danger text-white'
+              : current
               ? 'bg-accent-strong border-accent-strong text-accent-fg'
               : `bg-panel border-fill-strong text-faint ${s.state === 'skipped' ? 'border-dashed' : ''}`;
-          const word = done ? 'text-success-text' : current ? 'text-accent font-medium' : 'text-muted';
+          const word = done ? 'text-success-text' : stopped ? 'text-danger-text font-medium' : current ? 'text-accent font-medium' : 'text-muted';
           return (
             <li
               key={s.key}
@@ -67,10 +70,10 @@ export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, bu
                 />
               )}
               <span className={`relative z-10 w-8 h-8 shrink-0 rounded-full border-2 grid place-items-center text-sm font-semibold ${circle}`}>
-                {done ? <Check className="w-4 h-4" /> : s.state === 'hidden' ? <EyeOff className="w-4 h-4" /> : i + 1}
+                {done ? <Check className="w-4 h-4" /> : stopped ? <X className="w-4 h-4" /> : s.state === 'hidden' ? <EyeOff className="w-4 h-4" /> : i + 1}
               </span>
               <span className="min-w-0">
-                <span className={`block text-sm font-semibold ${current || done ? 'text-heading' : 'text-soft'}`}>{stageName(s.key)}</span>
+                <span className={`block text-sm font-semibold ${current || done || stopped ? 'text-heading' : 'text-soft'}`}>{stageName(s.key)}</span>
                 <span className={`block text-xs ${word}`}>{stateWord(s.state)}</span>
               </span>
             </li>

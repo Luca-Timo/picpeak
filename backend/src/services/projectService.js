@@ -798,8 +798,10 @@ function computeValuation(invoices = [], quotes = []) {
 //   invoice  — it has invoices and every one that still counts is paid;
 //   done     — the admin completed the project.
 // A stage that is not done while a later one is reads `skipped`. The first
-// stage after the last done one is `current`; a cancelled or completed project
-// has none. A stage whose documents the admin may not see reads `hidden`.
+// stage after the last done one is `current`; on a cancelled project it reads
+// `cancelled` instead (where the job stopped) and the rest stay `todo`; a
+// completed project has no current stage either. A stage whose documents the
+// admin may not see reads `hidden`.
 const STAGES = ['inquiry', 'quote', 'contract', 'gallery', 'invoice', 'done'];
 const QUOTE_DONE = new Set(['accepted', 'converted']);
 const CONTRACT_DONE = new Set(['fully_signed']);
@@ -821,14 +823,17 @@ function deriveStages({ status, quotes = [], contracts = [], events = [], invoic
   const hidden = { quote: perms.quotes === false, contract: perms.contracts === false, invoice: perms.bills === false };
   let lastDone = -1;
   STAGES.forEach((key, i) => { if (done[key] && !hidden[key]) lastDone = i; });
-  const closed = status === 'completed' || status === 'cancelled';
+  const completed = status === 'completed';
+  const cancelled = status === 'cancelled';
   let current = null;
+  let stoppedAt = null;
   const stages = STAGES.map((key, i) => {
     let state;
     if (hidden[key]) state = 'hidden';
     else if (done[key]) state = 'done';
-    else if (i < lastDone || (closed && key !== 'done')) state = 'skipped';
-    else if (!closed && current === null) { state = 'current'; current = key; }
+    else if (i < lastDone || (completed && key !== 'done')) state = 'skipped';
+    else if (cancelled && stoppedAt === null) { state = 'cancelled'; stoppedAt = key; }
+    else if (!completed && !cancelled && current === null) { state = 'current'; current = key; }
     else state = 'todo';
     return { key, state };
   });
