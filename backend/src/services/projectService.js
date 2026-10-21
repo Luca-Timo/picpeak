@@ -792,6 +792,54 @@ const assignQuote = (projectId, quoteId, actor) => assignDocument('quotes', proj
 const assignContract = (projectId, contractId, actor) => assignDocument('contracts', projectId, contractId, actor);
 
 /**
+ * Attach an existing invoice, e.g. to set up a project for a job that is
+ * already finished. Only `project_id` changes, never the issued invoice
+ * itself. Its deal comes along (linkDealToProject: quotes, contracts and the
+ * galleries they made), and so does its gallery when that is in no project
+ * yet. Its Storno and reissue follow through the lineage rollup.
+ * Refused when its gallery is in another project (it rolls up there), or
+ * when it is another customer's. The caller's route vets the gallery owner.
+ */
+async function assignInvoice(projectId, invoiceId, actor = null) {
+  if (!(await hasColumnCached('invoices', 'project_id'))) {
+    throw new AppError('This instance has no invoices.project_id column yet — run migrations', 409);
+  }
+  const project = await db('projects').where({ id: projectId }).first('id');
+  if (!project) throw new AppError('Project not found', 404);
+  const inv = await db('invoices').where({ id: invoiceId }).first('id', 'event_id', 'deal_uuid', 'customer_account_id');
+  if (!inv) throw new AppError('Invoice not found', 404);
+
+  let event = null;
+  if (inv.event_id && await hasColumnCached('events', 'project_id')) {
+    event = await db('events').where({ id: inv.event_id }).first('id', 'project_id');
+    if (event?.project_id != null && Number(event.project_id) !== Number(projectId)) {
+      throw new AppError('This invoice’s gallery belongs to another project', 422, 'PROJECT_EVENT_MISMATCH');
+    }
+  }
+
+  let adopted = false;
+  if (inv.customer_account_id != null) {
+    const hold = await holdProjectToCustomer(projectId, inv.customer_account_id);
+    if (!hold) throw new AppError('That belongs to a different customer than this project', 422, 'PROJECT_CUSTOMER_MISMATCH');
+    adopted = hold === 'adopted';
+  }
+
+  try {
+    if (inv.deal_uuid) await linkDealToProject(inv.deal_uuid, projectId, db, actor);
+    if (event && event.project_id == null) {
+      await db('events').where({ id: event.id }).whereNull('project_id').update({ project_id: projectId });
+    }
+    await auditedUpdate(db, 'invoices', { id: invoiceId }, { project_id: projectId },
+      { actor: actor?.id ?? null, source: 'project.assign_invoice' });
+  } catch (err) {
+    if (adopted) await releaseAdoptedCustomer(projectId, inv.customer_account_id);
+    throw err;
+  }
+  await promoteInquiry(projectId);
+  return { projectId, invoiceId };
+}
+
+/**
  * Project valuation — "newest stage wins per deal, cumulative across events".
  *
  * Each deal (deal_uuid lineage: quote → contract → invoice) contributes ONE
@@ -1277,6 +1325,7 @@ module.exports = {
   assignEvent,
   assignQuote,
   assignContract,
+  assignInvoice,
   linkDealToProject,
   computeValuation,
   getProjectOverview,

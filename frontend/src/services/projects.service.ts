@@ -243,6 +243,10 @@ export const projectsService = {
     await api.post(`/admin/projects/${projectId}/contracts`, { contractId });
   },
 
+  async assignInvoice(projectId: number, invoiceId: number): Promise<void> {
+    await api.post(`/admin/projects/${projectId}/invoices`, { invoiceId });
+  },
+
   async emailPreview(emailId: number): Promise<EmailPreview> {
     const { data } = await api.get(`/admin/projects/email/${emailId}/preview`);
     return (data.data || data) as EmailPreview;

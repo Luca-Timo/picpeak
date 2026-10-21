@@ -8249,9 +8249,6 @@
     "events": {
       "title": "Galerien",
       "none": "Diesem Projekt sind noch keine Galerien zugeordnet.",
-      "searchPlaceholder": "Galerie zuordnen — nach Name suchen…",
-      "attached": "Galerie zugeordnet",
-      "attachFailed": "Galerie konnte nicht zugeordnet werden",
       "attachAfterCreateFailed": "Die Galerie wurde erstellt, konnte aber nicht dem Projekt zugeordnet werden. Ordnen Sie sie auf der Projektseite zu."
     },
     "feed": {
@@ -8477,6 +8474,21 @@
       "no_quote": "Ohne Angebot",
       "help": "Schritte, die der Ablauf nicht vorsieht, erscheinen als übersprungen. Einzelne Schritte lassen sich auch auf der Projektseite überspringen.",
       "sectionHelp": "Welche Schritte dieser Auftrag hat. Sie können das später ändern."
+    },
+    "attach": {
+      "add": "Vorhandenes hinzufügen",
+      "quoteTitle": "Angebot hinzufügen",
+      "contractTitle": "Vertrag hinzufügen",
+      "galleryTitle": "Galerie hinzufügen",
+      "help": "Nach Nummer oder Name suchen. Verknüpfte Dokumente kommen mit.",
+      "helpCustomer": "Dokumente dieses Kunden. Suchen Sie, um andere zu finden.",
+      "search": "Suchen…",
+      "elsewhere": "in einem anderen Projekt, wird hierher verschoben",
+      "none": "Nichts gefunden.",
+      "done": "Zum Projekt hinzugefügt",
+      "failed": "Konnte nicht zum Projekt hinzugefügt werden",
+      "invoiceTitle": "Rechnung hinzufügen",
+      "galleryElsewhere": "Die Galerie dazu gehört zu einem anderen Projekt. Fügen Sie sie dort hinzu oder verschieben Sie zuerst die Galerie."
     }
   },
   "calendar": {

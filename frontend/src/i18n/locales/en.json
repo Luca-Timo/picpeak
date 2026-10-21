@@ -8284,9 +8284,6 @@
     "events": {
       "title": "Galleries",
       "none": "No galleries grouped under this project yet.",
-      "searchPlaceholder": "Attach a gallery — search by name…",
-      "attached": "Gallery attached",
-      "attachFailed": "Could not attach gallery",
       "attachAfterCreateFailed": "The gallery was created but could not be attached to the project. Attach it on the project page."
     },
     "feed": {
@@ -8512,6 +8509,21 @@
       "no_quote": "Without quote",
       "help": "Stages the workflow leaves out show as skipped. One stage can also be skipped on the project page.",
       "sectionHelp": "Which steps this job has. You can change it later."
+    },
+    "attach": {
+      "add": "Add existing",
+      "quoteTitle": "Add a quote",
+      "contractTitle": "Add a contract",
+      "galleryTitle": "Add a gallery",
+      "help": "Search by number or name. Its linked documents come along.",
+      "helpCustomer": "This customer’s documents. Search to find any other.",
+      "search": "Search…",
+      "elsewhere": "in another project, moves here",
+      "none": "Nothing found.",
+      "done": "Added to the project",
+      "failed": "Could not add it to the project",
+      "invoiceTitle": "Add an invoice",
+      "galleryElsewhere": "Its gallery belongs to another project. Add it there, or move the gallery first."
     }
   },
   "calendar": {

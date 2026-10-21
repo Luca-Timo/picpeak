@@ -315,6 +315,30 @@ router.post('/:id/contracts',
   }),
 );
 
+// Attach an existing invoice to the project (a finished job set up after the
+// fact). bills.manage in addition to events.edit, as for quotes and contracts
+// (GHSA-v4vw). The invoice is read through the CRM access layer, so another
+// admin's answers 404; its gallery, which comes along, must be the caller's.
+router.post('/:id/invoices',
+  requirePermission(['events.edit', 'bills.manage'], { requireAll: true }),
+  requireProjectOwnership,
+  [param('id').isInt({ min: 1 }), body('invoiceId').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const invoiceId = parseInt(req.body.invoiceId, 10);
+    const inv = await db('invoices').where({ id: invoiceId }).first('event_id');
+    if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+    if (inv.event_id) {
+      const { denied } = await filterOwnedEventIds(req.admin, [inv.event_id]);
+      if (denied.length) return res.status(403).json({ error: 'That invoice’s gallery is not yours to attach' });
+    }
+    await assertCascadePermitted(req, 'invoices', invoiceId, 'quotes', 'quotes.manage');
+    await assertCascadePermitted(req, 'invoices', invoiceId, 'contracts', 'contracts.manage');
+    const result = await projectService.assignInvoice(parseInt(req.params.id, 10), invoiceId, req.admin);
+    return successResponse(res, result, 200, 'Invoice attached to project');
+  }),
+);
+
 // The cockpit aggregation — doc types gated on the admin's own permissions
 router.get('/:id/overview', requirePermission('events.view'), requireProjectOwnership, [param('id').isInt({ min: 1 })], handleAsync(async (req, res) => {
   validateRequest(req);

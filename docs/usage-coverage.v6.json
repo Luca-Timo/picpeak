@@ -1156,6 +1156,7 @@
         "POST /:id/events",
         "POST /:id/quotes",
         "POST /:id/contracts",
+        "POST /:id/invoices",
         "GET /:id/overview",
         "GET /email/:emailId/preview",
         "POST /email/:emailId/resend",

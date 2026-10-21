@@ -7519,10 +7519,7 @@
     },
     "events": {
       "title": "Dogodki",
-      "none": "Pod tem projektom še ni združenih dogodkov.",
-      "searchPlaceholder": "Pripni dogodek — išči po imenu…",
-      "attached": "Dogodek pripet",
-      "attachFailed": "Dogodka ni bilo mogoče pripeti"
+      "none": "Pod tem projektom še ni združenih dogodkov."
     },
     "feed": {
       "title": "Dejavnost",

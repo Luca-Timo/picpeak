@@ -136,6 +136,8 @@ describe('project inquiry flow', () => {
     app.use(express.json());
     app.use('/api/admin/projects', require('../../src/routes/adminProjects'));
     app.use('/api/admin/invoices', require('../../src/routes/adminInvoices'));
+    // As in the app, so a refusal carries its code.
+    app.use(require('../../src/middleware/errorHandler').errorHandler);
   }, 120000);
 
   afterAll(async () => { if (cleanup) await cleanup(); });
@@ -540,6 +542,67 @@ describe('project inquiry flow', () => {
     }).returning('id'));
     const ownRes = await get(`/api/admin/projects/${own}/overview`, editorToken);
     expect((ownRes.body.data || ownRes.body).project.documentsLinkable).toBe(true);
+  });
+
+  it('attaches an existing invoice and brings its deal and unassigned gallery along', async () => {
+    const project = idOf(await db('projects').insert({
+      name: 'Finished job', status: 'inquiry', created_by: superId, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const dealUuid = crypto.randomUUID();
+    const quoteId = await mkQuote({ dealUuid });
+    const ev = await mkEvent();
+    const invoiceId = await mkInvoice({ dealUuid, eventId: ev, status: 'paid' });
+    const res = await post(`/api/admin/projects/${project}/invoices`, { invoiceId });
+    expect(res.status).toBe(200);
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBe(project);
+    expect((await db('quotes').where({ id: quoteId }).first('project_id')).project_id).toBe(project);
+    expect((await db('events').where({ id: ev }).first('project_id')).project_id).toBe(project);
+    const row = await db('projects').where({ id: project }).first('status', 'customer_account_id');
+    expect(row.status).toBe('active');
+    expect(Number(row.customer_account_id)).toBe(Number(customerId));
+    expect((await overview(project)).invoices.map((i) => i.id)).toContain(invoiceId);
+  });
+
+  it('refuses an existing invoice whose gallery is in another project, and keeps the customer free', async () => {
+    const other = await createInquiry();
+    const ev = await mkEvent({ projectId: other.id });
+    const invoiceId = await mkInvoice({ eventId: ev });
+    const project = idOf(await db('projects').insert({
+      name: 'Empty', status: 'inquiry', created_by: superId, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const res = await post(`/api/admin/projects/${project}/invoices`, { invoiceId });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_EVENT_MISMATCH');
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBeNull();
+    expect((await db('projects').where({ id: project }).first('customer_account_id')).customer_account_id).toBeNull();
+  });
+
+  it('refuses an existing invoice of another customer', async () => {
+    const project = await createInquiry();
+    const invoiceId = await mkInvoice({});
+    await db('invoices').where({ id: invoiceId }).update({ customer_account_id: otherCustomerId });
+    const res = await post(`/api/admin/projects/${project.id}/invoices`, { invoiceId });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROJECT_CUSTOMER_MISMATCH');
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBeNull();
+  });
+
+  it('gives back the customer when a late check refuses the invoice (deal holds another admin\'s gallery)', async () => {
+    const project = idOf(await db('projects').insert({
+      name: 'Editor empty', status: 'inquiry', created_by: editorId, created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const dealUuid = crypto.randomUUID();
+    const foreignEvent = await mkEvent();
+    await db('quotes').where({ id: await mkQuote({ dealUuid }) }).update({ converted_event_id: foreignEvent });
+    const invoiceId = await mkInvoice({ dealUuid });
+    // The service with the editor as actor: linkDealToProject refuses after
+    // the project adopted the invoice's customer.
+    const projectService = require('../../src/services/projectService');
+    await expect(projectService.assignInvoice(project, invoiceId, { id: editorId, roleName: 'editor' }))
+      .rejects.toMatchObject({ code: 'DEAL_EVENT_FORBIDDEN' });
+    expect((await db('invoices').where({ id: invoiceId }).first('project_id')).project_id).toBeNull();
+    expect((await db('events').where({ id: foreignEvent }).first('project_id')).project_id).toBeNull();
+    expect((await db('projects').where({ id: project }).first('customer_account_id')).customer_account_id).toBeNull();
   });
 
   it.each([

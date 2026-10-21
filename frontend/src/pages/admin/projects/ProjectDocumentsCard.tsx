@@ -1,18 +1,17 @@
 /**
  * Everything the project holds, grouped by the stage it belongs to: quotes,
- * contracts, galleries, invoices. Each row opens its document; an empty
- * group says so. The gallery group keeps the "attach a gallery" search the
- * page always had.
+ * contracts, galleries, invoices. Each row opens its document. An empty
+ * group is a button that opens the search to add
+ * an existing one (AttachDocumentDialog); a group with rows has "Add" in its
+ * heading.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-toastify';
-import { FileText, Image as ImageIcon, Plus, Receipt, ScrollText, Search } from 'lucide-react';
-import { Badge, Card, Input, type BadgeTone } from '../../../components/common';
-import { eventsService } from '../../../services/events.service';
-import { projectsService, type ProjectOverview } from '../../../services/projects.service';
+import { FileText, Image as ImageIcon, Plus, Receipt, ScrollText } from 'lucide-react';
+import { Badge, Card, type BadgeTone } from '../../../components/common';
+import type { ProjectOverview } from '../../../services/projects.service';
+import type { AttachKind } from './AttachDocumentDialog';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { formatMoneyMinor } from '../../../utils/money';
 
@@ -34,6 +33,12 @@ interface Props {
   flags: Record<string, boolean>;
   can: (perm: string) => boolean;
   canAttachGallery: boolean;
+  /** May add quotes and contracts (documentsLinkable plus the manage permission). */
+  canAttachQuote: boolean;
+  canAttachContract: boolean;
+  canAttachInvoice: boolean;
+  /** Opens the search window (AttachDocumentDialog, rendered by the page). */
+  onAdd: (kind: AttachKind) => void;
 }
 
 const Row: React.FC<{
@@ -59,58 +64,45 @@ const Row: React.FC<{
   );
 };
 
-const Group: React.FC<{ title: string; empty: string; children?: React.ReactNode; footer?: React.ReactNode }> = ({ title, empty, children, footer }) => {
+const Group: React.FC<{ title: string; empty: string; addLabel?: string; onAdd?: () => void; children?: React.ReactNode }> = ({ title, empty, addLabel, onAdd, children }) => {
   const rows = React.Children.toArray(children).filter(Boolean);
+  const emptyCls = 'w-full rounded-xl border border-dashed border-line-strong px-3 py-2.5 text-left text-sm text-muted';
   return (
     <section>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{title}</h3>
-      <div className="space-y-1.5">
-        {rows.length ? rows : (
-          <p className="rounded-xl border border-dashed border-line-strong px-3 py-2.5 text-sm text-muted">{empty}</p>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
+        {onAdd && rows.length > 0 && (
+          <button type="button" onClick={onAdd} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+            <Plus className="w-3 h-3" />{addLabel}
+          </button>
         )}
-        {footer}
+      </div>
+      <div className="space-y-1.5">
+        {rows.length ? rows : onAdd ? (
+          <button type="button" onClick={onAdd} className={`${emptyCls} flex items-center justify-between gap-2 hover:border-accent hover:text-heading`}>
+            <span>{empty}</span>
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-accent"><Plus className="w-3 h-3" />{addLabel}</span>
+          </button>
+        ) : (
+          <p className={emptyCls}>{empty}</p>
+        )}
       </div>
     </section>
   );
 };
 
-export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAttachGallery }) => {
+export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAttachGallery, canAttachQuote, canAttachContract, canAttachInvoice, onAdd }) => {
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
-  const qc = useQueryClient();
-  const projectId = data.project.id;
-  const [eventSearch, setEventSearch] = useState('');
-
-  const { data: eventResults } = useQuery({
-    queryKey: ['project-event-search', eventSearch],
-    queryFn: () => eventsService.getEvents({ limit: 10, search: eventSearch }),
-    enabled: canAttachGallery && eventSearch.trim().length >= 2,
-  });
-  const attach = useMutation({
-    mutationFn: (eventId: number) => projectsService.assignEvent(projectId, eventId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project-overview', projectId] });
-      qc.invalidateQueries({ queryKey: ['projects'] });
-      setEventSearch('');
-      toast.success(t('projects.events.attached', 'Gallery attached') as string);
-    },
-    onError: (err: unknown) => {
-      const res = (err as { response?: { data?: { code?: string; error?: string } } })?.response?.data;
-      if (res?.code === 'PROJECT_CUSTOMER_MISMATCH') {
-        toast.error(t('projects.error.customerMismatch', 'That belongs to a different customer than this project.') as string);
-        return;
-      }
-      toast.error(res?.error || (t('projects.events.attachFailed', 'Could not attach gallery') as string));
-    },
-  });
+  const addLabel = t('projects.attach.add', 'Add existing') as string;
 
   const link = (flag: string, href: string) => (flags[flag] ? href : null);
   // A group the admin cannot have (feature off, or no view permission: the
   // overview leaves those documents out) is not shown as "none yet".
   const shows = (flag: string, perm: string) => !!flags[flag] && can(perm);
   // Nor is a group whose stage this project skips, while it holds nothing:
-  // the stage strip already says "skipped". The gallery group stays for its
-  // attach search.
+  // the stage strip already says "skipped". The gallery group stays, so a
+  // gallery can still be added.
   const skipped = (key: string, count: number) => count === 0
     && data.stage?.stages.some((s) => s.key === key && s.state === 'skipped');
   const date = (d: string | null | undefined) => (d ? format(d) : '');
@@ -120,7 +112,8 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
       <h2 className="text-base font-semibold text-heading mb-4">{t('projects.documents.title', 'Documents & galleries')}</h2>
       <div className="space-y-5">
         {shows('quotes', 'quotes.view') && !skipped('quote', data.quotes.length) && (
-        <Group title={t('projects.stage.quote', 'Quote')} empty={t('projects.documents.noQuote', 'No quote yet.')}>
+        <Group title={t('projects.stage.quote', 'Quote')} empty={t('projects.documents.noQuote', 'No quote yet.')}
+          addLabel={addLabel} onAdd={canAttachQuote ? () => onAdd('quote') : undefined}>
           {data.quotes.map((q) => (
             <Row
               key={q.id}
@@ -136,7 +129,8 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
         )}
 
         {shows('contracts', 'contracts.view') && !skipped('contract', data.contracts.length) && (
-        <Group title={t('projects.stage.contract', 'Contract')} empty={t('projects.documents.noContract', 'No contract yet.')}>
+        <Group title={t('projects.stage.contract', 'Contract')} empty={t('projects.documents.noContract', 'No contract yet.')}
+          addLabel={addLabel} onAdd={canAttachContract ? () => onAdd('contract') : undefined}>
           {data.contracts.map((c) => (
             <Row
               key={c.id}
@@ -155,36 +149,8 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
         <Group
           title={t('projects.stage.gallery', 'Gallery')}
           empty={t('projects.documents.noGallery', 'No gallery yet.')}
-          footer={canAttachGallery ? (
-            <div className="relative max-w-sm pt-1">
-              <Input
-                id="project-attach-gallery"
-                value={eventSearch}
-                onChange={(e) => setEventSearch(e.target.value)}
-                leftIcon={<Search className="w-4 h-4" />}
-                placeholder={t('projects.events.searchPlaceholder', 'Attach a gallery — search by name…') as string}
-                aria-label={t('projects.events.searchPlaceholder', 'Attach a gallery — search by name…') as string}
-              />
-              {eventSearch.trim().length >= 2 && eventResults?.events && eventResults.events.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full rounded-lg border border-line bg-panel shadow-lg max-h-56 overflow-auto">
-                  {eventResults.events
-                    .filter((ev) => !data.events.some((existing) => existing.id === ev.id))
-                    .map((ev) => (
-                      <button
-                        key={ev.id}
-                        type="button"
-                        onClick={() => attach.mutate(ev.id)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-hover"
-                      >
-                        <Plus className="w-3 h-3 text-faint" />
-                        <span className="flex-1 truncate text-heading">{ev.event_name}</span>
-                        <span className="text-xs text-muted">{date(ev.event_date)}</span>
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-          ) : undefined}
+          addLabel={addLabel}
+          onAdd={canAttachGallery ? () => onAdd('gallery') : undefined}
         >
           {data.events.map((ev) => (
             <Row
@@ -203,7 +169,8 @@ export const ProjectDocumentsCard: React.FC<Props> = ({ data, flags, can, canAtt
         </Group>
 
         {shows('bills', 'bills.view') && !skipped('invoice', data.invoices.length) && (
-        <Group title={t('projects.documents.invoices', 'Invoices')} empty={t('projects.documents.noInvoice', 'No invoice yet.')}>
+        <Group title={t('projects.documents.invoices', 'Invoices')} empty={t('projects.documents.noInvoice', 'No invoice yet.')}
+          addLabel={addLabel} onAdd={canAttachInvoice ? () => onAdd('invoice') : undefined}>
           {data.invoices.map((inv) => (
             <Row
               key={inv.id}

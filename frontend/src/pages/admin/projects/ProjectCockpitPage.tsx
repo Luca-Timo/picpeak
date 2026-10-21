@@ -36,6 +36,7 @@ import { usePermissions } from '../../../contexts/PermissionsContext';
 import { ProjectActivityFeed, minutesToHours } from './ProjectActivityFeed';
 import { ProjectStageCard } from './ProjectStageCard';
 import { ProjectDocumentsCard } from './ProjectDocumentsCard';
+import { AttachDocumentDialog, type AttachKind } from './AttachDocumentDialog';
 import { ProjectCustomerCard, ProjectDataCard, ProjectValueCard, type CustomerChoice } from './ProjectSideCards';
 import { ProjectSettingsTab } from './ProjectSettingsTab';
 import { projectSteps, type ProjectStep } from './projectSteps';
@@ -99,6 +100,8 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
 
   // ── Tabs, in ?tab= (read on mount, kept in step with back/forward) ──
   const [tab, setTab] = useState<ProjectTab>(isTab(searchParams.get('tab')) ? (searchParams.get('tab') as ProjectTab) : 'overview');
+  // Which kind of existing document the search window adds, if open.
+  const [adding, setAdding] = useState<AttachKind | null>(null);
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
     next.set('tab', tab);
@@ -230,16 +233,16 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
   const sourceQuote = contractFrom ? data.quotes.find((q) => q.id === contractFrom.sourceId) : null;
 
   const closed = project.status === 'cancelled' || project.status === 'completed';
+  // Adding an existing quote or contract runs the CRM write rule: only on a
+  // project new documents may join (documentsLinkable), with the route's permission.
+  const canLink = canEdit && !closed && project.documentsLinkable !== false;
   const menuItems: ActionMenuItem[] = [];
   if (canEdit && !closed) {
     menuItems.push({
       key: 'attach',
       label: t('projects.menu.attach', 'Attach a gallery'),
       icon: <Paperclip className="w-4 h-4" />,
-      onSelect: () => {
-        setTab('overview');
-        window.setTimeout(() => document.getElementById('project-attach-gallery')?.focus(), 0);
-      },
+      onSelect: () => { setTab('overview'); setAdding('gallery'); },
     });
     menuItems.push({
       key: 'cancel',
@@ -340,7 +343,17 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
               onSkip={canEdit && !closed ? (stage) => skipStage.mutate({ stage, skip: true }) : undefined}
               onRestore={canEdit && !closed ? (stage) => skipStage.mutate({ stage, skip: false }) : undefined}
             />
-            <ProjectDocumentsCard data={data} flags={flags} can={hasPermission} canAttachGallery={canEdit && !closed} />
+            <ProjectDocumentsCard
+              data={data}
+              flags={flags}
+              can={hasPermission}
+              canAttachGallery={canEdit && !closed}
+              canAttachQuote={canLink && !!flags.quotes && hasPermission('quotes.manage')}
+              canAttachContract={canLink && !!flags.contracts && hasPermission('contracts.manage')}
+              canAttachInvoice={canLink && !!flags.bills && hasPermission('bills.manage')}
+              onAdd={setAdding}
+            />
+            <AttachDocumentDialog kind={adding} data={data} onClose={() => setAdding(null)} />
           </div>
           <div className="space-y-6 min-w-0">
             <ProjectValueCard valuation={data.valuation} quotedMinor={quotedMinor} />
