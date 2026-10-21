@@ -119,8 +119,10 @@ export const ProjectCustomerCard: React.FC<{
     errorMessage: t('projects.customer.inviteFailed', 'Could not send the invitation') as string,
     invalidateKeys: [['admin-customer', savedCustomerId]],
   });
-  // The saved customer's own state, once loaded; the draft's while changing.
-  const passive = customer.id === savedCustomerId && detail ? Boolean(detail.isPassive) : customer.isPassive;
+  // The saved customer's own state and name, once loaded; the draft's while changing.
+  const saved = customer.id === savedCustomerId && detail ? detail : null;
+  const passive = saved ? Boolean(saved.isPassive) : customer.isPassive;
+  const label = saved ? (saved.companyName || saved.displayName || saved.email) : customer.label;
 
   return (
     <Card>
@@ -135,7 +137,7 @@ export const ProjectCustomerCard: React.FC<{
       {canViewCustomers ? (
         <CustomerPicker
           value={customer.id}
-          label={customer.label}
+          label={label}
           isPassive={passive}
           readOnly={!canChange}
           onSelect={(c) => onChange({ id: c.id, label: c.companyName || c.displayName || c.email, isPassive: Boolean(c.isPassive) })}
@@ -146,8 +148,8 @@ export const ProjectCustomerCard: React.FC<{
         // Without customers.view the API leaves the customer out altogether.
         <p className="text-sm text-muted">{t('projects.customer.hidden', 'Customers are not visible to your role.')}</p>
       )}
-      {detail?.email && customer.id === savedCustomerId && (
-        <p className="text-xs text-muted mt-2">{detail.email}</p>
+      {saved?.email && saved.email !== label && (
+        <p className="text-xs text-muted mt-2">{saved.email}</p>
       )}
       {passive && canInvite && customer.id === savedCustomerId && savedCustomerId && (
         <div className="mt-3">
