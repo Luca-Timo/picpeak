@@ -261,7 +261,7 @@ describe('project inquiry flow', () => {
     // An editor does not own the super admin's project: 404, not 403.
     const foreign = await post('/api/admin/invoices', body, editorToken);
     expect([403, 404]).toContain(foreign.status);
-    if (foreign.status === 404) expect(foreign.body.error).toBe('Project not found');
+    if (foreign.status === 404) expect(foreign.body.error).toMatch(/^Project not found/);
   });
 
   it('deletes a project and keeps its gallery, quote and invoice, only unlinked', async () => {
@@ -330,6 +330,58 @@ describe('project inquiry flow', () => {
     const res = await request(app).delete(`/api/admin/projects/${own}`).set('Authorization', `Bearer ${editorToken}`);
     expect(res.status).toBe(403);
     expect((await db('events').where({ id: foreignEvent }).first('project_id')).project_id).toBe(own);
+  });
+
+  it('refuses to delete a project that holds a document the caller cannot see, and keeps the link', async () => {
+    const own = idOf(await db('projects').insert({
+      name: 'Editor project with a foreign quote', status: 'active', created_by: editorId,
+      created_at: new Date(), updated_at: new Date(),
+    }).returning('id'));
+    const quoteId = await mkQuote({ projectId: own, dealUuid: crypto.randomUUID() });
+    await db('quotes').where({ id: quoteId }).update({ created_by_admin_id: superId });
+    const res = await request(app).delete(`/api/admin/projects/${own}`).set('Authorization', `Bearer ${editorToken}`);
+    expect(res.status).toBe(403);
+    // The route's own answer, not a refusal further down: it saw the quote.
+    expect(res.body.error).toMatch(/records you cannot change|documents that are not yours/);
+    expect((await db('quotes').where({ id: quoteId }).first('project_id')).project_id).toBe(own);
+  });
+
+  it('refuses a value that is not null where a field expects one (false is not a date)', async () => {
+    const res = await post('/api/admin/projects', { name: 'Bad date', eventDate: false });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses an invoice for one customer in a project that holds another customer\'s quote', async () => {
+    const project = await createInquiry({ customerAccountId: null });
+    const quoteId = await mkQuote({ projectId: project.id, dealUuid: crypto.randomUUID() });
+    await db('quotes').where({ id: quoteId }).update({ customer_account_id: otherCustomerId });
+    const res = await post('/api/admin/invoices', {
+      customerAccountId: customerId, projectId: project.id, currency: 'CHF',
+      lineItems: [{ description: 'Anzahlung', quantity: 1, unitPriceMinor: 1000 }],
+    });
+    expect(res.status).toBe(422);
+    expect((await db('projects').where({ id: project.id }).first('customer_account_id')).customer_account_id).toBeNull();
+  });
+
+  it('does not move a project to another customer while it holds the first one\'s invoice', async () => {
+    const project = await createInquiry();
+    await mkInvoice({ projectId: project.id });
+    const res = await put(`/api/admin/projects/${project.id}`, { customerAccountId: otherCustomerId });
+    expect(res.status).toBe(422);
+  });
+
+  it('carries no project on a conversion while the feature is off', async () => {
+    const projectService = require('../../src/services/projectService');
+    const project = await createInquiry();
+    expect(await projectService.carriedProjectId(project.id, superId, { target: 'events' })).toBe(project.id);
+    await db('feature_flags').where({ key: 'projects' }).update({ value: 0 });
+    require('../../src/middleware/requireFeatureFlag').invalidateFeatureFlagCache();
+    try {
+      expect(await projectService.carriedProjectId(project.id, superId, { target: 'events' })).toBeNull();
+    } finally {
+      await db('feature_flags').where({ key: 'projects' }).update({ value: 1 });
+      require('../../src/middleware/requireFeatureFlag').invalidateFeatureFlagCache();
+    }
   });
 
   it('answers 403 on every project route with the feature off', async () => {

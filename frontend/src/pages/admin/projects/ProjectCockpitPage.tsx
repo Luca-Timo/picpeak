@@ -24,6 +24,7 @@ import {
   type ActionMenuItem, type BadgeTone, type TabItem,
 } from '../../../components/common';
 import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
+import { useLeaveGuard } from '../../../contexts/UnsavedChangesContext';
 import { CustomerGroupChipList } from '../../../components/admin/CustomerGroupChips';
 import { ConvertToContractDialog } from '../quotes/ConvertToContractDialog';
 import { projectsService, type ProjectOverview, type ProjectStatus } from '../../../services/projects.service';
@@ -86,6 +87,7 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
   const { hasPermission } = usePermissions();
   const { format } = useLocalizedDate();
   const [promptDialog, prompt] = usePrompt();
+  const { unguarded } = useLeaveGuard();
   const [searchParams, setSearchParams] = useSearchParams();
   const project = data.project;
   const projectId = project.id;
@@ -133,16 +135,20 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
 
   // A budget is stored with its currency: the business profile's when the
   // admin did not pick one (as on New inquiry).
+  // GET /admin/business-profile needs settings.view or settings.banking; without
+  // it there is no default to offer, and none is guessed.
+  const canReadProfile = hasPermission('settings.view') || hasPermission('settings.banking');
   const { data: profileSnap } = useQuery({
     queryKey: ['business-profile'],
     queryFn: () => businessProfileService.get(),
+    enabled: canReadProfile,
     retry: false,
   });
-  const defaultCurrency = profileSnap?.profile.defaultCurrency || 'CHF';
+  const defaultCurrency = profileSnap?.profile.defaultCurrency || undefined;
   const save = useMutationWithToast({
     mutationFn: () => {
       const payload = updatePayload(draft, base);
-      if (payload.budgetMinor != null && !draft.currency) payload.currency = defaultCurrency;
+      if (payload.budgetMinor != null && !draft.currency && defaultCurrency) payload.currency = defaultCurrency;
       return projectsService.update(projectId, {
         ...payload,
         ...(customerDirty ? { customerAccountId: customer.id } : {}),
@@ -196,6 +202,12 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
         return;
       }
       try { await save.mutateAsync(); } catch { return; }
+      // The page still holds the pre-save state until the refetch renders;
+      // what was unsaved is saved now, so leaving needs no question.
+      await qc.refetchQueries({ queryKey: ['project-overview', projectId] });
+      if (step.kind === 'createContract') { setContractFrom(step); return; }
+      unguarded(() => run(step));
+      return;
     }
     if (step.kind === 'createContract') { setContractFrom(step); return; }
     run(step);

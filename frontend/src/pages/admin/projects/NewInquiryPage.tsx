@@ -62,12 +62,14 @@ export const NewInquiryPage: React.FC = () => {
     queryKey: ['event-types-active'],
     queryFn: () => eventTypesService.getActiveEventTypes(),
   });
+  // GET /admin/business-profile needs settings.view or settings.banking.
   const { data: profileSnap } = useQuery({
     queryKey: ['business-profile'],
     queryFn: () => businessProfileService.get(),
+    enabled: hasPermission('settings.view') || hasPermission('settings.banking'),
     retry: false,
   });
-  const defaultCurrency = profileSnap?.profile.defaultCurrency || 'CHF';
+  const defaultCurrency = profileSnap?.profile.defaultCurrency || undefined;
 
   // Until the admin types a name: the occasion and the customer's last name
   // (or company), e.g. "Wedding Keller". Only a suggestion; it never reaches
@@ -89,7 +91,7 @@ export const NewInquiryPage: React.FC = () => {
       name: effectiveName.trim(),
       customerAccountId: customer.id,
       status: 'inquiry',
-      ...fieldsFromDraft({ ...draft, currency: draft.currency || (draft.budget > 0 ? defaultCurrency : '') }),
+      ...fieldsFromDraft({ ...draft, currency: draft.currency || (draft.budget > 0 && defaultCurrency ? defaultCurrency : '') }),
     }),
     successMessage: t('projects.inquiry.created', 'Inquiry saved.') as string,
     errorMessage: t('projects.inquiry.createFailed', 'Could not save the inquiry') as string,

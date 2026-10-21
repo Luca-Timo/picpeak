@@ -461,10 +461,11 @@ router.get(
 //   The rule the CRM access layer applies to project_id on an invoice insert
 //   (crmAccess validateWrite), so it is refused here with a clear answer
 //   rather than failing inside createInvoice. 404, so no existence oracle;
-// - it is not another customer's (projects hold one customer);
 // - the customer is billed per event: a monthly or manual customer's lines go
 //   into one shared draft (createInvoice → appendToMonthlyDraft), which no
-//   single project can hold, so the link would silently drop.
+//   single project can hold, so the link would silently drop;
+// - it is not another customer's (projects hold one customer), adopting the
+//   customer when the project has none yet.
 async function projectLinkRefusal(req, projectId) {
   if (!(await isFeatureEnabled('projects'))) {
     return { status: 403, body: { error: 'Projects feature is disabled', code: 'PROJECTS_DISABLED' } };
@@ -472,11 +473,8 @@ async function projectLinkRefusal(req, projectId) {
   const projectService = require('../services/projectService');
   const owned = await projectService.carriedProjectId(projectId, req.admin.id);
   const project = owned ? await db('projects').where({ id: owned }).first('id', 'customer_account_id') : null;
-  if (!project) return { status: 404, body: { error: 'Project not found' } };
-  if (project.customer_account_id != null
-    && Number(project.customer_account_id) !== Number(req.body.customerAccountId)) {
-    return { status: 422, body: { error: 'That project belongs to a different customer', code: 'PROJECT_CUSTOMER_MISMATCH' } };
-  }
+  // Not found, or not one the caller created: the same answer either way.
+  if (!project) return { status: 404, body: { error: 'Project not found, or not one you created' } };
   const customer = await db('customer_accounts').where({ id: req.body.customerAccountId }).first('billing_cadence');
   if (customer && (customer.billing_cadence === 'monthly' || customer.billing_cadence === 'manual')) {
     return {
@@ -486,6 +484,13 @@ async function projectLinkRefusal(req, projectId) {
         code: 'PROJECT_INVOICE_COLLECTED_BILLING',
       },
     };
+  }
+  // Last, because it writes: a project with no customer adopts this one, unless
+  // something it holds is another customer's (holdProjectToCustomer is atomic,
+  // so two invoices racing on an empty project cannot both win). Done before
+  // the invoice exists, so a refused link never leaves an invoice behind.
+  if (!(await projectService.holdProjectToCustomer(project.id, req.body.customerAccountId))) {
+    return { status: 422, body: { error: 'That project belongs to a different customer', code: 'PROJECT_CUSTOMER_MISMATCH' } };
   }
   return null;
 }
@@ -515,12 +520,7 @@ router.post(
     // full id list so the editor can show "N invoices created".
     const { invoiceIds } = await invoiceService.createInvoice(mapPayloadToService(req.body), req.admin.id);
     if (linkedProject) {
-      const projectService = require('../services/projectService');
-      // A project without a customer adopts the invoice's, as it adopts a
-      // gallery's (assignEvent), so the next document is held to the same one.
-      await db('projects').where({ id: linkedProject }).whereNull('customer_account_id')
-        .update({ customer_account_id: req.body.customerAccountId, updated_at: new Date() });
-      await projectService.promoteInquiry(linkedProject);
+      await require('../services/projectService').promoteInquiry(linkedProject);
     }
     const firstId = invoiceIds[0];
     const data = await invoiceService.getInvoiceById(firstId);

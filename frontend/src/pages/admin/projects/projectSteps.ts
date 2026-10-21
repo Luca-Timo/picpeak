@@ -88,6 +88,9 @@ export function stepFor(stage: ProjectStageKey, data: ProjectOverview, { flags, 
       const unpaid = invoices.find((i) => i.kind !== 'storno' && !['paid', 'cancelled', 'skipped'].includes(i.status));
       if (unpaid && can('bills.view')) return { kind: 'openInvoice', stage, href: `/admin/clients/bills/${unpaid.id}` };
       if (!can('bills.manage') || !data.project.customerAccountId) return null;
+      // A monthly or manual customer's invoices go into one collected draft,
+      // which POST /invoices refuses to tie to a project (422).
+      if (['monthly', 'manual'].includes(data.project.customerBillingCadence || '')) return null;
       const gallery = events[0];
       return {
         kind: 'createInvoice',

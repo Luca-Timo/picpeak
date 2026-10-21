@@ -183,11 +183,14 @@ export const ContractForm = forwardRef<ContractFormHandle, ContractFormProps>(({
 
   // Opened from a project (`?projectId=`): the contract joins the project and
   // starts from its name and date. The customer comes through the effect above.
-  useProjectPrefill((project) => {
-    setProjectId((prev) => prev ?? project.id);
+  // The link itself is taken from the URL at once (see QuoteEditorPage).
+  const prefillProjectId = useProjectPrefill((project) => {
     setEventName((prev) => prev || project.name);
     setEventDate((prev) => prev || project.eventDate || '');
-  }, { enabled: !isEdit });
+  }, { enabled: !isEdit, onError: (failedId) => setProjectId((prev) => (prev === failedId ? null : prev)) });
+  useEffect(() => {
+    if (prefillProjectId) setProjectId((prev) => prev ?? prefillProjectId);
+  }, [prefillProjectId]);
 
   // Load existing contract on edit.
   const { data: existing, isLoading: existingLoading } = useQuery({

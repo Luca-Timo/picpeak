@@ -48,6 +48,8 @@ export interface ProjectSummary extends Partial<ProjectInquiryFields> {
   name: string;
   customerAccountId: number | null;
   customerEmail: string | null;
+  /** per_event / monthly / quarterly / manual; absent without customers.view. */
+  customerBillingCadence?: string | null;
   /** The customer's groups (#1443); only on the cockpit, with customers.view. */
   customerGroups?: CustomerGroup[];
   status: ProjectStatus;

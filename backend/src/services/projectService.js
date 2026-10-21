@@ -91,6 +91,9 @@ function transformProject(p) {
     name: p.name,
     customerAccountId: p.customer_account_id || null,
     customerEmail: p.customer_email || null,
+    // How the customer is billed: a monthly or manual customer's invoices go
+    // into one collected draft, so the page offers no project invoice for them.
+    customerBillingCadence: p.customer_billing_cadence ?? undefined,
     status: p.status,
     eventCount: p.event_count != null ? Number(p.event_count) : undefined,
     eventType: p.event_type ?? null,
@@ -306,7 +309,8 @@ async function attachValuations(projects, perms = {}) {
 async function getProjectById(id) {
   const row = await db('projects')
     .leftJoin('customer_accounts', 'customer_accounts.id', 'projects.customer_account_id')
-    .select('projects.*', 'customer_accounts.email as customer_email')
+    .select('projects.*', 'customer_accounts.email as customer_email',
+      'customer_accounts.billing_cadence as customer_billing_cadence')
     .where('projects.id', id)
     .first();
   return transformProject(row);
@@ -349,14 +353,36 @@ async function projectLinkedCustomerIds(id, conn = db) {
       .distinct('eca.customer_account_id as cid');
     for (const r of rows) if (r.cid != null) ids.add(Number(r.cid));
   }
-  for (const tbl of ['quotes', 'contracts']) {
+  // Every linked document counts, not only the caller's: the rule is about the
+  // project, and the CRM access layer would otherwise hide another admin's
+  // quote from this read. Only customer ids leave this function.
+  const { withTrustedCrmAccess } = require('../database/crmAccess');
+  for (const tbl of ['quotes', 'contracts', 'invoices']) {
     if (await hasColumnCached(tbl, 'project_id') && await hasColumnCached(tbl, 'customer_account_id')) {
-      for (const r of await conn(tbl).where({ project_id: id }).whereNotNull('customer_account_id').distinct('customer_account_id as cid')) {
-        if (r.cid != null) ids.add(Number(r.cid));
-      }
+      const rows = await withTrustedCrmAccess('project single-customer rule',
+        () => conn(tbl).where({ project_id: id }).whereNotNull('customer_account_id').distinct('customer_account_id as cid'));
+      for (const r of rows) if (r.cid != null) ids.add(Number(r.cid));
     }
   }
   return ids;
+}
+
+/** Hold a project to `customerAccountId` for a new document: a project with no
+ *  customer adopts it (first content wins, as assignEvent does), but only when
+ *  nothing it already holds belongs to someone else. Atomic: the adoption is a
+ *  conditional UPDATE, so two documents for different customers racing on an
+ *  empty project cannot both win. Returns true when the project is (now) that
+ *  customer's. */
+async function holdProjectToCustomer(projectId, customerAccountId) {
+  const cid = Number(customerAccountId);
+  const project = await db('projects').where({ id: projectId }).first('customer_account_id');
+  if (!project) return false;
+  if (project.customer_account_id != null) return Number(project.customer_account_id) === cid;
+  for (const linked of await projectLinkedCustomerIds(projectId)) if (linked !== cid) return false;
+  await db('projects').where({ id: projectId }).whereNull('customer_account_id')
+    .update({ customer_account_id: cid, updated_at: new Date() });
+  const after = await db('projects').where({ id: projectId }).first('customer_account_id');
+  return Number(after?.customer_account_id) === cid;
 }
 
 async function updateProject(id, { name, customerAccountId, status, ...fields }) {
@@ -476,17 +502,34 @@ async function isSuperAdmin(actor, conn = db) {
 
 /**
  * The project a document made by `adminId` from another document may keep
- * (quote → contract, quote/contract → gallery), or null. Only a project the
- * converter created, or any project for a super admin: the same rule the CRM
- * access layer applies to project_id on quote, contract and invoice writes
- * (database/crmAccess.js validateWrite), so a carried link never makes the
- * conversion fail, and a gallery never lands in another admin's project.
- * Resolve it before opening the conversion's transaction (global db reads).
+ * (quote → contract, quote/contract → gallery), or null. Resolve it before
+ * opening the conversion's transaction (global db reads).
+ *  - With the projects feature off, none: nothing changes for such installs.
+ *  - A super admin keeps any.
+ *  - `target: 'documents'` (a contract, an invoice): a project the caller
+ *    created. That is the rule the CRM access layer applies to project_id on
+ *    a quote, contract or invoice write (crmAccess validateWrite), so a
+ *    carried link never fails the write.
+ *  - `target: 'events'`: a project the converter owns as the project routes
+ *    see it (ownedProjectsSubquery, legacy ownerless projects included), so a
+ *    gallery never lands in another admin's project. An unattended workflow
+ *    step (no admin) keeps the source document's own project: no person is
+ *    acting, so there is no one to leak it to.
  */
-async function carriedProjectId(projectId, adminId) {
-  if (!projectId || !adminId) return null;
+async function carriedProjectId(projectId, adminId, { target = 'documents' } = {}) {
+  if (!projectId) return null;
+  const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
+  if (!(await isFeatureEnabled('projects'))) return null;
+  if (!adminId) return target === 'events' ? projectId : null;
   if (await isSuperAdmin({ id: adminId })) return projectId;
-  const row = await db('projects').where({ id: projectId, created_by: adminId }).first('id');
+  let q = db('projects').where('projects.id', projectId);
+  if (target === 'events') {
+    const owned = require('../middleware/ownership').ownedProjectsSubquery({ id: adminId });
+    if (owned !== null) q = q.whereIn('projects.id', owned);
+  } else {
+    q = q.where('projects.created_by', adminId);
+  }
+  const row = await q.first('projects.id');
   return row ? row.id : null;
 }
 
@@ -1136,6 +1179,7 @@ module.exports = {
   deriveStages,
   promoteInquiry,
   carriedProjectId,
+  holdProjectToCustomer,
   assignEvent,
   assignQuote,
   assignContract,

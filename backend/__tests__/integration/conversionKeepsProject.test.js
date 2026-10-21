@@ -18,6 +18,8 @@ describe('conversions keep the project', () => {
   beforeAll(async () => {
     ({ db, cleanup } = await bootCrmDb());
     ({ adminId, customerId } = await seedMinimal(db));
+    // Conversions only carry a project with the feature on (carriedProjectId).
+    await db('feature_flags').insert({ key: 'projects', value: 1 }).onConflict('key').merge({ value: 1 });
     quoteService = require('../../src/services/quoteService');
     contractConversions = require('../../src/services/contract/conversions');
   }, 120000);

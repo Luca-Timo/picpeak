@@ -2409,7 +2409,7 @@ async function convertToEvent(quoteId, adminId, options = {}) {
   // contract's when the contract→event button re-entered here, else the
   // quote's), when the converter owns it. Resolved before the transaction.
   const carriedProject = await require('./projectService')
-    .carriedProjectId(options.projectId || quote.project_id, adminId);
+    .carriedProjectId(options.projectId || quote.project_id, adminId, { target: 'events' });
 
   const result = await db.transaction(async (trx) => {
     // Claim the quote before creating anything. Two concurrent conversions

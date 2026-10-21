@@ -302,11 +302,15 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
 
   // The project link itself; the customer and gallery come through the
   // query string above, the date from the project when no gallery has one.
-  useProjectPrefill((project) => {
-    setProjectId(project.id);
+  // The link is taken from the URL at once, so an invoice saved before the
+  // project has loaded still joins it, and dropped if the project cannot load.
+  const prefillProjectId = useProjectPrefill((project) => {
     setEventName((prev) => prev || project.name);
     setEventDate((prev) => prev || project.eventDate || '');
-  }, { enabled: !isEdit });
+  }, { enabled: !isEdit, onError: (failedId) => setProjectId((prev) => (prev === failedId ? null : prev)) });
+  useEffect(() => {
+    if (prefillProjectId) setProjectId((prev) => prev ?? prefillProjectId);
+  }, [prefillProjectId]);
 
   // Pre-fill from a fully-signed contract when the editor is opened
   // via `?fromContractId=<id>` (the "New invoice" link on

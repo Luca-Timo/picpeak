@@ -101,11 +101,12 @@ export const OccasionFields: React.FC<FieldProps> = ({ draft, onChange, dirty = 
 
 /** Rahmen: budget, where the inquiry came from, notes. */
 export const FrameFields: React.FC<FieldProps & { defaultCurrency?: string }> = ({
-  draft, onChange, dirty = [], disabled, defaultCurrency = 'CHF', layout = 'form',
+  draft, onChange, dirty = [], disabled, defaultCurrency, layout = 'form',
 }) => {
   const { t } = useTranslation();
   const isDirty = (k: ProjectDraftKey) => dirty.includes(k);
-  const currency = draft.currency || defaultCurrency;
+  // The business profile's currency when known; otherwise nothing is guessed.
+  const currency = draft.currency || defaultCurrency || '';
 
   return (
     <div className="space-y-4">
@@ -129,6 +130,7 @@ export const FrameFields: React.FC<FieldProps & { defaultCurrency?: string }> = 
               onChange={(e) => onChange({ currency: e.target.value })}
               className={`input w-24 ${dirtyClass(isDirty('currency'))}`}
             >
+              {!currency && <option value="">—</option>}
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>

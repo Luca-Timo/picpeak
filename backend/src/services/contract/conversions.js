@@ -275,7 +275,7 @@ async function convertToEvent(contractId, adminId) {
     quote_id: null,
     // The gallery stays in the contract's project when the converter owns it
     // (dropped below when the column is missing, like every other candidate key).
-    project_id: await require('../projectService').carriedProjectId(contract.project_id, adminId),
+    project_id: await require('../projectService').carriedProjectId(contract.project_id, adminId, { target: 'events' }),
     created_at: new Date(),
     updated_at: new Date(),
     // #1296 — a signed standalone contract converts straight to a gallery

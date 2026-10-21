@@ -18,6 +18,8 @@ const customerGroupsService = require('../services/customerGroupsService');
 const { db } = require('../database/db');
 const { ownedProjectsSubquery, requireProjectOwnership, filterOwnedEventIds } = require('../middleware/ownership');
 const { ForbiddenError } = require('../utils/errors');
+const { hasColumnCached } = require('../utils/schemaCache');
+const { withTrustedCrmAccess } = require('../database/crmAccess');
 
 const router = express.Router();
 
@@ -64,6 +66,7 @@ function withoutCustomer(project) {
   const copy = { ...project };
   delete copy.customerAccountId;
   delete copy.customerEmail;
+  delete copy.customerBillingCadence;
   return copy;
 }
 
@@ -86,9 +89,9 @@ router.use(requireProjectsFlag);
 // Where an inquiry came from. Keys only; the UI translates them.
 const INQUIRY_SOURCES = ['referral', 'website', 'social', 'returning', 'fair', 'other'];
 
-// The inquiry fields (migration 315). `values: 'null'` lets the editor send
-// null to clear a field; an empty string clears too and is skipped here.
-const optionalField = (name) => body(name).optional({ values: 'falsy' });
+// The inquiry fields (migration 315). null clears a field and skips the check;
+// any other value, false and '' included, has to pass it.
+const optionalField = (name) => body(name).optional({ values: 'null' });
 const inquiryValidators = [
   optionalField('eventType').isString().trim().isLength({ max: 50 }),
   optionalField('eventDate').isISO8601({ strict: true }),
@@ -206,10 +209,11 @@ router.put('/:id',
 
 // Delete. The project's galleries, quotes, contracts, invoices and hours stay;
 // they only lose the link (projectService.deleteProject). Clearing a link is a
-// write on that document, so it needs what attaching one needs: the manage
-// permission of each document domain the project holds (as POST /:id/quotes
-// and /:id/contracts), and ownership of every linked gallery (as POST
-// /:id/events), which a super admin may have put into this project.
+// write on that record, so it needs what attaching or editing one needs: the
+// manage permission of each domain the project holds (as POST /:id/quotes and
+// /:id/contracts; hours and customer documents as their own routes), every
+// linked document being the caller's, and ownership of every linked gallery
+// (as POST /:id/events), which a super admin may have put into this project.
 router.delete('/:id',
   requirePermission('events.edit'),
   requireProjectOwnership,
@@ -217,14 +221,29 @@ router.delete('/:id',
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
+    // Counted twice: unscoped, to see every linked record, and as the caller,
+    // through the CRM access layer (auth.js withCrmActor), to see which of
+    // them are theirs. A plain read here only ever sees the caller's own
+    // documents, so it would let a delete through that unlinks someone else's.
+    const count = async (query) => Number((await query.count('* as c').first())?.c || 0);
     const needs = [];
-    for (const [table, perm] of [['quotes', 'quotes.manage'], ['contracts', 'contracts.manage'], ['invoices', 'bills.manage']]) {
-      let linked = null;
-      try { linked = await db(table).where({ project_id: id }).first('id'); } catch { linked = null; }
-      if (linked && !(await userHasAnyPermission(req.admin.id, [perm]))) needs.push(perm);
+    let foreign = false;
+    for (const [table, perm] of [
+      ['quotes', 'quotes.manage'], ['contracts', 'contracts.manage'], ['invoices', 'bills.manage'],
+      ['customer_hour_entries', 'customers.edit'], ['customer_documents', 'customers.documents.manage'],
+    ]) {
+      if (!(await hasColumnCached(table, 'project_id'))) continue;
+      const linked = await withTrustedCrmAccess('project delete: linked-record census',
+        () => count(db(table).where({ project_id: id })));
+      if (!linked) continue;
+      if (!(await userHasAnyPermission(req.admin.id, [perm]))) { needs.push(perm); continue; }
+      if (await count(db(table).where({ project_id: id })) < linked) foreign = true;
     }
     if (needs.length) {
-      throw new ForbiddenError(`This project holds documents you cannot change; ${needs.join(', ')} is required to delete it`);
+      return res.status(403).json({ error: `This project holds records you cannot change; ${needs.join(', ')} is required to delete it` });
+    }
+    if (foreign) {
+      return res.status(403).json({ error: 'This project holds documents that are not yours; they have to be moved out before it can be deleted' });
     }
     const eventIds = (await db('events').where({ project_id: id }).select('id')).map((e) => e.id);
     const { denied } = await filterOwnedEventIds(req.admin, eventIds);
