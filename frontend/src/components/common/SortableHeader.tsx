@@ -63,6 +63,32 @@ interface SortableHeaderProps {
   align?: 'left' | 'right';
 }
 
+/** The clickable label alone, for a header cell that brings its own `<th>`
+ *  (`TableHeaderCell`, the shared list table). */
+export const SortButton: React.FC<Omit<SortableHeaderProps, 'align'> & { align?: 'left' | 'right' | 'center' }> = ({
+  label, columnKey, activeKey, activeDir, onSort, align = 'left',
+}) => {
+  const active = activeKey === columnKey;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(columnKey)}
+      className={`group inline-flex items-center gap-1 uppercase tracking-wide transition-colors hover:text-heading ${
+        align === 'right' ? 'flex-row-reverse' : ''
+      } ${active ? 'text-heading' : ''}`}
+    >
+      <span>{label}</span>
+      {active ? (
+        activeDir === 'asc'
+          ? <ChevronUp className="w-3 h-3" />
+          : <ChevronDown className="w-3 h-3" />
+      ) : (
+        <ChevronsUpDown className="w-3 h-3 opacity-30 group-hover:opacity-60" />
+      )}
+    </button>
+  );
+};
+
 export const SortableHeader: React.FC<SortableHeaderProps> = ({
   label, columnKey, activeKey, activeDir, onSort, align = 'left',
 }) => {

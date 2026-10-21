@@ -6,18 +6,19 @@
  * project's cockpit. Visual shape mirrors the other /admin/clients lists so
  * the CRM area feels like one product. Admin-only — customers never see it.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, FolderKanban } from 'lucide-react';
-import { Badge, Button, Card, EmptyState, ErrorState, Input, Loading, Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from '../../../components/common';
+import { Badge, Button, Card, EmptyState, ErrorState, Input, Loading, SortButton, Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell, useColumnSort } from '../../../components/common';
 import { projectsService, type ProjectSummary } from '../../../services/projects.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { formatMoneyMinor } from '../../../utils/money';
 import { SectionPageHeader } from '../../../components/admin/SectionPageHeader';
 import { usePermissions } from '../../../contexts/PermissionsContext';
 import { STATUS_TONE } from './ProjectCockpitPage';
+import { PROJECT_SORT_COLUMNS, sortProjects, type ProjectSort } from './projectSort';
 
 /** Render a project's rolled-up value (newest stage per deal, cumulative),
  *  one entry per currency. Convention (deliberately differs from the Events
@@ -31,7 +32,7 @@ function formatValuation(p: ProjectSummary): string {
 }
 
 export const ProjectsListPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const { format } = useLocalizedDate();
@@ -41,6 +42,9 @@ export const ProjectsListPage: React.FC = () => {
     queryKey: ['projects', { search }],
     queryFn: () => projectsService.list({ q: search || undefined }),
   });
+  const { sort, activeKey, activeDir, toggle } = useColumnSort<ProjectSort>(PROJECT_SORT_COLUMNS, 'none');
+  const rows = useMemo(() => sortProjects(projects || [], sort, i18n.language), [projects, sort, i18n.language]);
+  const ariaSort = (key: string) => (activeKey === key ? (activeDir === 'asc' ? 'ascending' : 'descending') : undefined);
 
   return (
     <div>
@@ -94,15 +98,15 @@ export const ProjectsListPage: React.FC = () => {
           <TableHead>
             <tr>
               <TableHeaderCell>{t('projects.col.name', 'Project')}</TableHeaderCell>
-              <TableHeaderCell>{t('projects.col.customer', 'Customer')}</TableHeaderCell>
-              <TableHeaderCell align="right">{t('projects.col.events', 'Galleries')}</TableHeaderCell>
-              <TableHeaderCell align="right">{t('projects.col.value', 'Value')}</TableHeaderCell>
-              <TableHeaderCell>{t('projects.col.status', 'Status')}</TableHeaderCell>
+              <TableHeaderCell aria-sort={ariaSort('customer')}><SortButton label={t('projects.col.customer', 'Customer')} columnKey="customer" activeKey={activeKey} activeDir={activeDir} onSort={toggle} /></TableHeaderCell>
+              <TableHeaderCell align="right" aria-sort={ariaSort('galleries')}><SortButton label={t('projects.col.events', 'Galleries')} columnKey="galleries" activeKey={activeKey} activeDir={activeDir} onSort={toggle} align="right" /></TableHeaderCell>
+              <TableHeaderCell align="right" aria-sort={ariaSort('value')}><SortButton label={t('projects.col.value', 'Value')} columnKey="value" activeKey={activeKey} activeDir={activeDir} onSort={toggle} align="right" /></TableHeaderCell>
+              <TableHeaderCell aria-sort={ariaSort('status')}><SortButton label={t('projects.col.status', 'Status')} columnKey="status" activeKey={activeKey} activeDir={activeDir} onSort={toggle} /></TableHeaderCell>
               <TableHeaderCell>{t('projects.col.updated', 'Updated')}</TableHeaderCell>
             </tr>
           </TableHead>
           <TableBody>
-            {projects.map((p: ProjectSummary) => (
+            {rows.map((p: ProjectSummary) => (
               <TableRow
                 key={p.id}
                 interactive
