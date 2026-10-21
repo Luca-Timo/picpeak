@@ -8,9 +8,9 @@
  */
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, EyeOff, X } from 'lucide-react';
+import { Check, EyeOff, SkipForward, X } from 'lucide-react';
 import { Button, Card } from '../../../components/common';
-import type { ProjectOverview, ProjectStageKey, ProjectStageState } from '../../../services/projects.service';
+import { SKIPPABLE_STAGES, type ProjectOverview, type ProjectStageKey, type ProjectStageState } from '../../../services/projects.service';
 import type { ProjectStep } from './projectSteps';
 import { StepIcon, useStepHint, useStepLabel } from './useProjectSteps';
 
@@ -20,15 +20,22 @@ interface Props {
   later: ProjectStep[];
   onRun: (step: ProjectStep) => void;
   busy: boolean;
+  /** Skipping or taking back a stage (an action, saved at once); absent for a
+   *  role that may not change the project. */
+  onSkip?: (stage: ProjectStageKey) => void;
+  onRestore?: (stage: ProjectStageKey) => void;
 }
 
-export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, busy }) => {
+export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, busy, onSkip, onRestore }) => {
   const { t } = useTranslation();
   const label = useStepLabel();
   const hint = useStepHint();
   const stages = data.stage?.stages || [];
   const position = stages.findIndex((s) => s.state === 'current');
   const status = data.project.status;
+  const skippedByHand = new Set(data.project.skippedStages || []);
+  const currentKey = data.stage?.current ?? null;
+  const canSkip = !!onSkip && !!currentKey && SKIPPABLE_STAGES.includes(currentKey);
 
   const stageName = (key: ProjectStageKey) => t(`projects.stage.${key}`);
   const stateWord = (state: ProjectStageState) => t(`projects.stageState.${state}`);
@@ -75,6 +82,17 @@ export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, bu
               <span className="min-w-0">
                 <span className={`block text-sm font-semibold ${current || done || stopped ? 'text-heading' : 'text-soft'}`}>{stageName(s.key)}</span>
                 <span className={`block text-xs ${word}`}>{stateWord(s.state)}</span>
+                {s.state === 'skipped' && skippedByHand.has(s.key) && onRestore && (
+                  <button
+                    type="button"
+                    onClick={() => onRestore(s.key)}
+                    disabled={busy}
+                    className="text-xs font-medium text-accent hover:underline"
+                    aria-label={t('projects.stage.restoreAria', 'Take {{stage}} back into the project', { stage: stageName(s.key) }) as string}
+                  >
+                    {t('projects.stage.restore', 'undo')}
+                  </button>
+                )}
               </span>
             </li>
           );
@@ -87,12 +105,23 @@ export const ProjectStageCard: React.FC<Props> = ({ data, main, later, onRun, bu
             ? t('projects.stage.cancelledNote', 'This project is cancelled. Reopen it in Settings to continue.')
             : t('projects.stage.completedNote', 'This project is completed.')}
         </p>
-      ) : main ? (
+      ) : main || canSkip ? (
         <div className="rounded-xl border border-line bg-subtle px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
             <div className="text-xs text-muted">{t('projects.stage.next', 'Next step')}</div>
-            <div className="text-sm font-semibold text-heading">{label(main.kind)}</div>
-            <div className="text-sm text-muted">{hint(main.kind)}</div>
+            {main ? (
+              <>
+                <div className="text-sm font-semibold text-heading">{label(main.kind)}</div>
+                <div className="text-sm text-muted">{hint(main.kind)}</div>
+              </>
+            ) : (
+              <div className="text-sm font-semibold text-heading">{currentKey ? stageName(currentKey) : ''}</div>
+            )}
+            {canSkip && currentKey && (
+              <Button variant="ghost" size="sm" className="mt-1 -ml-3" leftIcon={<SkipForward className="w-4 h-4" />} disabled={busy} onClick={() => onSkip?.(currentKey)}>
+                {t('projects.stage.skip', 'Skip this step')}
+              </Button>
+            )}
           </div>
           {later.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">

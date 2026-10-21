@@ -56,6 +56,21 @@ async function assertResendable(row, { newMail = false } = {}) {
 // `archived` is the value older UIs could set; it stays accepted.
 const PROJECT_STATUSES = ['inquiry', 'active', 'completed', 'cancelled', 'archived'];
 
+// Which stages a job has. The stages a flow leaves out read `skipped`; a
+// project can skip a further one by hand (skipped_stages). Inquiry and done
+// are always there.
+const PROJECT_FLOWS = {
+  full: [],
+  no_contract: ['contract'],
+  no_quote: ['quote', 'contract'],
+};
+const SKIPPABLE_STAGES = ['quote', 'contract', 'gallery', 'invoice'];
+
+function parseSkippedStages(value) {
+  if (!value) return [];
+  return String(value).split(',').map((x) => x.trim()).filter((x) => SKIPPABLE_STAGES.includes(x));
+}
+
 // The inquiry a project starts from (migration 315). API key → column.
 const INQUIRY_FIELDS = {
   eventType: 'event_type',
@@ -67,6 +82,7 @@ const INQUIRY_FIELDS = {
   currency: 'currency',
   source: 'source',
   notes: 'notes',
+  flow: 'flow',
 };
 const DATE_FIELDS = new Set(['event_date', 'event_end_date']);
 const INT_FIELDS = new Set(['guest_count', 'budget_minor']);
@@ -105,6 +121,8 @@ function transformProject(p) {
     currency: p.currency ?? null,
     source: p.source ?? null,
     notes: p.notes ?? null,
+    flow: p.flow || 'full',
+    skippedStages: parseSkippedStages(p.skipped_stages),
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
@@ -133,6 +151,10 @@ async function inquiryPatch(payload = {}) {
     else value = String(value).trim() || null;
     if (column === 'currency' && value) value = value.toUpperCase();
     patch[column] = value;
+  }
+  if (payload.skippedStages !== undefined && await hasColumnCached('projects', 'skipped_stages')) {
+    const list = Array.from(new Set((payload.skippedStages || []).filter((x) => SKIPPABLE_STAGES.includes(x))));
+    patch.skipped_stages = list.length ? list.join(',') : null;
   }
   return patch;
 }
@@ -840,7 +862,7 @@ const INVOICE_IGNORED = new Set(['cancelled', 'skipped', 'draft']);
 
 const truthy = (v) => v === true || v === 1 || v === '1';
 
-function deriveStages({ status, quotes = [], contracts = [], events = [], invoices = [] }, perms = {}) {
+function deriveStages({ status, flow, skippedStages = [], quotes = [], contracts = [], events = [], invoices = [] }, perms = {}) {
   const counting = invoices.filter((inv) => inv.kind !== 'storno' && !INVOICE_IGNORED.has(inv.status));
   const done = {
     inquiry: true,
@@ -852,6 +874,9 @@ function deriveStages({ status, quotes = [], contracts = [], events = [], invoic
     done: status === 'completed',
   };
   const hidden = { quote: perms.quotes === false, contract: perms.contracts === false, invoice: perms.bills === false };
+  // Left out by the project's flow or skipped by hand. A stage that is done
+  // anyway (a contract signed after all) still reads done.
+  const leftOut = new Set([...(PROJECT_FLOWS[flow] || []), ...(skippedStages || [])]);
   let lastDone = -1;
   STAGES.forEach((key, i) => { if (done[key] && !hidden[key]) lastDone = i; });
   const completed = status === 'completed';
@@ -863,11 +888,13 @@ function deriveStages({ status, quotes = [], contracts = [], events = [], invoic
     // Where a cancelled job stopped is the first stage after the last done one,
     // whether or not this admin may see it: a hidden stage stays hidden, and the
     // cross is not moved onto a later stage it never reached.
-    if (cancelled && stoppedAt === null && !done[key] && i > lastDone) {
+    const left = leftOut.has(key) && !done[key];
+    if (cancelled && stoppedAt === null && !done[key] && !left && i > lastDone) {
       stoppedAt = key;
       state = hidden[key] ? 'hidden' : 'cancelled';
     } else if (hidden[key]) state = 'hidden';
     else if (done[key]) state = 'done';
+    else if (left) state = 'skipped';
     else if (i < lastDone || (completed && key !== 'done')) state = 'skipped';
     else if (!completed && !cancelled && current === null) { state = 'current'; current = key; }
     else state = 'todo';
@@ -895,6 +922,8 @@ async function attachStages(projects, perms = {}) {
   for (const p of projects) {
     p.stage = deriveStages({
       status: p.status,
+      flow: p.flow,
+      skippedStages: p.skippedStages,
       quotes: quotes.get(p.id), contracts: contracts.get(p.id),
       events: events.get(p.id), invoices: invoices.get(p.id),
     }, perms);
@@ -1083,7 +1112,7 @@ async function getProjectOverview(id, perms = {}, admin = null) {
   // Rolled-up project value (newest stage wins per deal, cumulative).
   out.valuation = computeValuation(out.invoices, out.quotes);
 
-  out.stage = deriveStages({ status: project.status, ...out }, perms);
+  out.stage = deriveStages({ status: project.status, flow: project.flow, skippedStages: project.skippedStages, ...out }, perms);
 
   return out;
 }
@@ -1212,6 +1241,8 @@ async function sendEmailNow(emailId, adminId = null) {
 
 module.exports = {
   PROJECT_STATUSES,
+  PROJECT_FLOWS,
+  SKIPPABLE_STAGES,
   listProjects,
   getProjectById,
   createProject,

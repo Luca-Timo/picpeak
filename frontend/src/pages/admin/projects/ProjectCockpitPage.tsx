@@ -27,7 +27,7 @@ import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import { useLeaveGuard } from '../../../contexts/UnsavedChangesContext';
 import { CustomerGroupChipList } from '../../../components/admin/CustomerGroupChips';
 import { ConvertToContractDialog } from '../quotes/ConvertToContractDialog';
-import { projectsService, type ProjectOverview, type ProjectStatus } from '../../../services/projects.service';
+import { projectsService, type ProjectOverview, type ProjectStageKey, type ProjectStatus } from '../../../services/projects.service';
 import { businessProfileService } from '../../../services/businessProfile.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../../hooks';
@@ -188,6 +188,21 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
     invalidateKeys: [['project-overview', projectId], ['projects']],
   });
 
+  // Skipping a stage is an action, like cancel and complete: saved at once,
+  // outside the save bar, and undone from the stage itself.
+  const skipStage = useMutationWithToast({
+    mutationFn: ({ stage, skip }: { stage: ProjectStageKey; skip: boolean }) => {
+      const current = new Set(project.skippedStages || []);
+      if (skip) current.add(stage); else current.delete(stage);
+      return projectsService.update(projectId, { skippedStages: Array.from(current) });
+    },
+    successMessage: (_r, { skip }) => (skip
+      ? t('projects.toast.stageSkipped', 'Step skipped.')
+      : t('projects.toast.stageRestored', 'Step taken back into the project.')) as string,
+    errorMessage: t('projects.toast.saveFailed', 'Save failed') as string,
+    invalidateKeys: [['project-overview', projectId], ['projects']],
+  });
+
   // ── The next step ──
   const stepLabel = useStepLabel();
   const { run, isRunning } = useRunStep(projectId);
@@ -316,7 +331,15 @@ const ProjectPage: React.FC<{ data: ProjectOverview }> = ({ data }) => {
       {tab === 'overview' && (
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start">
           <div className="space-y-6 min-w-0">
-            <ProjectStageCard data={data} main={main} later={later} onRun={(step) => { void runStep(step); }} busy={isRunning || save.isPending} />
+            <ProjectStageCard
+              data={data}
+              main={main}
+              later={later}
+              onRun={(step) => { void runStep(step); }}
+              busy={isRunning || save.isPending || skipStage.isPending}
+              onSkip={canEdit && !closed ? (stage) => skipStage.mutate({ stage, skip: true }) : undefined}
+              onRestore={canEdit && !closed ? (stage) => skipStage.mutate({ stage, skip: false }) : undefined}
+            />
             <ProjectDocumentsCard data={data} flags={flags} can={hasPermission} canAttachGallery={canEdit && !closed} />
           </div>
           <div className="space-y-6 min-w-0">

@@ -12,7 +12,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Calendar, Inbox, User, Wallet } from 'lucide-react';
+import { Calendar, Inbox, Route, User, Wallet } from 'lucide-react';
 import { Button, Card, Input } from '../../../components/common';
 import { SectionPageHeader } from '../../../components/admin/SectionPageHeader';
 import { CustomerPicker } from '../../../components/admin/CustomerPicker';
@@ -22,7 +22,7 @@ import { businessProfileService } from '../../../services/businessProfile.servic
 import { useMutationWithToast } from '../../../hooks';
 import { usePermissions } from '../../../contexts/PermissionsContext';
 import { useLeaveGuard, useUnsavedChanges } from '../../../contexts/UnsavedChangesContext';
-import { FrameFields, OccasionFields } from './ProjectInquiryFields';
+import { FlowField, FrameFields, OccasionFields } from './ProjectInquiryFields';
 import { EMPTY_DRAFT, changedKeys, dateRangeError, fieldsFromDraft, type ProjectDraft } from './projectDraft';
 import type { CustomerChoice } from './ProjectSideCards';
 
@@ -156,6 +156,14 @@ export const NewInquiryPage: React.FC = () => {
             />
             <OccasionFields draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
           </div>
+        </Section>
+
+        <Section
+          icon={<Route className="w-5 h-5" />}
+          title={t('projects.flow.title', 'Workflow')}
+          description={t('projects.flow.sectionHelp', 'Which steps this job has. You can change it later.')}
+        >
+          <FlowField draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
         </Section>
 
         <Section

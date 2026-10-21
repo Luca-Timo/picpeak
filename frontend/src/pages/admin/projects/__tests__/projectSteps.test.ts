@@ -65,6 +65,12 @@ describe('project steps', () => {
     expect(stepFor('invoice', data, everything)).toBeNull();
   });
 
+  it('does not offer a skipped stage as a jump', () => {
+    const data = overview('quote');
+    data.stage.stages = data.stage.stages.map((s) => (s.key === 'gallery' ? { ...s, state: 'skipped' } : s));
+    expect(projectSteps(data, everything).later.map((s) => s.kind)).toEqual(['createInvoice']);
+  });
+
   it('has no step on a closed project and lists only later creates as jumps', () => {
     expect(projectSteps(overview(null), everything)).toEqual({ main: null, later: [] });
     const { main, later } = projectSteps(overview('quote'), everything);

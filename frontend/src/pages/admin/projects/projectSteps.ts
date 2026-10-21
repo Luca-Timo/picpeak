@@ -111,9 +111,10 @@ export function projectSteps(data: ProjectOverview, ctx: Ctx): { main: ProjectSt
   if (!current) return { main: null, later: [] };
   const order = data.stage.stages.map((s) => s.key);
   const main = stepFor(current, data, ctx);
+  const stateOf = new Map(data.stage.stages.map((s) => [s.key, s.state]));
   const later = order
     .slice(order.indexOf(current) + 1)
-    .filter((key) => key !== 'done')
+    .filter((key) => key !== 'done' && stateOf.get(key) !== 'skipped')
     .map((key) => stepFor(key, data, ctx))
     .filter((s): s is ProjectStep => !!s && s.kind.startsWith('create'));
   return { main, later };

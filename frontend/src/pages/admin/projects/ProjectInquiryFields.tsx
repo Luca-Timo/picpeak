@@ -10,7 +10,8 @@ import { MapPin } from 'lucide-react';
 import { Input, LocalizedDateInput } from '../../../components/common';
 import { DecimalInput } from '../../../components/common/DecimalInput';
 import { eventTypesService } from '../../../services/eventTypes.service';
-import { INQUIRY_SOURCES } from '../../../services/projects.service';
+import { INQUIRY_SOURCES, PROJECT_FLOWS, type ProjectFlow } from '../../../services/projects.service';
+import { radioGroupKeyDown } from '../../../utils/ariaKeyboard';
 import { dateRangeError, type ProjectDraft, type ProjectDraftKey } from './projectDraft';
 
 const CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
@@ -30,6 +31,51 @@ const pairClass = (layout: 'form' | 'card') => (layout === 'card' ? 'grid grid-c
 const datesClass = (layout: 'form' | 'card') => (layout === 'card' ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-1 md:grid-cols-2 gap-4');
 
 const dirtyClass = (on: boolean) => (on ? 'border-warning ring-2 ring-warning-soft' : '');
+
+const FLOW_ORDER: ProjectFlow[] = ['full', 'no_contract', 'no_quote'];
+
+/** Which stages the job has: one of a few flows, as tiles (UX.md › Forms). */
+export const FlowField: React.FC<FieldProps> = ({ draft, onChange, dirty = [], disabled, layout = 'form' }) => {
+  const { t } = useTranslation();
+  const sequence = (flow: ProjectFlow) => ['quote', 'contract', 'gallery', 'invoice']
+    .filter((key) => !PROJECT_FLOWS[flow].includes(key as never))
+    .map((key) => t(`projects.stage.${key}`))
+    .join(' → ');
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-1">
+        <span id="project-flow-label" className="block text-sm font-medium text-body">{t('projects.flow.label', 'Workflow')}</span>
+        {dirty.includes('flow') && <span className="w-2 h-2 rounded-full bg-warning" aria-hidden />}
+      </div>
+      <div
+        className={layout === 'card' ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-1 md:grid-cols-3 gap-3'}
+        role="radiogroup"
+        aria-labelledby="project-flow-label"
+        onKeyDown={radioGroupKeyDown}
+      >
+        {FLOW_ORDER.map((flow) => {
+          const on = draft.flow === flow;
+          return (
+            <button
+              key={flow}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={on ? 0 : -1}
+              disabled={disabled}
+              onClick={() => onChange({ flow })}
+              className={`flex flex-col items-start gap-0.5 text-left px-3 py-2.5 rounded-lg border-2 transition-all ${on ? 'tile-selected' : 'border-line hover:border-line-strong'}`}
+            >
+              <span className="text-sm font-semibold text-heading">{t(`projects.flow.${flow}`)}</span>
+              <span className="text-xs text-soft">{sequence(flow)}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-1 text-xs text-muted">{t('projects.flow.help', 'Stages the workflow leaves out show as skipped. One stage can also be skipped on the project page.')}</p>
+    </div>
+  );
+};
 
 /** Anlass: occasion, guests, dates, location. */
 export const OccasionFields: React.FC<FieldProps> = ({ draft, onChange, dirty = [], disabled, layout = 'form' }) => {

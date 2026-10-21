@@ -14,6 +14,12 @@
  * any gallery exists) has no event to roll up through. Existing invoices
  * keep rolling up through their event or deal, so there is no backfill.
  *
+ * projects.flow: which stages the job has. NULL or 'full' (quote, contract,
+ * gallery, invoice) is what every existing project shows today; 'no_contract'
+ * and 'no_quote' leave stages out. projects.skipped_stages: a comma list of
+ * stages the admin skipped on this one project. Both only change how the
+ * stage strip reads and which next step is offered.
+ *
  * projects.status keeps its free-text column; the new values (`inquiry`,
  * `completed`, `cancelled`) need no schema change, and every existing row
  * stays `active`, which is what it shows today. Additive; safe to re-run.
@@ -29,6 +35,8 @@ const PROJECT_COLUMNS = [
   ['currency', (t) => t.string('currency', 3).nullable()],
   ['source', (t) => t.string('source', 32).nullable()],
   ['notes', (t) => t.text('notes').nullable()],
+  ['flow', (t) => t.string('flow', 24).nullable()],
+  ['skipped_stages', (t) => t.string('skipped_stages', 64).nullable()],
 ];
 
 exports.up = async function up(knex) {

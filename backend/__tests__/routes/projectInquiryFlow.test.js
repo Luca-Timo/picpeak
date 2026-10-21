@@ -447,6 +447,54 @@ describe('project inquiry flow', () => {
     expect(res.status).toBe(422);
   });
 
+  it('leaves the contract out of a no-contract project and offers the gallery after the quote', async () => {
+    const project = await createInquiry({ flow: 'no_contract' });
+    expect(project.flow).toBe('no_contract');
+    await mkQuote({ projectId: project.id, dealUuid: crypto.randomUUID() });
+    const { stage } = await overview(project.id);
+    expect(stage.stages.map((s) => [s.key, s.state])).toEqual([
+      ['inquiry', 'done'], ['quote', 'done'], ['contract', 'skipped'],
+      ['gallery', 'current'], ['invoice', 'todo'], ['done', 'todo'],
+    ]);
+  });
+
+  it('starts a no-quote project at the gallery', async () => {
+    const project = await createInquiry({ flow: 'no_quote' });
+    const { stage } = await overview(project.id);
+    expect(stage.current).toBe('gallery');
+    expect(stage.stages.filter((s) => s.state === 'skipped').map((s) => s.key)).toEqual(['quote', 'contract']);
+  });
+
+  it('skips one stage by hand and takes it back', async () => {
+    const project = await createInquiry();
+    let res = await put(`/api/admin/projects/${project.id}`, { skippedStages: ['quote'] });
+    expect(res.status).toBe(200);
+    expect((res.body.data || res.body).project.skippedStages).toEqual(['quote']);
+    expect((await overview(project.id)).stage.current).toBe('contract');
+    res = await put(`/api/admin/projects/${project.id}`, { skippedStages: [] });
+    expect((res.body.data || res.body).project.skippedStages).toEqual([]);
+    expect((await overview(project.id)).stage.current).toBe('quote');
+  });
+
+  it('keeps a stage done that was skipped but happened anyway', async () => {
+    const project = await createInquiry({ flow: 'no_contract' });
+    await mkQuote({ projectId: project.id, dealUuid: crypto.randomUUID() });
+    await db('contracts').insert({
+      contract_number: `C-SKIP-${project.id}`, customer_account_id: customerId, status: 'fully_signed',
+      issue_date: '2027-02-01', project_id: project.id, created_at: new Date().toISOString(),
+    });
+    const { stage } = await overview(project.id);
+    expect(stage.stages.find((s) => s.key === 'contract').state).toBe('done');
+  });
+
+  it.each([
+    ['an unknown flow', { flow: 'express' }],
+    ['a stage that cannot be skipped', { skippedStages: ['inquiry'] }],
+  ])('refuses %s', async (_label, extra) => {
+    const res = await post('/api/admin/projects', { name: 'Bad flow', ...extra });
+    expect(res.status).toBe(400);
+  });
+
   it('answers 403 on every project route with the feature off', async () => {
     await db('feature_flags').where({ key: 'projects' }).update({ value: 0 });
     try {

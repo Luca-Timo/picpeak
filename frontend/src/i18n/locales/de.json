@@ -8288,8 +8288,10 @@
       "deleted": "Projekt gelöscht. Seine Galerien und Dokumente bleiben erhalten.",
       "galleryCreated": "Galerie als Entwurf erstellt.",
       "renamed": "Projekt umbenannt",
-      "reopened": "Projekt wieder geöffnet.",
-      "stepFailed": "Das hat nicht geklappt. Versuchen Sie es noch einmal."
+      "reopened": "Projekt wieder aufgenommen.",
+      "stepFailed": "Das hat nicht geklappt. Versuchen Sie es noch einmal.",
+      "stageSkipped": "Schritt übersprungen.",
+      "stageRestored": "Schritt wieder ins Projekt aufgenommen."
     },
     "error": {
       "customerMismatch": "Das gehört zu einem anderen Kunden als dieses Projekt."
@@ -8385,7 +8387,7 @@
     "renameLabel": "Projektname",
     "settings": {
       "cancel": "Als abgesagt markieren",
-      "cancelHelp": "Kommt kein Auftrag zustande? Das Projekt verschwindet vom Dashboard, bleibt aber in der Projektliste unter „Abgesagt“. Rückgängig mit „Wieder öffnen“.",
+      "cancelHelp": "Kommt kein Auftrag zustande? Das Projekt verschwindet vom Dashboard, bleibt aber in der Projektliste unter „Abgesagt“. Rückgängig mit „Projekt wieder aufnehmen“.",
       "cancelTitle": "Als abgesagt markieren",
       "complete": "Abschliessen",
       "completeHelp": "Für Projekte, bei denen nichts mehr offen ist, auch wenn eine Phase übersprungen wurde.",
@@ -8394,15 +8396,15 @@
       "dangerTitle": "Danger-Zone",
       "deleteHelp": "Kann nicht rückgängig gemacht werden. Projektdaten und Notizen gehen verloren.",
       "readOnly": "Sie können dieses Projekt sehen, aber nicht ändern.",
-      "reopen": "Wieder öffnen",
-      "reopenCancelled": "Dieses Projekt ist abgesagt. Öffnen Sie es wieder, damit es erneut auf dem Dashboard erscheint.",
-      "reopenCompleted": "Dieses Projekt ist abgeschlossen. Öffnen Sie es wieder, um weiter daran zu arbeiten.",
-      "reopenTitle": "Wieder öffnen",
+      "reopen": "Projekt wieder aufnehmen",
+      "reopenCancelled": "Dieses Projekt ist abgesagt. Nehmen Sie es wieder auf, damit es erneut auf dem Dashboard erscheint.",
+      "reopenCompleted": "Dieses Projekt ist abgeschlossen. Nehmen Sie es wieder auf, um weiter daran zu arbeiten.",
+      "reopenTitle": "Projekt wieder aufnehmen",
       "statusHelp": "Die Phase folgt Angebot, Vertrag und Rechnungen. Ändern Sie den Status nur von Hand, wenn kein Auftrag zustande kommt oder Sie früher abschliessen.",
       "statusTitle": "Status"
     },
     "stage": {
-      "cancelledNote": "Dieses Projekt ist abgesagt. Öffnen Sie es in den Einstellungen wieder, um weiterzumachen.",
+      "cancelledNote": "Dieses Projekt ist abgesagt. Nehmen Sie es in den Einstellungen wieder auf, um weiterzumachen.",
       "completedNote": "Dieses Projekt ist abgeschlossen.",
       "contract": "Vertrag",
       "gallery": "Galerie",
@@ -8414,7 +8416,10 @@
       "title": "Ablauf",
       "inquiry": "Anfrage",
       "invoice": "Rechnung",
-      "done": "Abschluss"
+      "done": "Abschluss",
+      "skip": "Diesen Schritt überspringen",
+      "restore": "rückgängig",
+      "restoreAria": "{{stage}} wieder ins Projekt aufnehmen"
     },
     "step": {
       "complete": "Projekt abschliessen",
@@ -8460,6 +8465,15 @@
       "returning": "Stammkunde",
       "fair": "Messe oder Event",
       "other": "Andere"
+    },
+    "flow": {
+      "title": "Projektablauf",
+      "label": "Projektablauf",
+      "full": "Mit Vertrag",
+      "no_contract": "Ohne Vertrag",
+      "no_quote": "Ohne Angebot",
+      "help": "Schritte, die der Ablauf nicht vorsieht, erscheinen als übersprungen. Einzelne Schritte lassen sich auch auf der Projektseite überspringen.",
+      "sectionHelp": "Welche Schritte dieser Auftrag hat. Sie können das später ändern."
     }
   },
   "calendar": {

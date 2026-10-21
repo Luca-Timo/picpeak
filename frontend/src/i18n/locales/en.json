@@ -8324,7 +8324,9 @@
       "deleteFailed": "Could not delete the project",
       "contractCreated": "Contract created from the quote.",
       "galleryCreated": "Gallery created as a draft.",
-      "stepFailed": "That did not work. Try again."
+      "stepFailed": "That did not work. Try again.",
+      "stageSkipped": "Step skipped.",
+      "stageRestored": "Step taken back into the project."
     },
     "error": {
       "customerMismatch": "That belongs to a different customer than this project."
@@ -8415,7 +8417,10 @@
       "gallery": "Gallery",
       "inquiry": "Inquiry",
       "invoice": "Invoice",
-      "done": "Done"
+      "done": "Done",
+      "skip": "Skip this step",
+      "restore": "undo",
+      "restoreAria": "Take {{stage}} back into the project"
     },
     "documents": {
       "title": "Documents & galleries",
@@ -8495,6 +8500,15 @@
       "returning": "Returning customer",
       "fair": "Fair or event",
       "other": "Other"
+    },
+    "flow": {
+      "title": "Workflow",
+      "label": "Workflow",
+      "full": "With contract",
+      "no_contract": "Without contract",
+      "no_quote": "Without quote",
+      "help": "Stages the workflow leaves out show as skipped. One stage can also be skipped on the project page.",
+      "sectionHelp": "Which steps this job has. You can change it later."
     }
   },
   "calendar": {

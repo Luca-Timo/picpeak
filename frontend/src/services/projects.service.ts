@@ -17,6 +17,17 @@ export const INQUIRY_SOURCES = ['referral', 'website', 'social', 'returning', 'f
 export type InquirySource = typeof INQUIRY_SOURCES[number];
 
 export type ProjectStageKey = 'inquiry' | 'quote' | 'contract' | 'gallery' | 'invoice' | 'done';
+
+/** Which stages a job has (projectService.PROJECT_FLOWS): the stages a flow
+ *  leaves out read "skipped". */
+export const PROJECT_FLOWS = {
+  full: [] as ProjectStageKey[],
+  no_contract: ['contract'] as ProjectStageKey[],
+  no_quote: ['quote', 'contract'] as ProjectStageKey[],
+};
+export type ProjectFlow = keyof typeof PROJECT_FLOWS;
+/** Stages a project can skip by hand. */
+export const SKIPPABLE_STAGES: ProjectStageKey[] = ['quote', 'contract', 'gallery', 'invoice'];
 /** Derived on the server from what the project holds (projectService.deriveStages). */
 /** `cancelled`: where a cancelled project stopped. */
 export type ProjectStageState = 'done' | 'current' | 'skipped' | 'cancelled' | 'todo' | 'hidden';
@@ -36,6 +47,7 @@ export interface ProjectInquiryFields {
   currency: string | null;
   source: InquirySource | null;
   notes: string | null;
+  flow: ProjectFlow | null;
 }
 
 /** Rolled-up project value: newest stage wins per deal (invoice > quote;
@@ -58,6 +70,8 @@ export interface ProjectSummary extends Partial<ProjectInquiryFields> {
   valuation?: ProjectValuation;
   /** Only on the list with `withStages`. */
   stage?: ProjectStage;
+  /** Stages skipped by hand on this project. */
+  skippedStages?: ProjectStageKey[];
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -156,6 +170,7 @@ export interface ProjectOverview {
 }
 
 export type ProjectWritePayload = Partial<ProjectInquiryFields> & {
+  skippedStages?: ProjectStageKey[];
   name?: string;
   customerAccountId?: number | null;
   status?: ProjectStatus;

@@ -16,7 +16,7 @@ import { customerAdminService } from '../../../services/customerAdmin.service';
 import { useMutationWithToast } from '../../../hooks';
 import type { ProjectValuation } from '../../../services/projects.service';
 import { formatMoneyMinor } from '../../../utils/money';
-import { FrameFields, OccasionFields } from './ProjectInquiryFields';
+import { FlowField, FrameFields, OccasionFields } from './ProjectInquiryFields';
 import type { ProjectDraft, ProjectDraftKey } from './projectDraft';
 
 export const ProjectValueCard: React.FC<{ valuation?: ProjectValuation; quotedMinor: Record<string, number> }> = ({ valuation, quotedMinor }) => {
@@ -83,6 +83,7 @@ export const ProjectDataCard: React.FC<{
         <p className="text-xs text-muted mb-3">{t('projects.data.readOnly', 'You can see this data but not change it.')}</p>
       )}
       <fieldset disabled={!canEdit} className="space-y-4">
+        <FlowField draft={draft} onChange={onChange} dirty={dirty} disabled={!canEdit} layout="card" />
         <OccasionFields draft={draft} onChange={onChange} dirty={dirty} disabled={!canEdit} layout="card" />
         <FrameFields draft={draft} onChange={onChange} dirty={dirty} disabled={!canEdit} defaultCurrency={defaultCurrency} layout="card" />
       </fieldset>

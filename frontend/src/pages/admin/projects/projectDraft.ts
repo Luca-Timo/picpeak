@@ -5,9 +5,10 @@
  * both build the request the same way, and the Overview sends only what
  * changed (UX.md › Saving).
  */
-import type { ProjectInquiryFields, ProjectSummary, ProjectWritePayload, InquirySource } from '../../../services/projects.service';
+import type { ProjectFlow, ProjectInquiryFields, ProjectSummary, ProjectWritePayload, InquirySource } from '../../../services/projects.service';
 
 export interface ProjectDraft {
+  flow: ProjectFlow;
   eventType: string;
   eventDate: string;
   eventEndDate: string;
@@ -23,6 +24,7 @@ export interface ProjectDraft {
 export type ProjectDraftKey = keyof ProjectDraft;
 
 export const EMPTY_DRAFT: ProjectDraft = {
+  flow: 'full',
   eventType: '',
   eventDate: '',
   eventEndDate: '',
@@ -36,6 +38,7 @@ export const EMPTY_DRAFT: ProjectDraft = {
 
 export function draftFromProject(p: Partial<ProjectSummary>): ProjectDraft {
   return {
+    flow: p.flow || 'full',
     eventType: p.eventType || '',
     eventDate: p.eventDate || '',
     eventEndDate: p.eventEndDate || '',
@@ -52,6 +55,7 @@ export function draftFromProject(p: Partial<ProjectSummary>): ProjectDraft {
 export function fieldsFromDraft(d: ProjectDraft): Partial<ProjectInquiryFields> {
   const guests = d.guestCount.trim() === '' ? null : Math.max(0, Math.trunc(Number(d.guestCount)));
   return {
+    flow: d.flow || 'full',
     eventType: d.eventType || null,
     eventDate: d.eventDate || null,
     eventEndDate: d.eventEndDate || null,

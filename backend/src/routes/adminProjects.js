@@ -107,10 +107,13 @@ const inquiryValidators = [
   optionalField('currency').isString().trim().isLength({ min: 3, max: 3 }).isAlpha(),
   optionalField('source').isIn(INQUIRY_SOURCES),
   optionalField('notes').isString().isLength({ max: 10000 }),
+  optionalField('flow').isIn(Object.keys(projectService.PROJECT_FLOWS)),
+  body('skippedStages').optional().isArray({ max: projectService.SKIPPABLE_STAGES.length }),
+  body('skippedStages.*').isIn(projectService.SKIPPABLE_STAGES),
   body('status').optional().isIn(projectService.PROJECT_STATUSES),
 ];
 
-const INQUIRY_KEYS = ['eventType', 'eventDate', 'eventEndDate', 'location', 'guestCount',
+const INQUIRY_KEYS = ['flow', 'skippedStages', 'eventType', 'eventDate', 'eventEndDate', 'location', 'guestCount',
   'budgetMinor', 'currency', 'source', 'notes'];
 const inquiryFields = (reqBody) => Object.fromEntries(
   INQUIRY_KEYS.filter((k) => reqBody[k] !== undefined).map((k) => [k, reqBody[k]]),
