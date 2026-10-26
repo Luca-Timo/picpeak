@@ -134,6 +134,24 @@ describe('processUploadedVideo degrades gracefully instead of rejecting the whol
     expect(result.thumbnailError).toBe('ffmpeg seek failed');
   });
 
+  it('in strict mode throws instead of writing the placeholder when no frame is taken', async () => {
+    ffmpeg.ffprobe = jest.fn((videoPath, cb) => {
+      cb(null, { streams: [{ codec_type: 'video', width: 1080, height: 1920, codec_name: 'h264' }], format: { duration: 5.4 } });
+    });
+    ffmpeg.mockImplementation(() => ({
+      screenshots() { return this; },
+      on(event, handler) {
+        if (event === 'error') setImmediate(() => handler(new Error('ffmpeg seek failed')));
+        return this;
+      }
+    }));
+
+    await expect(processUploadedVideo('/tmp/video.mp4', 'thumbnails/thumb_wedding_001.jpg', { strict: true }))
+      .rejects.toThrow('ffmpeg seek failed');
+    expect(generateVideoPlaceholder).not.toHaveBeenCalled();
+    expect(storage.putFromFile).not.toHaveBeenCalled();
+  });
+
   it('throws when metadata, thumbnail generation, AND the placeholder all fail, so the caller surfaces a retryable failure instead of completing with nothing to show (codex review)', async () => {
     ffmpeg.ffprobe = jest.fn((videoPath, cb) => cb(new Error('Invalid data found when processing input')));
     ffmpeg.mockImplementation(() => ({
@@ -147,5 +165,50 @@ describe('processUploadedVideo degrades gracefully instead of rejecting the whol
 
     await expect(processUploadedVideo('/tmp/corrupt.mp4', 'thumbnails/thumb_corrupt.jpg'))
       .rejects.toThrow('Unable to generate any thumbnail');
+  });
+});
+
+describe('portrait phone clips (issue 2263)', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('stores the displayed size and the capture date as an ISO string', async () => {
+    ffmpeg.ffprobe = jest.fn((videoPath, cb) => cb(null, {
+      streams: [{ codec_type: 'video', width: 1920, height: 1080, side_data_list: [{ rotation: -90 }] }],
+      format: { duration: 3, tags: { creation_time: '2025-06-15T12:30:00.000000Z' } }
+    }));
+
+    const metadata = await extractVideoMetadata('/tmp/portrait.mov');
+
+    expect(metadata).toEqual(expect.objectContaining({ width: 1080, height: 1920, capturedAt: '2025-06-15T12:30:00.000Z' }));
+  });
+
+  it('has no capture date when the container carries none', async () => {
+    ffmpeg.ffprobe = jest.fn((videoPath, cb) => cb(null, {
+      streams: [{ codec_type: 'video', width: 1920, height: 1080 }], format: { duration: 3 }
+    }));
+
+    expect((await extractVideoMetadata('/tmp/landscape.mp4')).capturedAt).toBeNull();
+  });
+
+  it('fits the poster frame inside the box instead of squashing it into a square', async () => {
+    const mediaProcesses = require('../mediaProcessService');
+    const run = jest.spyOn(mediaProcesses, 'run').mockImplementation(async (_command, args) => {
+      require('fs').writeFileSync(args[args.length - 1], 'jpeg-bytes');
+      return { stdout: Buffer.alloc(0) };
+    });
+    getStorage.mockReturnValue({ putFromFile: jest.fn().mockResolvedValue(undefined) });
+    const { generateVideoThumbnail } = require('../videoProcessor');
+
+    await generateVideoThumbnail('/tmp/portrait.mov', 'thumbnails/thumb_portrait.jpg');
+    await generateVideoThumbnail('/tmp/portrait.mov', 'thumbnails/thumb_portrait.jpg', { size: '640x480' });
+
+    const filters = run.mock.calls.map(([, args]) => args[args.indexOf('-vf') + 1]);
+    expect(filters).toEqual([
+      'scale=w=300:h=300:force_original_aspect_ratio=decrease',
+      'scale=w=640:h=480:force_original_aspect_ratio=decrease',
+    ]);
+    // The size check still stands in front of the filter string.
+    await expect(generateVideoThumbnail('/tmp/portrait.mov', 'thumbnails/thumb_portrait.jpg', { size: '300:300,crop' }))
+      .rejects.toThrow('Invalid video thumbnail size');
   });
 });
