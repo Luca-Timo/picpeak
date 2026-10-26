@@ -123,6 +123,7 @@ export interface Event {
   is_draft?: boolean;
   // Client access (#172)
   client_access_enabled?: boolean;
+  client_pin_entry_enabled?: boolean;
   client_share_token?: string;
   // Set when the API withheld the gallery links because the admin sees this
   // event but cannot act on it (another owner's gallery).
@@ -419,6 +420,8 @@ export interface GalleryData {
     id: number;
     event_name: string;
     event_type: string;
+    /** Server-derived capability; never contains the private client link or PIN. */
+    client_pin_entry_available?: boolean;
     event_date: string | null;
     // Download resolutions (#858). `choices` is empty when the picker is off,
     // so the UI never offers a size the server would reject.
@@ -590,6 +593,8 @@ export interface GalleryAuthResponse {
     download_limit?: number | null;
   };
   accessLevel?: GalleryAccessLevel;
+  viaCustomer?: boolean;
+  viaClientPin?: boolean;
 }
 
 // API Error type
