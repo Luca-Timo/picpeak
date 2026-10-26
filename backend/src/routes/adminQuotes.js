@@ -271,6 +271,7 @@ function transformLineItemPreset(p) {
     vatCode: p.vat_code || null,
     priceMode: p.price_mode || 'fixed',
     pinnedRateMinor: p.pinned_rate_minor == null ? null : Number(p.pinned_rate_minor),
+    productId: p.product_id || null, productSurcharges: p.product_surcharges ? JSON.parse(p.product_surcharges) : [],
   };
 }
 
@@ -601,11 +602,15 @@ router.post(
     param('id').isInt({ min: 1 }),
     body('selectedOptional').isArray({ max: 200 }),
     body('selectedOptional.*').isInt({ min: 1 }).toInt(),
+    body('configurations').optional().isArray({ max: 200 }),
+    body('configurations.*').isObject(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
-    const result = await quoteService.adminChangeAddOns(id, { selectedOptional: req.body.selectedOptional }, req.admin.id);
+    const result = await quoteService.adminChangeAddOns(id, {
+      selectedOptional: req.body.selectedOptional, configurations: req.body.configurations,
+    }, req.admin.id);
     const data = await quoteService.getQuoteById(id);
     return successResponse(res, {
       ...result,
@@ -829,6 +834,7 @@ router.post(
       currency: req.body.currency,
       quantity_default: req.body.quantityDefault,
       display_order: req.body.displayOrder,
+      product_id: req.body.productId, product_surcharges: req.body.productSurcharges,
       ...presetCatalogueFields(req.body),
     });
     return successResponse(res, { preset: transformLineItemPreset(row) }, 201);
@@ -860,6 +866,7 @@ router.put(
       quantity_default: req.body.quantityDefault,
       display_order: req.body.displayOrder,
       is_active: req.body.isActive,
+      product_id: req.body.productId, product_surcharges: req.body.productSurcharges,
       ...presetCatalogueFields(req.body),
     });
     return successResponse(res, { preset: transformLineItemPreset(row) });
