@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useQuery, useMutation, type UseMutationOptions } from '@tanstack/react-query';
 import { galleryService } from '../services';
 import { toast } from 'react-toastify';
-import { isDownloadLimitError } from '../utils/downloadLimit';
+import { isDownloadLimitError, isGalleryLimited } from '../utils/downloadLimit';
 import { renamedGallerySlug } from './useFollowGalleryRename';
 import { beginPhotoDownload, endPhotoDownload, touchPhotoDownload } from './usePhotoDownloadPending';
 
@@ -53,7 +53,8 @@ export const useGalleryStats = (slug: string, enabled: boolean = true) => {
 };
 
 // `resolution`: a size picked from the download menu (issue 1733, E2).
-type PhotoDownload = { slug: string; photoId: number; filename: string; resolution?: string };
+// `isVideo`: lets a video download directly (issue 2263).
+type PhotoDownload = { slug: string; photoId: number; filename: string; resolution?: string; isVideo?: boolean };
 
 // Issue 2043: one download per photo at a time. `mutate` marks the photo
 // busy before the request starts (so a second tap in the same moment is
@@ -80,9 +81,13 @@ const useSinglePhotoDownload = (
 
 export const useDownloadPhoto = () => {
   return useSinglePhotoDownload(
-    ({ slug, photoId, filename, resolution }, onProgress) => galleryService.downloadPhoto(slug, photoId, filename, onProgress, resolution),
+    ({ slug, photoId, filename, resolution, isVideo }, onProgress) => galleryService.downloadPhoto(slug, photoId, filename, onProgress, resolution, isVideo),
     {
-      onSuccess: () => {
+      onSuccess: (_data, { slug, isVideo }) => {
+        // A video in a gallery without a limit downloads directly (issue
+        // 2263): the call returns before any byte arrives, and the browser's
+        // own download UI reports it.
+        if (isVideo && !isGalleryLimited(slug)) return;
         toast.success('Photo downloaded successfully');
       },
       onError: (error) => {
@@ -108,7 +113,7 @@ export const useDownloadPhoto = () => {
 // is its own affordance.
 export const useSavePhotoToDevice = () => {
   return useSinglePhotoDownload(
-    ({ slug, photoId, filename, resolution }, onProgress) => galleryService.savePhotoToDevice(slug, photoId, filename, onProgress, resolution),
+    ({ slug, photoId, filename, resolution, isVideo }, onProgress) => galleryService.savePhotoToDevice(slug, photoId, filename, onProgress, resolution, isVideo),
     {
       onError: (error) => {
         if (isDownloadLimitError(error)) return;
