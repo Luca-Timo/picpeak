@@ -488,7 +488,8 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   // whatever arrived in the meantime too).
   const followProcessing = data?.event?.media_processing === true && !hiddenUntilReveal && !revealArmed
     && !uploadProcessing && !peopleData?.scan?.in_progress;
-  useProcessingRefresh({
+  // Issue 2274: once that poll gives up on a stuck row, live refresh takes over.
+  const processingPollHalted = useProcessingRefresh({
     slug,
     enabled: followProcessing,
     loadedCount: data?.photos?.length ?? 0,
@@ -500,7 +501,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
     // revealArmed too: the reveal poll above keeps refetching the list after
     // the reveal, for as long as the mode is on.
     enabled: data?.event?.live_refresh === true && !hiddenUntilReveal && !revealArmed && !uploadProcessing
-      && !peopleData?.scan?.in_progress && !followProcessing,
+      && !peopleData?.scan?.in_progress && (!followProcessing || processingPollHalted),
     loadedCount: data?.photos?.length ?? 0,
     loadedMaxId,
   });
