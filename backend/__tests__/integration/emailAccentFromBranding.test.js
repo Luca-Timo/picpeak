@@ -107,4 +107,32 @@ describe('wrapEmailHtml — email accent', () => {
     expect(contrastRatio(inline, '#ffffff')).toBeGreaterThanOrEqual(4.5);
     expect(html).not.toMatch(/#5c8762/i);
   });
+
+  // The seeded gallery_created CTA is an inline-styled anchor, not
+  // class="button", and its link carries the green as text colour.
+  const seededBody = '<a href="#" style="color: #5C8762;">link</a>'
+    + '<a href="#" style="display: inline-block; padding: 12px 30px; background-color: #5C8762; color: white; text-decoration: none;">View Gallery</a>';
+
+  it('fills an inline-styled seeded button with the accent and the button label colour', async () => {
+    await setSetting('email_primary_color', '#2D5A5A');
+    await setSetting('email_button_text_color', '#fafafa');
+    const html = await wrapEmailHtml(seededBody, 'Subject', 'en', template);
+    expect(html).toContain('background-color: #2D5A5A; color: #fafafa; text-decoration: none;');
+  });
+
+  it('lightens the accent for link text on a dark card instead of keeping the green', async () => {
+    await setSetting('email_primary_color', '#2D5A5A');
+    await setSetting('email_container_bg_color', '#1b1b1b');
+    try {
+      const html = await wrapEmailHtml(seededBody, 'Subject', 'en', template);
+      const link = html.match(/<a href="#" style="color: (#[0-9a-f]{6});">link/i)[1];
+      expect(link.toLowerCase()).not.toBe('#2d5a5a');
+      expect(contrastRatio(link, '#1b1b1b')).toBeGreaterThanOrEqual(4.5);
+      // The button fill is not link text: it stays the accent, like the header.
+      expect(html).toContain('background-color: #2D5A5A; color: #ffffff;');
+      expect(html).not.toMatch(/#5c8762/i);
+    } finally {
+      await setSetting('email_container_bg_color', undefined);
+    }
+  });
 });

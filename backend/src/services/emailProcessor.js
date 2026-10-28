@@ -465,20 +465,41 @@ async function resolveEmailAccent(configuredPrimary, configuredButtonText) {
  * The colour the seeded templates' inline green turns into. It is link text
  * as well as border and box colour, so it has to read on the email card at
  * 4.5:1: the accent itself when it does, else the accent darkened step by
- * step until it does. null when the contrast can't be computed (a named or
- * hsl() colour) — the template then keeps its green.
+ * step until it does — or, on a dark card no darker shade reads on,
+ * lightened step by step. null when the contrast can't be computed (a named
+ * or hsl() colour) — the template then keeps its green.
  */
 function templateAccentOn(accent, card) {
   const rgb = parseColor(accent);
   if (!rgb || contrastRatio(accent, card) === null) return null;
+  if (contrastRatio(accent, card) >= 4.5) return accent;
   const hex = (c) => Math.round(c).toString(16).padStart(2, '0');
-  for (let step = 0; step <= 20; step += 1) {
-    const f = 1 - step * 0.05;
-    const candidate = `#${hex(rgb.r * f)}${hex(rgb.g * f)}${hex(rgb.b * f)}`;
-    if (contrastRatio(candidate, card) >= 4.5) return step === 0 ? accent : candidate;
+  const shade = (f) => `#${hex(rgb.r * f)}${hex(rgb.g * f)}${hex(rgb.b * f)}`;
+  const tint = (f) => `#${hex(rgb.r + (255 - rgb.r) * f)}${hex(rgb.g + (255 - rgb.g) * f)}${hex(rgb.b + (255 - rgb.b) * f)}`;
+  for (const mix of [shade, tint]) {
+    for (let step = 1; step <= 20; step += 1) {
+      const candidate = mix === shade ? shade(1 - step * 0.05) : tint(step * 0.05);
+      if (contrastRatio(candidate, card) >= 4.5) return candidate;
+    }
   }
-  // A card too dark for any darker accent: the template keeps its green.
   return null;
+}
+
+/**
+ * Seeded templates draw their CTA as an anchor with the green as an inline
+ * background-color (no `class="button"`, so the wrapper's button style never
+ * reached it). That fill is the button, not link text: it takes the accent
+ * as is, like the header and every `class="button"` CTA, and the label in
+ * the same style attribute takes the button text colour.
+ */
+function themeInlineButtons(html, fill, label) {
+  return String(html).replace(/style="([^"]*)"/gi, (match, css) => {
+    if (!/background-color:\s*#5c8762\b/i.test(css)) return match;
+    const themed = css
+      .replace(/background-color:\s*#5c8762\b/gi, `background-color: ${fill}`)
+      .replace(/(^|;)\s*color:\s*[^;]*/i, `$1 color: ${label}`);
+    return `style="${themed}"`;
+  });
 }
 
 function isUsableLogoUrl(value) {
@@ -552,6 +573,7 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en', { seededTemplat
   // only: an edited template can't be told apart from a seeded one, but a
   // newsletter or a hand-written mail never meant the accent by it.
   if (seededTemplate && primaryColor.toLowerCase() !== LEGACY_EMAIL_GREEN.toLowerCase()) {
+    htmlBody = themeInlineButtons(htmlBody, primaryColor, buttonTextColor);
     const inlineAccent = templateAccentOn(primaryColor, containerBgColor);
     if (inlineAccent) htmlBody = String(htmlBody).replace(/#5c8762\b/gi, inlineAccent);
   }
@@ -841,7 +863,11 @@ function safeTemplateReplace(template, variables, options = {}) {
     if (!variables || !Object.prototype.hasOwnProperty.call(variables, key)) {
       return match;
     }
-    const raw = String(variables[key]);
+    // A variable the sender passed as null (no expiry date, no promised
+    // date) has no value to print; String(null) put a literal "null" in the
+    // mail.
+    const value = variables[key];
+    const raw = value === null || value === undefined ? '' : String(value);
     if (escapeOnSubstitute && !HTML_PASSTHROUGH_KEYS.has(key)) {
       return escapeHtml(raw);
     }
