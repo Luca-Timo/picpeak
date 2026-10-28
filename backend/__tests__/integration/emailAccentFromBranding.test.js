@@ -120,9 +120,38 @@ describe('wrapEmailHtml — email accent', () => {
     expect(html).toContain('background-color: #2D5A5A; color: #fafafa; text-decoration: none;');
   });
 
+  it('adds the button label colour to a seeded button style that has none', async () => {
+    await setSetting('email_primary_color', '#2D5A5A');
+    const html = await wrapEmailHtml('<a href="#" style="padding: 12px; background-color: #5C8762">Go</a>', 'Subject', 'en', template);
+    expect(html).toContain('style="padding: 12px; background-color: #2D5A5A; color: #ffffff;"');
+  });
+
+  it('keeps the green rather than a lightened accent that would vanish on a light info panel', async () => {
+    // A tint that reads on #444 at 4.5:1 is too light for #f9f9f9 at 3:1.
+    await setSetting('email_primary_color', '#2D5A5A');
+    await setSetting('email_container_bg_color', '#444444');
+    await setSetting('email_list_bg_color', '#f9f9f9');
+    try {
+      const html = await wrapEmailHtml(seededBody, 'Subject', 'en', template);
+      expect(html).toContain('<a href="#" style="color: #5C8762;">link');
+      expect(html).toContain('background-color: #2D5A5A; color: #ffffff;');
+    } finally {
+      await setSetting('email_container_bg_color', undefined);
+      await setSetting('email_list_bg_color', undefined);
+    }
+  });
+
+  it('gives inline seeded buttons a configured label on the legacy green too', async () => {
+    await setSetting('email_primary_color', '#5C8762');
+    await setSetting('email_button_text_color', '#111111');
+    const html = await wrapEmailHtml(seededBody, 'Subject', 'en', template);
+    expect(html).toContain('background-color: #5C8762; color: #111111;');
+  });
+
   it('lightens the accent for link text on a dark card instead of keeping the green', async () => {
     await setSetting('email_primary_color', '#2D5A5A');
     await setSetting('email_container_bg_color', '#1b1b1b');
+    await setSetting('email_list_bg_color', '#232323');
     try {
       const html = await wrapEmailHtml(seededBody, 'Subject', 'en', template);
       const link = html.match(/<a href="#" style="color: (#[0-9a-f]{6});">link/i)[1];
@@ -133,6 +162,7 @@ describe('wrapEmailHtml — email accent', () => {
       expect(html).not.toMatch(/#5c8762/i);
     } finally {
       await setSetting('email_container_bg_color', undefined);
+      await setSetting('email_list_bg_color', undefined);
     }
   });
 });

@@ -175,6 +175,35 @@ Mit freundlichen Grüßen`);
     expect((await translation('en')).body_html).toBe(body);
   });
 
+  it('does not wrap an element that holds a {{#if}} block of its own', async () => {
+    const [id] = await knex('email_templates').insert({ template_key: 'gallery_created' });
+    const html = '<p>{{#if welcome_message}}Hi. {{/if}}Until {{expiry_date}}</p>';
+    const text = 'Hello\n{{#if welcome_message}}Hi. {{/if}}Until {{expiry_date}}';
+    await knex('email_template_translations').insert({ template_id: id, language: 'en', body_html: html, body_text: text });
+    await migration.up(knex);
+    const row = await translation('en');
+    expect(row.body_html).toBe(html);
+    expect(row.body_text).toBe(text);
+  });
+
+  it('does not hide another value that shares the element with the date', async () => {
+    const [id] = await knex('email_templates').insert({ template_key: 'gallery_created' });
+    const html = '<p>Password {{gallery_password}}, available until {{expiry_date}}</p>';
+    await knex('email_template_translations').insert({ template_id: id, language: 'en', body_html: html, body_text: html });
+    await migration.up(knex);
+    const row = await translation('en');
+    expect(row.body_html).toBe(html);
+    expect(row.body_text).toBe(html);
+  });
+
+  it('guards the line a partly guarded body still prints', async () => {
+    const [id] = await knex('email_templates').insert({ template_key: 'gallery_created' });
+    const html = '{{#if expiry_date}}<li>Until {{expiry_date}}</li>{{/if}}\n<p>Expires {{expiry_date}}.</p>';
+    await knex('email_template_translations').insert({ template_id: id, language: 'en', body_html: html });
+    await migration.up(knex);
+    expect(render((await translation('en')).body_html, NO_DATE)).toBe('\n');
+  });
+
   it('touches no other template', async () => {
     await seed('gallery_expired');
     await migration.up(knex);

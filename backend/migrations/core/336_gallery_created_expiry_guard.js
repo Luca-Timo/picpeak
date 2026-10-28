@@ -21,13 +21,15 @@
  *  - text: the line holding it, with the line break before it, so the lines
  *    around it close up.
  *
- * Skipped: a body that already has `{{#if expiry_date}}`, and an element that
- * sits inside another `{{#if}}` block — safeTemplateReplace does not nest.
+ * Skipped, element by element: one that sits inside an `{{#if}}` block (an
+ * already guarded one included, so a second run changes nothing) or holds
+ * one — safeTemplateReplace does not nest; and one that carries another
+ * variable too.
  */
 
 const TEMPLATE_KEY = 'gallery_created';
-const VAR = String.raw`\{\{\s*expiry_date\s*\}\}`;
-const HAS_GUARD = /\{\{#if\s+expiry_date\s*\}\}/;
+// The tight form only: safeTemplateReplace substitutes nothing else.
+const VAR = String.raw`\{\{expiry_date\}\}`;
 
 // Alternation order matters: at a <div> the whole box is wrapped before its
 // inner <p> could be.
@@ -46,10 +48,16 @@ function insideConditional(body, offset) {
 }
 
 function guard(body, pattern) {
-  if (typeof body !== 'string' || !body || HAS_GUARD.test(body)) return body;
+  if (typeof body !== 'string' || !body) return body;
   return body.replace(pattern, (match, ...rest) => {
     const offset = rest.find((value) => typeof value === 'number');
-    if (insideConditional(body, offset)) return match;
+    // Neither around the element nor inside it: an inner {{/if}} would
+    // close the new guard early.
+    if (insideConditional(body, offset) || /\{\{(#if\s|\/if\}\})/.test(match)) return match;
+    // Nor one that carries another value (an edited "password …, available
+    // until …" line): hiding it would hide that value too. It keeps the blank
+    // date safeTemplateReplace prints.
+    if (/\{\{(?!expiry_date\}\})\w+\}\}/.test(match)) return match;
     return `{{#if expiry_date}}${match}{{/if}}`;
   });
 }
