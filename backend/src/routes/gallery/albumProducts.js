@@ -31,9 +31,12 @@ router.use(
 );
 router.get(
   '/:slug/album-products',
-  handleAsync(async (req, res) =>
-    res.json({ offers: await service().clientOffers(req.event.id) }),
-  ),
+  handleAsync(async (req, res) => {
+    const offers = await service().clientOffers(req.event.id);
+    const readOnly = !!req.viaCustomer
+      && !(await customerContactsService.sessionMayAct(req.galleryAccess?.session, 'galleries'));
+    res.json({ offers: offers.map((offer) => ({ ...offer, readOnly })) });
+  }),
 );
 router.get(
   '/:slug/album-products/images/:imageId',

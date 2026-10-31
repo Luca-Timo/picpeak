@@ -846,10 +846,14 @@ async function updateCustomer(id, updates, updatedByAdminId) {
 
   allowed.updated_at = new Date();
   const emailChanged = !!allowed.email && allowed.email !== customer.email;
+  let movedContacts = [];
   await db.transaction(async (trx) => {
     // The holder's password also opens the customers where this person is a
     // contact, and that link is the address.
     const moved = trx('customer_contacts').whereRaw('LOWER(email) = LOWER(?)', [customer.email]);
+    if (emailChanged) {
+      movedContacts = await moved.clone().orderBy('id').forUpdate().select('id', 'customer_account_id');
+    }
     // A reset link already mailed to the old address must not set the
     // password of the account at its new one, wherever it was requested
     // from. Reset rows before the account, the order applyPasswordReset
@@ -866,10 +870,20 @@ async function updateCustomer(id, updates, updatedByAdminId) {
       actor: updatedByAdminId || null, source: 'customer.update',
     });
     if (emailChanged) {
-      await moved.update({ email: allowed.email, updated_at: new Date() })
+      await moved.update({ email: allowed.email, password_changed_at: new Date(), updated_at: new Date() })
         .catch(customerContactsService.conflictOnDuplicate);
+      for (const contact of movedContacts) {
+        await customerContactsService.cancelQueuedMail(
+          trx, customer.email.toLowerCase(), contact.customer_account_id, { lastUse: false },
+        );
+      }
     }
   });
+  for (const contact of movedContacts) {
+    await logActivity('customer_contact_updated',
+      { customerId: contact.customer_account_id, contactId: contact.id, fields: ['email', 'password_changed_at'] },
+      null, { type: 'admin', id: updatedByAdminId || null });
+  }
 
   await logActivity('customer_updated',
     { customerId: id, fields: Object.keys(allowed) },
@@ -1292,6 +1306,7 @@ async function eraseCustomer(id, erasedByAdminId) {
   const touchedCampaignIds = new Set();
 
   await db.transaction(async (trx) => {
+    await customerContactsService.lockForErasure(trx, id);
     // Re-read (and on PostgreSQL lock) the row here: every address match
     // below must use the address the account has as the erasure commits. An
     // email change committing during the planning above would otherwise
@@ -1378,16 +1393,17 @@ async function eraseCustomer(id, erasedByAdminId) {
     const extraQueueIds = [...signerQueueIds, ...await acceptedInvitationQueueIds(trx, id)];
     // Contact addresses are logins of this customer, with mail of their own.
     const contactEmails = await customerContactsService.contactEmailsForErasure(trx, id);
-    await customerContactsService.redactContactMail(trx, id);
+    await customerContactsService.redactContactMail(trx, id, sentinelEmail);
     await customerContactsService.keepHolderLogin(trx, customer);
-    const otherCustomersMail = await customerContactsService.mailAboutOthers(trx, customer.email, id);
+    const kept = await customerContactsService.mailToKeep(trx, id, [customer.email, ...contactEmails]);
+    const notToRedact = kept.filter((queueId) => !extraQueueIds.includes(queueId));
     const matchQueue = (q) => q.where((w) => {
       forCustomer(w);
       if (extraQueueIds.length > 0) w.orWhereIn('id', extraQueueIds);
       if (contactEmails.length > 0) {
         w.orWhereRaw(`LOWER(recipient_email) IN (${contactEmails.map(() => '?').join(', ')})`, contactEmails);
       }
-    }).whereNotIn('id', otherCustomersMail);
+    }).whereNotIn('id', notToRedact);
 
     const cancelledQueueRows = await matchQueue(trx('email_queue'))
       .whereIn('status', ['pending', PROTECTED_PENDING_STATUS])
@@ -1787,8 +1803,6 @@ async function notifyCustomerOfNewAssignments(customerId, addedEventIds) {
     || customer.first_name?.trim()
     || (customer.email ? customer.email.split('@')[0] : '');
 
-  // Before the customer's own mail: a failure must not leave a retry mailing them twice.
-  const contacts = await customerContactsService.mailRecipients(customerId, 'galleries');
   const queued = await queueEmail(null, customer.email, 'customer_gallery_assigned', {
     customer_name: customerName,
     gallery_count: String(events.length),
@@ -1802,7 +1816,7 @@ async function notifyCustomerOfNewAssignments(customerId, addedEventIds) {
     dashboard_link: `${frontendUrl}/customer/dashboard`,
   });
   // People of this customer who follow its galleries get the same notice.
-  for (const contact of contacts) {
+  for (const contact of await customerContactsService.noticeRecipients(customerId, 'galleries')) {
     await queueEmail(null, contact.email, 'customer_gallery_assigned', {
       customer_name: contact.display_name?.trim() || contact.first_name?.trim() || contact.email.split('@')[0],
       gallery_count: String(events.length),

@@ -875,6 +875,9 @@ describe('customer contacts', () => {
         await agent.post('/api/customer/auth/login').send({ email, password: PASSWORD });
         const access = await agent.get('/api/customer/events/album-gallery/access-token');
         expect(access.status).toBe(200);
+        const offers = await agent.get('/api/gallery/album-gallery/album-products')
+          .set('Authorization', `Bearer ${access.body.token}`);
+        expect(offers.status).toBe(200);
         return agent.put(`/api/gallery/album-gallery/album-products/${offer}`)
           .set('Authorization', `Bearer ${access.body.token}`)
           .send({});
@@ -895,6 +898,15 @@ describe('customer contacts', () => {
       expect((await notifier.recipientFor(holder)).email).toBe(HOLDER_EMAIL);
       await contacts.updateContact(customerId, contact.id, { isActive: false }, adminId);
       expect(await notifier.recipientFor(req)).toBeNull();
+    });
+
+    it('a contact\'s gallery link leads into the portal, not to the share link', async () => {
+      const { galleryLinkFor } = require('../../src/services/galleryNotificationService');
+      const eventId = await portalGallery('link-gallery');
+      const event = await db('events').where({ id: eventId }).first();
+      const share = 'https://example.test/share';
+      expect(await galleryLinkFor(event, 'mia@example.test', share, { customerAccountId: customerId })).not.toBe(share);
+      expect(await galleryLinkFor(event, 'stranger@example.test', share)).toBe(share);
     });
   });
 
@@ -1072,6 +1084,72 @@ describe('customer contacts', () => {
       expect(res.body.customer.id).toBe(customerId);
       expect((await db('email_queue').where({ id: kept }).first()).status).toBe('pending');
       expect((await db('email_queue').where({ id: gone }).first()).status).toBe('cancelled');
+    });
+
+    it('redacts mail about an erased customer to someone removed long before', async () => {
+      const erasedId = await newCustomer();
+      const contact = await contacts.createContact(erasedId, { email: 'left@example.test' }, adminId);
+      const sent = await queueMail({
+        recipient_email: 'left@example.test', email_type: 'customer_gallery_assigned', status: 'sent',
+        email_data: JSON.stringify({ gallery_list_text: 'Secret', __customerAccountId: erasedId }),
+      });
+      await contacts.deleteContact(erasedId, contact.id, adminId);
+      await accounts.eraseCustomer(erasedId, adminId);
+      const row = await db('email_queue').where({ id: sent }).first();
+      expect(row.recipient_email).not.toBe('left@example.test');
+      expect(JSON.stringify(row.email_data)).not.toContain('Secret');
+    });
+
+    it('does not spare mail about a customer the erased holder has left', async () => {
+      const erasedId = await newCustomer({ email: 'was@example.test' });
+      const about = await queueMail({
+        recipient_email: 'was@example.test', email_type: 'customer_gallery_assigned', status: 'sent',
+        email_data: JSON.stringify({ gallery_list_text: 'Secret', __customerAccountId: otherId }),
+      });
+      await accounts.eraseCustomer(erasedId, adminId);
+      const row = await db('email_queue').where({ id: about }).first();
+      expect(row.recipient_email).not.toBe('was@example.test');
+      expect(JSON.stringify(row.email_data)).not.toContain('Secret');
+    });
+
+    it('leaves another customer\'s contract mail to a contact of the erased customer', async () => {
+      const erasedId = await newCustomer();
+      await contacts.createContact(erasedId, { email: 'signer@example.test' }, adminId);
+      const signing = await queueMail({
+        recipient_email: 'signer@example.test', email_type: 'contract_signature_request',
+        email_data: JSON.stringify({ contract_number: 'V-OTHER' }),
+      });
+      await accounts.eraseCustomer(erasedId, adminId);
+      expect((await db('email_queue').where({ id: signing }).first()).status).toBe('pending');
+    });
+
+    it('gives no reset link to a contact of a passive customer', async () => {
+      const passive = await newCustomer({ password_hash: null });
+      const contact = await contacts.createContact(passive, { email: 'in@example.test' }, adminId);
+      await db('customer_logins').insert({ email: 'in@example.test', password_hash: 'x' });
+      await expect(contacts.createPasswordReset(passive, contact.id, adminId))
+        .rejects.toThrow('Invite the customer to the portal first');
+    });
+
+    it('stops mail about other customers when a holder\'s address moves', async () => {
+      const holder = await newCustomer({ email: 'moving@example.test' });
+      await db('customer_contacts').insert({
+        customer_account_id: otherId, email: 'moving@example.test', is_active: true,
+        created_at: new Date(), updated_at: new Date(),
+      });
+      const queued = await queueMail({
+        recipient_email: 'moving@example.test', email_type: 'customer_gallery_assigned',
+        email_data: JSON.stringify({ __customerAccountId: otherId }),
+      });
+      await accounts.updateCustomer(holder, { email: 'moved-on@example.test' }, adminId);
+      expect((await db('email_queue').where({ id: queued }).first()).status).toBe('cancelled');
+      const [row] = await db('customer_contacts').where({ customer_account_id: otherId, email: 'moved-on@example.test' });
+      expect(row.password_changed_at).toBeTruthy();
+    });
+
+    it('keeps the holder\'s notice when the contacts cannot be read', async () => {
+      jest.spyOn(contacts, 'mailRecipients').mockRejectedValue(new Error('lookup failed'));
+      await expect(contacts.noticeRecipients(customerId, 'galleries')).resolves.toEqual([]);
     });
 
     it('shows a view-only contact nothing to act on', async () => {

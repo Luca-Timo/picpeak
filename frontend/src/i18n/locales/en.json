@@ -11516,6 +11516,7 @@
     "manageCatalogue": "Manage catalogue",
     "savedChoice": "Saved choice",
     "lockedHelp": "Contact the studio if you need to change this choice.",
+    "readOnlyHelp": "Your login can view this choice but not make it.",
     "chooseModel": "Choose a model",
     "chooseColour": "Choose a colour",
     "yourName": "Your name",

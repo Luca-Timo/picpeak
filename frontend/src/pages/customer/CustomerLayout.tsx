@@ -87,6 +87,7 @@ export const CustomerLayout: React.FC = () => {
   // The dashboard is the one page every company has: an open document or
   // gallery may belong to the company being left.
   const switchCompany = async (customerId: number) => {
+    if (switching) return;
     setSwitching(true);
     try {
       setSession(await customerService.switchCompany(customerId));
@@ -263,7 +264,7 @@ export const CustomerLayout: React.FC = () => {
                   <select
                     className="input-themed w-full"
                     value={customer?.id}
-                    disabled={switching}
+                    aria-disabled={switching}
                     onChange={(e) => switchCompany(Number(e.target.value))}
                   >
                     {companies.map((company) => (

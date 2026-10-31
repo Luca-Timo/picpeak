@@ -11482,6 +11482,7 @@
     "manageCatalogue": "Katalog verwalten",
     "savedChoice": "Gespeicherte Auswahl",
     "lockedHelp": "Wenden Sie sich an das Studio, wenn Sie diese Auswahl ändern möchten.",
+    "readOnlyHelp": "Mit Ihrem Login können Sie diese Auswahl ansehen, aber nicht treffen.",
     "chooseModel": "Modell auswählen",
     "chooseColour": "Farbe auswählen",
     "yourName": "Ihr Name",

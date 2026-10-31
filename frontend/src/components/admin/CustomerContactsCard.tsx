@@ -8,7 +8,7 @@
  * Presets only fill in the rights below them; nothing remembers which one was
  * picked. The server decides what a login may do, this card just edits it.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Users } from 'lucide-react';
@@ -179,6 +179,12 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey });
   const closeForm = () => { setAdding(false); setEditingId(null); setDraft(emptyDraft()); };
+  // The contact being edited can be removed by someone else; the form and its
+  // Cancel go with its row, so nothing else could get the card back.
+  const editedGone = editingId !== null && !!contacts && !contacts.some((c) => c.id === editingId);
+  useEffect(() => {
+    if (editedGone) closeForm();
+  }, [editedGone]);
 
   const payload = (): CustomerContactInput => ({
     email: draft.email.trim(),
@@ -340,14 +346,14 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
                   </Button>
                 )}
                 {canCreate && !contact.hasLogin && contact.isActive && mayInvite && (
-                  <Button variant="outline" size="sm" isLoading={invite.isPending && invite.variables === contact.id} onClick={() => invite.mutate(contact.id)}>
+                  <Button variant="outline" size="sm" isLoading={invite.isPending && invite.variables === contact.id} disabled={invite.isPending} onClick={() => invite.mutate(contact.id)}>
                     {contact.invitationPending
                       ? t('customers.contacts.reinvite', 'Send invitation again')
                       : t('customers.contacts.invite', 'Invite')}
                   </Button>
                 )}
                 {canCreate && contact.hasLogin && contact.isActive && portalEnabled && (
-                  <Button variant="outline" size="sm" isLoading={reset.isPending && reset.variables === contact.id} onClick={() => reset.mutate(contact.id)}>
+                  <Button variant="outline" size="sm" isLoading={reset.isPending && reset.variables === contact.id} disabled={reset.isPending} onClick={() => reset.mutate(contact.id)}>
                     {t('customers.contacts.resetPassword', 'Reset password')}
                   </Button>
                 )}

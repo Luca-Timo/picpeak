@@ -173,7 +173,7 @@ async function request(job, recipient) {
   return 'requested';
 }
 
-async function galleryLink(event, email, token) {
+async function galleryLink(event, email, token, customerAccountId) {
   const { galleryLinkFor } = require('./galleryNotificationService');
   const { buildShareLinkVariants, getEventShareToken } = require('./shareLinkService');
   const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
@@ -184,7 +184,7 @@ async function galleryLink(event, email, token) {
     ? (await buildShareLinkVariants({ slug: event.slug, shareToken })).shareUrl
     : `${base}/gallery/${encodeURIComponent(event.slug)}`;
   // A customer account gets the gallery in its portal, as in every other mail.
-  const url = new URL(await galleryLinkFor(event, email, shareUrl), base);
+  const url = new URL(await galleryLinkFor(event, email, shareUrl, { customerAccountId }), base);
   url.searchParams.set(LINK_PARAM, token);
   return url.toString();
 }
@@ -258,7 +258,7 @@ async function notifyReady(jobId) {
       // holds the only connection.
       const data = {
         event_name: event.event_name,
-        gallery_link: await galleryLink(event, recipient.email, job.token),
+        gallery_link: await galleryLink(event, recipient.email, job.token, recipient.customer_account_id),
         available_hours: hoursLeft,
         // For staleMailReason, when the queue gets to this mail.
         __downloadJobId: job.id,
@@ -274,7 +274,9 @@ async function notifyReady(jobId) {
           .where({ id: recipient.id }).whereNull('notified_at')
           .update({ notified_at: new Date().toISOString() });
         if (!claimed) return false;
-        return queueEmail(event.id, recipient.email, 'download_ready', data, { trx });
+        return queueEmail(event.id, recipient.email, 'download_ready', data, {
+          trx, customerAccountId: recipient.customer_account_id,
+        });
       });
       if (queued) sent += 1;
     } catch (err) {
