@@ -977,7 +977,7 @@ describe('customer contacts', () => {
       const contact = await contacts.createContact(erasedId, { email: 'gone@example.test', first_name: 'Gone' }, adminId);
       await db('email_queue').insert({
         recipient_email: 'gone@example.test', email_type: 'invoice_sent', status: 'sent',
-        email_data: JSON.stringify({ name: 'Gone' }), created_at: new Date(), scheduled_at: new Date(),
+        email_data: JSON.stringify({ name: 'Gone', __customerAccountId: erasedId }), created_at: new Date(), scheduled_at: new Date(),
       });
       await accounts.eraseCustomer(erasedId, adminId);
       expect(await db('customer_contacts').where({ id: contact.id }).first()).toBeUndefined();
@@ -1121,6 +1121,29 @@ describe('customer contacts', () => {
       });
       await accounts.eraseCustomer(erasedId, adminId);
       expect((await db('email_queue').where({ id: signing }).first()).status).toBe('pending');
+    });
+
+    it('leaves mail to a contact\'s address that is not this customer\'s when it is erased', async () => {
+      const erasedId = await newCustomer();
+      await contacts.createContact(erasedId, { email: 'shared@example.test' }, adminId);
+      const adminMail = await queueMail({
+        recipient_email: 'shared@example.test', email_type: 'guest_invite',
+        email_data: JSON.stringify({ name: 'x' }),
+      });
+      await accounts.eraseCustomer(erasedId, adminId);
+      expect((await db('email_queue').where({ id: adminMail }).first()).status).toBe('pending');
+    });
+
+    it('still redacts a holder\'s own contract mail', async () => {
+      const erasedId = await newCustomer({ email: 'signed@example.test' });
+      const mail = await queueMail({
+        recipient_email: 'signed@example.test', email_type: 'contract_sent', status: 'sent',
+        email_data: JSON.stringify({ contract_number: 'V-OWN', name: 'Secret' }),
+      });
+      await accounts.eraseCustomer(erasedId, adminId);
+      const row = await db('email_queue').where({ id: mail }).first();
+      expect(row.recipient_email).not.toBe('signed@example.test');
+      expect(JSON.stringify(row.email_data)).not.toContain('Secret');
     });
 
     it('gives no reset link to a contact of a passive customer', async () => {

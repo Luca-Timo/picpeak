@@ -8239,7 +8239,7 @@
       "reactivate": "Reactivate",
       "delete": "Remove",
       "rightsHint": "A right cannot go beyond what is switched on for this customer under Customer features.",
-      "receivesMail": "Send a copy of gallery and invoice mail",
+      "receivesMail": "Send a copy of gallery notices and invoices",
       "receivesMailHint": "Only for areas this contact has a right to. The customer keeps getting their own mail.",
       "area": {
         "galleries": "Galleries",

@@ -103,7 +103,7 @@ async function stillHolds(recipient, trx) {
         customer_account_id: recipient.customer_account_id,
         email: recipient.email,
         is_active: formatBoolean(true),
-      }));
+      }).whereIn('right_galleries', ['view', 'act']));
     }
   } else if (recipient.guest_id) {
     owner = await read(conn('gallery_guests')

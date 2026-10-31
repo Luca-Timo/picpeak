@@ -1391,17 +1391,22 @@ async function eraseCustomer(id, erasedByAdminId) {
       }
     }
     const extraQueueIds = [...signerQueueIds, ...await acceptedInvitationQueueIds(trx, id)];
-    // Contact addresses are logins of this customer, with mail of their own.
+    // Contact addresses that end with this customer: logins with mail of their own.
     const contactEmails = await customerContactsService.contactEmailsForErasure(trx, id);
     await customerContactsService.redactContactMail(trx, id, sentinelEmail);
     await customerContactsService.keepHolderLogin(trx, customer);
-    const kept = await customerContactsService.mailToKeep(trx, id, [customer.email, ...contactEmails]);
+    const kept = await customerContactsService.mailToKeep(trx, id, customer.email);
     const notToRedact = kept.filter((queueId) => !extraQueueIds.includes(queueId));
     const matchQueue = (q) => q.where((w) => {
       forCustomer(w);
       if (extraQueueIds.length > 0) w.orWhereIn('id', extraQueueIds);
+      // Their mail about this customer went above. What else reaches these
+      // addresses is not this customer's, except the login's own mail.
       if (contactEmails.length > 0) {
-        w.orWhereRaw(`LOWER(recipient_email) IN (${contactEmails.map(() => '?').join(', ')})`, contactEmails);
+        w.orWhere((c) => {
+          c.whereRaw(`LOWER(recipient_email) IN (${contactEmails.map(() => '?').join(', ')})`, contactEmails)
+            .whereIn('email_type', ['customer_invitation', 'customer_password_reset']);
+        });
       }
     }).whereNotIn('id', notToRedact);
 

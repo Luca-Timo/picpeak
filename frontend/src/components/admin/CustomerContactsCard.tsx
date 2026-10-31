@@ -139,7 +139,7 @@ const RightsEditor: React.FC<{
       <Switch
         checked={draft.receivesMail}
         onChange={(receivesMail) => onChange({ ...draft, receivesMail })}
-        label={t('customers.contacts.receivesMail', 'Send a copy of gallery and invoice mail')}
+        label={t('customers.contacts.receivesMail', 'Send a copy of gallery notices and invoices')}
         description={t('customers.contacts.receivesMailHint', 'Only for areas this contact has a right to. The customer keeps getting their own mail.')}
       />
     </div>
@@ -352,7 +352,7 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
                       : t('customers.contacts.invite', 'Invite')}
                   </Button>
                 )}
-                {canCreate && contact.hasLogin && contact.isActive && portalEnabled && (
+                {canCreate && contact.hasLogin && contact.isActive && mayInvite && (
                   <Button variant="outline" size="sm" isLoading={reset.isPending && reset.variables === contact.id} disabled={reset.isPending} onClick={() => reset.mutate(contact.id)}>
                     {t('customers.contacts.resetPassword', 'Reset password')}
                   </Button>

@@ -419,17 +419,12 @@ async function addressAt(trx, address, { customerId, exceptCustomerId }) {
   return !!(holder || contact);
 }
 
-/**
- * What erasure must leave of the mail to these addresses: mail about a customer
- * this person still belongs to, and contract mail, which is that contract's
- * signer's. The caller matches the erased customer's own contracts separately.
- */
-async function mailToKeep(trx, customerId, emails) {
-  const addresses = [...new Set(emails.map(normaliseEmail))];
-  if (addresses.length === 0) return [];
+/** What erasure must leave of a holder's mail: what is about a customer they still belong to. */
+async function mailToKeep(trx, customerId, email) {
+  const address = normaliseEmail(email);
   const rows = await trx('email_queue')
-    .whereRaw(`LOWER(recipient_email) IN (${addresses.map(() => '?').join(', ')})`, addresses)
-    .select('id', 'recipient_email', 'email_data');
+    .whereRaw('LOWER(recipient_email) = ?', [address])
+    .select('id', 'email_data');
   const keep = [];
   for (const row of rows) {
     let data;
@@ -438,13 +433,9 @@ async function mailToKeep(trx, customerId, emails) {
     } catch (_) {
       continue;
     }
-    if (data?.__customerAccountId != null) {
-      const about = Number(data.__customerAccountId);
-      if (about !== Number(customerId)
-        && await addressAt(trx, row.recipient_email.toLowerCase(), { customerId: about })) keep.push(row.id);
-    } else if (data?.contract_number !== undefined && data?.contract_number !== null) {
-      keep.push(row.id);
-    }
+    if (data?.__customerAccountId == null) continue;
+    const about = Number(data.__customerAccountId);
+    if (about !== Number(customerId) && await addressAt(trx, address, { customerId: about })) keep.push(row.id);
   }
   return keep;
 }
@@ -586,7 +577,8 @@ async function acceptInvitation(invitation, { name, password, profile }) {
       .first();
     const claimed = await trx('customer_invitations')
       .where('id', invitation.id).whereNull('accepted_at')
-      .update({ accepted_at: new Date() });
+      .where('expires_at', '>', new Date())
+      .update({ accepted_at: new Date().toISOString() });
     if (claimed !== 1) throw new ValidationError('Invalid or expired invitation');
 
     const customer = row && await trx('customer_accounts')

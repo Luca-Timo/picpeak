@@ -8204,7 +8204,7 @@
       "reactivate": "Reaktivieren",
       "delete": "Entfernen",
       "rightsHint": "Ein Recht reicht nie weiter als das, was für diesen Kunden unter Kundenfunktionen aktiviert ist.",
-      "receivesMail": "Kopie von Galerie- und Rechnungs-E-Mails senden",
+      "receivesMail": "Kopie von Galerie-Hinweisen und Rechnungen senden",
       "receivesMailHint": "Nur für Bereiche, auf die dieser Kontakt ein Recht hat. Der Kunde erhält seine E-Mails weiterhin.",
       "area": {
         "galleries": "Galerien",
