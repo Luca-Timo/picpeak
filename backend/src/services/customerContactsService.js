@@ -21,6 +21,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
+const { isUniqueViolation } = require('../utils/dbErrors');
 const { getBcryptRounds } = require('../utils/passwordValidation');
 const { auditedUpdate } = require('./accountingHistory');
 const { queueEmail } = require('./emailProcessor');
@@ -269,7 +270,7 @@ async function createContact(customerId, input, adminId) {
     created_by_admin_id: adminId || null,
     created_at: new Date(),
     updated_at: new Date(),
-  }).returning('id');
+  }).returning('id').catch(conflictOnDuplicate);
   const id = inserted?.id || inserted;
 
   await logActivity('customer_contact_created',
@@ -414,6 +415,12 @@ async function deleteContact(customerId, contactId, adminId) {
     { customerId, contactId }, null, { type: 'admin', id: adminId });
 }
 
+// The checks above read first, so two requests at once can both pass them.
+function conflictOnDuplicate(err) {
+  if (isUniqueViolation(err)) throw new ConflictError('This email is already in use', 'email');
+  throw err;
+}
+
 function passiveCustomerError() {
   const err = new ValidationError('Invite the customer to the portal first');
   err.code = 'CUSTOMER_PASSIVE';
@@ -480,7 +487,7 @@ async function acceptInvitation(invitation, { name, password, profile }) {
       password_hash: passwordHash,
       created_at: new Date(),
       updated_at: new Date(),
-    });
+    }).catch(conflictOnDuplicate);
     await trx('customer_invitations').where('id', invitation.id)
       .update({ accepted_customer_id: row.customer_account_id });
     return row;

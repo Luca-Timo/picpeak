@@ -575,6 +575,14 @@ describe('customer contacts', () => {
       expect(lists[1][0].rights.bills).toBe('view');
     });
 
+    it('two identical requests at once end in one contact and a 409', async () => {
+      const results = await Promise.allSettled([1, 2].map(() => contacts.createContact(
+        secondId, { email: 'same@example.test' }, adminId,
+      )));
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(results.find((r) => r.status === 'rejected').reason.statusCode).toBe(409);
+    });
+
     it('sends no invitation to someone who already has a login', async () => {
       await makeContact('mia@example.test', MARKETING);
       const added = await contacts.createContact(secondId, { email: 'mia@example.test', invite: true }, adminId);
