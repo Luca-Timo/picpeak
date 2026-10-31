@@ -6,12 +6,16 @@
  * additional people, each with an own login and own rights, so a company no
  * longer has to share one password.
  *
- *   customer_contacts       One person of a customer. A right is 'none',
+ *   customer_contacts       One person at one customer. A right is 'none',
  *                           'view' or 'act' (customerContactsService.RIGHTS)
  *                           and defaults to 'none', so a contact starts with
- *                           no access. password_hash stays NULL until the
- *                           invitation is accepted, or for a person who never
- *                           gets a login.
+ *                           no access. The same address may be a contact at
+ *                           several customers, with rights of its own at each.
+ *   customer_logins         The password of a person who is not an account
+ *                           holder, keyed by address, so a person at several
+ *                           customers has one login. A holder's password stays
+ *                           on customer_accounts and also opens the customers
+ *                           where that address is a contact.
  *
  * customer_invitations and customer_password_resets gain a nullable contact_id:
  * a contact's link goes through the same hardened token tables as a holder's.
@@ -36,7 +40,7 @@ exports.up = async function (knex) {
       t.increments('id').primary();
       t.integer('customer_account_id').unsigned().notNullable()
         .references('id').inTable('customer_accounts').onDelete('CASCADE');
-      t.string('email', 255).notNullable().unique();
+      t.string('email', 255).notNullable();
 
       t.string('salutation', 32);
       t.string('first_name', 80);
@@ -45,7 +49,7 @@ exports.up = async function (knex) {
       t.string('phone', 40);
       t.string('preferred_language', 8);
 
-      t.string('password_hash', 255);
+      // Bumped to end this contact's sessions at this customer only.
       t.timestamp('password_changed_at');
       t.timestamp('last_login');
       t.string('last_login_ip', 45);
@@ -68,7 +72,19 @@ exports.up = async function (knex) {
       t.timestamp('created_at').defaultTo(knex.fn.now());
       t.timestamp('updated_at').defaultTo(knex.fn.now());
 
-      t.index(['customer_account_id']);
+      t.unique(['customer_account_id', 'email']);
+      t.index(['email']);
+    });
+  }
+
+  if (!(await knex.schema.hasTable('customer_logins'))) {
+    await knex.schema.createTable('customer_logins', (t) => {
+      t.increments('id').primary();
+      t.string('email', 255).notNullable().unique();
+      t.string('password_hash', 255).notNullable();
+      t.timestamp('password_changed_at');
+      t.timestamp('created_at').defaultTo(knex.fn.now());
+      t.timestamp('updated_at').defaultTo(knex.fn.now());
     });
   }
 
@@ -98,5 +114,6 @@ exports.down = async function (knex) {
     const { installAccountRecoveryWriteGuards } = require('../../src/services/accountRecoveryStorageHardening');
     await installAccountRecoveryWriteGuards(knex);
   }
+  await knex.schema.dropTableIfExists('customer_logins');
   await knex.schema.dropTableIfExists('customer_contacts');
 };

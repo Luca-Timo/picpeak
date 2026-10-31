@@ -244,7 +244,10 @@ async function createDirect({ email, prefill, createdByAdminId, withinTransactio
   const existing = await db('customer_accounts')
     .where('email', normalisedEmail)
     .first();
-  if (existing || await customerContactsService.isContactEmail(normalisedEmail)) {
+  if (await customerContactsService.isContactEmail(normalisedEmail)) {
+    throw new ConflictError('A customer contact with this email already exists', 'email');
+  }
+  if (existing) {
     throw new ConflictError('A customer account with this email already exists', 'email');
   }
 
@@ -857,6 +860,15 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     await auditedUpdate(trx, 'customer_accounts', { id }, allowed, {
       actor: updatedByAdminId || null, source: 'customer.update',
     });
+    // The holder's password also opens the customers where this person is a
+    // contact, and that link is the address.
+    if (emailChanged) {
+      const moved = trx('customer_contacts').whereRaw('LOWER(email) = LOWER(?)', [customer.email]);
+      // Same rule as above: a link mailed to the old address sets this
+      // person's password, wherever it was requested from.
+      await trx('customer_password_resets').whereIn('contact_id', moved.clone().select('id')).whereNull('used_at').del();
+      await moved.update({ email: allowed.email, updated_at: new Date() });
+    }
   });
 
   await logActivity('customer_updated',
@@ -1366,6 +1378,7 @@ async function eraseCustomer(id, erasedByAdminId) {
     const extraQueueIds = [...signerQueueIds, ...await acceptedInvitationQueueIds(trx, id)];
     // Contact addresses are logins of this customer, with mail of their own.
     const contactEmails = await customerContactsService.contactEmailsForErasure(trx, id);
+    await customerContactsService.redactContactMail(trx, id);
     const matchQueue = (q) => q.where((w) => {
       forCustomer(w);
       if (extraQueueIds.length > 0) w.orWhereIn('id', extraQueueIds);
@@ -1795,7 +1808,7 @@ async function notifyCustomerOfNewAssignments(customerId, addedEventIds) {
       gallery_list_text: galleryListText,
       dashboard_link: `${frontendUrl}/customer/dashboard`,
       __language: contact.preferred_language || undefined,
-    });
+    }, { customerAccountId: customerId });
   }
   // queueEmail resolves false when nothing was queued.
   return queued === true;

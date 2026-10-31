@@ -5,6 +5,7 @@ const { isTokenRevoked } = require('../utils/tokenRevocation');
 const { isTokenBeforeCutoff } = require('../utils/sessionCutoff');
 const { toTimestamp } = require('../utils/dateNormalize');
 const { AppError } = require('../utils/errors');
+const { credentialFor } = require('./customerContactsService');
 
 /** Call only with a verified JWT payload or a signed, server-created grant. */
 class SessionAccessService {
@@ -91,17 +92,18 @@ class SessionAccessService {
       this.assertPasswordCurrent(account, session);
       return account;
     }
-    // A contact's session stands on the contact's own password and active
-    // state, plus the customer being active. The holder changing their
-    // password ends no one else's session.
+    // A contact's session stands on that person's password, the contact's
+    // active state at this customer, and the customer being active. A holder
+    // changing their own password ends no one else's session.
     if (!Number.isInteger(session.contactId)) {
       throw new AppError('Invalid customer session', 401, 'CUSTOMER_NOT_FOUND');
     }
     const contact = await db('customer_contacts')
       .where({ id: session.contactId, customer_account_id: account.id, is_active: formatBoolean(true) })
-      .whereNotNull('password_hash')
       .first();
-    if (!contact) throw new AppError('Invalid token', 401, 'CUSTOMER_NOT_FOUND');
+    const credential = contact && await credentialFor(contact.email);
+    if (!credential) throw new AppError('Invalid token', 401, 'CUSTOMER_NOT_FOUND');
+    this.assertPasswordCurrent(credential, session);
     this.assertPasswordCurrent(contact, session);
     return { ...account, contact };
   }

@@ -7475,7 +7475,9 @@
       "profile": "Profile",
       "contracts": "Contracts",
       "documents": "Documents",
-      "overview": "Overview"
+      "overview": "Overview",
+      "company": "Company",
+      "switchFailed": "Could not switch company. Please try again."
     },
     "comingSoon": {
       "tag": "Coming soon"

@@ -65,6 +65,14 @@ function customerMayAct(req, res, area) {
   return false;
 }
 
+// These two routes are the older signing flow, which takes any typed name and
+// has no signer row to match a contact against.
+function holderSigns(req, res) {
+  if (!req.customer.contactId) return true;
+  res.status(403).json({ error: 'You are not a signer of this contract.', code: 'SIGNER_NOT_FOUND' });
+  return false;
+}
+
 function customerMaySeeGalleries(req, res) {
   if (customerContactsService.hasRight(req.customer.rights, 'galleries')) return true;
   res.status(403).json({ error: 'Galleries are disabled for this login', code: 'CUSTOMER_RIGHT_MISSING' });
@@ -521,7 +529,7 @@ router.post('/profile/password', [
 
     const contactId = req.customer.contactId;
     const row = contactId
-      ? await db('customer_contacts').where('id', contactId).first()
+      ? await customerContactsService.credentialFor(req.customer.email)
       : await db('customer_accounts').where('id', req.customer.id).first();
     if (!row || !row.password_hash) {
       return res.status(400).json({ error: 'Password change unavailable' });
@@ -532,13 +540,15 @@ router.post('/profile/password', [
     }
 
     const newHash = await bcrypt.hash(newPassword, getBcryptRounds());
-    const passwordColumns = { password_hash: newHash, password_changed_at: new Date(), updated_at: new Date() };
     if (contactId) {
-      await db('customer_contacts').where('id', contactId).update(passwordColumns);
+      await customerContactsService.setPassword(req.customer.email, newHash);
     } else {
       // Not a billing field, so this leaves no history entry.
-      await auditedUpdate(db, 'customer_accounts', { id: req.customer.id }, passwordColumns,
-        { actor: { type: 'customer', id: req.customer.id }, source: 'customer.portal.password' });
+      await auditedUpdate(db, 'customer_accounts', { id: req.customer.id }, {
+        password_hash: newHash,
+        password_changed_at: new Date(),
+        updated_at: new Date(),
+      }, { actor: { type: 'customer', id: req.customer.id }, source: 'customer.portal.password' });
     }
 
     await logActivity('customer_password_change',
@@ -872,7 +882,7 @@ router.get('/contracts', customerAuth, async (req, res) => {
         // no action token to look for; one sent before still needs a live one.
         canSign: mayAct && c.status === 'sent' && (Number(c.signing_version) === 2
           ? !!(mine.get(c.id) || {}).canSign
-          : liveTokens.has(c.id)),
+          : !req.customer.contactId && liveTokens.has(c.id)),
         signerState: (mine.get(c.id) || {}).state || null,
         waitingFor: (mine.get(c.id) || {}).waitingFor || null,
         // Collect-then-freeze (#1446): the customer's details come first.
@@ -1069,7 +1079,7 @@ router.get('/contracts/:id', customerAuth, async (req, res) => {
       contract: view,
       canSign: contract.status === 'sent'
         && customerContactsService.hasRight(req.customer.rights, 'contracts', 'act')
-        && (Number(contract.signing_version) === 2 ? !!mine.canSign : liveTokens.has(contract.id)),
+        && (Number(contract.signing_version) === 2 ? !!mine.canSign : !req.customer.contactId && liveTokens.has(contract.id)),
       signerState: mine.state || null,
       waitingFor: mine.waitingFor || null,
     });
@@ -1089,7 +1099,7 @@ router.post(
   async (req, res) => {
     try {
       if (sendValidationErrors(req, res)) return;
-      if (!customerMayAct(req, res, 'contracts')) return;
+      if (!customerMayAct(req, res, 'contracts') || !holderSigns(req, res)) return;
       const contract = await ownedDocument(req, res, CONTRACT);
       if (!contract) return;
       const token = (await publicDocumentViews.liveContractTokens([contract.id])).get(contract.id);
@@ -1122,7 +1132,7 @@ router.post(
   contractSignedPdfUpload.uploadSignedPdfSettingGuard,
   async (req, res, next) => {
     try {
-      if (!customerMayAct(req, res, 'contracts')) return undefined;
+      if (!customerMayAct(req, res, 'contracts') || !holderSigns(req, res)) return undefined;
       const contract = await ownedDocument(req, res, CONTRACT);
       if (!contract) return undefined;
       const token = (await publicDocumentViews.liveContractTokens([contract.id])).get(contract.id);
@@ -1441,7 +1451,9 @@ router.get('/documents/:id', customerAuth, requireDocumentsFeature, async (req, 
   try {
     const row = await loadCustomerDocument(req, res);
     if (!row) return undefined;
-    return res.json({ document: customerDocumentsService.toCustomerDto(row) });
+    const document = customerDocumentsService.toCustomerDto(row);
+    const mayAct = customerContactsService.hasRight(req.customer.rights, 'documents', 'act');
+    return res.json({ document: mayAct ? document : { ...document, canDelete: false } });
   } catch (error) {
     return sendDocumentError(res, error, 'Failed to load document');
   }

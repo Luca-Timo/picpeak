@@ -7440,7 +7440,9 @@
       "profile": "Profil",
       "contracts": "Verträge",
       "documents": "Dokumente",
-      "overview": "Übersicht"
+      "overview": "Übersicht",
+      "company": "Firma",
+      "switchFailed": "Die Firma konnte nicht gewechselt werden. Bitte versuchen Sie es erneut."
     },
     "comingSoon": {
       "tag": "Demnächst"

@@ -26,6 +26,8 @@ export interface CustomerProfile {
   /** Set when a contact is signed in; `id` stays the customer account. */
   contactId?: number | null;
   rights?: CustomerRights;
+  /** Every company this login can work in; the session is in one of them. */
+  companies?: { id: number; name: string }[];
   email: string;
   displayName: string | null;
   firstName: string | null;
@@ -310,6 +312,16 @@ export const customerService = {
    *               (including the brief window while the admin saves
    *               an unrelated change like gallery assignments).
    */
+  /** Move this session to another company of the same login. */
+  async switchCompany(customerId: number): Promise<{
+    customer: CustomerProfile;
+    features: CustomerFeatures;
+    branding: CustomerBranding;
+  }> {
+    const { data } = await api.post('/customer/auth/switch-company', { customerId });
+    return data;
+  },
+
   async session(): Promise<{
     customer: CustomerProfile;
     features: CustomerFeatures;

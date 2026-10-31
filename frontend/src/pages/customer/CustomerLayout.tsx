@@ -16,8 +16,10 @@
  * to wrap their content in `<CustomerLayout>` — same approach AdminLayout uses.
  */
 import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Link, NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'react-toastify';
+import { customerService } from '../../services/customer.service';
 import {
   Calendar,
   FileText,
@@ -78,7 +80,20 @@ const isDrawerLayout = () => typeof window.matchMedia === 'function' && window.m
 export const CustomerLayout: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
-  const { customer, features, branding, isAuthenticated, isLoading, logout } = useCustomerAuth();
+  const { customer, features, branding, isAuthenticated, isLoading, logout, setSession } = useCustomerAuth();
+  const navigate = useNavigate();
+  const companies = customer?.companies ?? [];
+
+  // The dashboard is the one page every company has: an open document or
+  // gallery may belong to the company being left.
+  const switchCompany = async (customerId: number) => {
+    try {
+      setSession(await customerService.switchCompany(customerId));
+      navigate('/customer/dashboard');
+    } catch {
+      toast.error(t('customer.nav.switchFailed', 'Could not switch company. Please try again.'));
+    }
+  };
   const { data: settingsData } = usePublicSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   useEscapeClose(sidebarOpen, () => setSidebarOpen(false));
@@ -237,6 +252,20 @@ export const CustomerLayout: React.FC = () => {
             <div className="min-w-0">
               <div className="text-sm font-medium text-theme truncate">{greetingName}</div>
               <div className="text-xs text-muted-theme truncate">{customer?.email}</div>
+              {companies.length > 1 && (
+                <label className="mt-2 block text-xs text-muted-theme">
+                  <span className="block mb-1">{t('customer.nav.company', 'Company')}</span>
+                  <select
+                    className="input-themed w-full"
+                    value={customer?.id}
+                    onChange={(e) => switchCompany(Number(e.target.value))}
+                  >
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id}>{company.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
             <button
               type="button"

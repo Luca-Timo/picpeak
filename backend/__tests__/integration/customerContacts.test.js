@@ -48,11 +48,10 @@ describe('customer contacts', () => {
   /** A contact with a working login, the way an accepted invitation leaves one. */
   const makeContact = async (email, rights, extra = {}) => {
     const contact = await contacts.createContact(customerId, { email, first_name: 'Mia', rights }, adminId);
-    await db('customer_contacts').where({ id: contact.id }).update({
-      password_hash: await bcrypt.hash(PASSWORD, 4),
-      ...extra,
-    });
-    return contact;
+    await db('customer_logins').where({ email }).del();
+    await db('customer_logins').insert({ email, password_hash: await bcrypt.hash(PASSWORD, 4) });
+    if (Object.keys(extra).length > 0) await db('customer_contacts').where({ id: contact.id }).update(extra);
+    return { ...contact, hasLogin: true };
   };
 
   const login = async (email) => {
@@ -110,6 +109,7 @@ describe('customer contacts', () => {
 
   afterEach(async () => {
     await db('customer_contacts').del();
+    await db('customer_logins').del();
   });
 
   describe('the account holder', () => {
@@ -287,6 +287,23 @@ describe('customer contacts', () => {
       expect((await agent.post('/api/customer/contracts/1/upload-signed-pdf')).status).toBe(403);
     });
 
+    it('a contact with the signing right cannot use the older typed-name flow', async () => {
+      await makeContact('anna2@example.test', { contracts: 'act' });
+      const { agent } = await login('anna2@example.test');
+      const res = await agent.post('/api/customer/contracts/1/sign').send({ name: 'Anna', accepted: true });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('SIGNER_NOT_FOUND');
+      expect((await agent.post('/api/customer/contracts/1/upload-signed-pdf')).status).toBe(403);
+    });
+
+    it('no invoice copy goes out while invoices are off for the customer', async () => {
+      await makeContact('tom@example.test', ACCOUNTING);
+      await db('customer_accounts').where({ id: customerId }).update({ feature_bills: false });
+      expect(await contacts.mailRecipients(customerId, 'bills')).toEqual([]);
+      await db('customer_accounts').where({ id: customerId }).update({ feature_bills: true });
+      expect(await contacts.mailRecipients(customerId, 'bills')).toHaveLength(1);
+    });
+
     it('galleries take their own right, also behind a gallery token', async () => {
       const contact = await makeContact('tom@example.test', ACCOUNTING);
       const { agent } = await login('tom@example.test');
@@ -373,7 +390,7 @@ describe('customer contacts', () => {
         .send({ currentPassword: PASSWORD, newPassword: 'Neues12345' });
       expect(res.status).toBe(200);
       expect((await db('customer_accounts').where({ id: customerId }).first()).password_hash).toBe(before);
-      const row = await db('customer_contacts').where({ id: contact.id }).first();
+      const row = await db('customer_logins').where({ email: contact.email }).first();
       expect(await bcrypt.compare('Neues12345', row.password_hash)).toBe(true);
     });
   });
@@ -437,7 +454,7 @@ describe('customer contacts', () => {
         .update(capabilityTokenColumns(token));
       expect((await accounts.validatePasswordResetToken(token)).email).toBe('mia@example.test');
       await accounts.applyPasswordReset({ token, password: 'Neues12345' });
-      const row = await db('customer_contacts').where({ id: contact.id }).first();
+      const row = await db('customer_logins').where({ email: contact.email }).first();
       expect(await bcrypt.compare('Neues12345', row.password_hash)).toBe(true);
       expect((await db('customer_accounts').where({ id: customerId }).first()).password_hash).toBe(holderBefore);
     });
@@ -458,6 +475,236 @@ describe('customer contacts', () => {
       expect(resolveBillingRecipients({ email: 'a@x.test' }, null)).toEqual({ to: 'a@x.test', cc: undefined });
       expect(resolveBillingRecipients({ email: 'a@x.test', billing_email: 'b@x.test' }, null, ['t@x.test', 'B@x.test']))
         .toEqual({ to: 'b@x.test', cc: ['a@x.test', 't@x.test'] });
+    });
+  });
+
+  describe('one person at several companies', () => {
+    let secondId;
+
+    beforeAll(async () => {
+      secondId = await insertId('customer_accounts', {
+        email: 'zweite@example.test',
+        password_hash: await bcrypt.hash('Andere12345', 4),
+        company_name: 'Firma ABC',
+        is_active: true,
+        feature_quotes: true,
+        feature_bills: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    });
+
+    const inBoth = async () => {
+      const first = await makeContact('mia@example.test', MARKETING);
+      const second = await contacts.createContact(secondId, { email: 'mia@example.test', rights: ACCOUNTING }, adminId);
+      return { first, second };
+    };
+
+    it('logs in once, with both companies and one set of rights at a time', async () => {
+      const { second } = await inBoth();
+      expect(second.hasLogin).toBe(true);
+      const { agent, res } = await login('mia@example.test');
+      expect(res.status).toBe(200);
+      expect(res.body.customer.id).toBe(customerId);
+      expect(res.body.customer.companies.map((c) => c.id)).toEqual([customerId, secondId]);
+      expect(res.body.features.bills).toBe(false);
+      expect((await agent.get('/api/customer/invoices')).status).toBe(403);
+
+      const switched = await agent.post('/api/customer/auth/switch-company').send({ customerId: secondId });
+      expect(switched.status).toBe(200);
+      expect(switched.body.customer.id).toBe(secondId);
+      expect(switched.body.customer.contactId).toBe(second.id);
+      expect(switched.body.features.bills).toBe(true);
+      expect((await agent.get('/api/customer/invoices')).status).toBe(200);
+      const session = await agent.get('/api/customer/auth/session');
+      expect(session.body.customer.id).toBe(secondId);
+      expect(session.body.customer.rights).toEqual(second.rights);
+    });
+
+    it('ends the old session on a switch, and switching back works in the same second', async () => {
+      await inBoth();
+      const { agent, res } = await login('mia@example.test');
+      expect((await agent.post('/api/customer/auth/switch-company').send({ customerId: secondId })).status).toBe(200);
+      expect((await agent.post('/api/customer/auth/switch-company').send({ customerId: res.body.customer.id })).status).toBe(200);
+      expect((await agent.get('/api/customer/auth/session')).status).toBe(200);
+    });
+
+    it('refuses a company this person does not belong to', async () => {
+      await makeContact('mia@example.test', MARKETING);
+      const { agent } = await login('mia@example.test');
+      const res = await agent.post('/api/customer/auth/switch-company').send({ customerId: secondId });
+      expect(res.status).toBe(404);
+      expect((await agent.get('/api/customer/auth/session')).body.customer.id).toBe(customerId);
+    });
+
+    it('refuses a company the person was removed from since logging in', async () => {
+      const { second } = await inBoth();
+      const { agent } = await login('mia@example.test');
+      await contacts.updateContact(secondId, second.id, { isActive: false }, adminId);
+      const res = await agent.post('/api/customer/auth/switch-company').send({ customerId: secondId });
+      expect(res.status).toBe(404);
+    });
+
+    it('lets a holder of one company be a contact at another, on the one password', async () => {
+      const contact = await contacts.createContact(secondId, { email: HOLDER_EMAIL, rights: ACCOUNTING }, adminId);
+      expect(contact.hasLogin).toBe(true);
+      const { agent, res } = await login(HOLDER_EMAIL);
+      expect(res.body.customer.contactId).toBeNull();
+      expect(res.body.customer.rights).toEqual(contacts.HOLDER_RIGHTS);
+      expect(res.body.customer.companies).toHaveLength(2);
+      const switched = await agent.post('/api/customer/auth/switch-company').send({ customerId: secondId });
+      expect(switched.body.customer.contactId).toBe(contact.id);
+      expect(switched.body.customer.rights.quotes).toBe('view');
+      const back = await agent.post('/api/customer/auth/switch-company').send({ customerId });
+      expect(back.body.customer.contactId).toBeNull();
+    });
+
+    it('a holder\'s address change takes their contact rows along', async () => {
+      const contact = await contacts.createContact(secondId, { email: HOLDER_EMAIL, rights: ACCOUNTING }, adminId);
+      await accounts.updateCustomer(customerId, { email: 'holder3@example.test' }, adminId);
+      expect((await db('customer_contacts').where({ id: contact.id }).first()).email).toBe('holder3@example.test');
+      await accounts.updateCustomer(customerId, { email: HOLDER_EMAIL }, adminId);
+    });
+
+    it('one company\'s rights never apply at the other, and a contact is once per company', async () => {
+      await inBoth();
+      await expect(contacts.createContact(secondId, { email: 'mia@example.test' }, adminId))
+        .rejects.toMatchObject({ statusCode: 409 });
+      const lists = await Promise.all([contacts.listContacts(customerId), contacts.listContacts(secondId)]);
+      expect(lists[0][0].rights.bills).toBe('none');
+      expect(lists[1][0].rights.bills).toBe('view');
+    });
+
+    it('sends no invitation to someone who already has a login', async () => {
+      await makeContact('mia@example.test', MARKETING);
+      const added = await contacts.createContact(secondId, { email: 'mia@example.test', invite: true }, adminId);
+      expect(await db('customer_invitations').where({ contact_id: added.id })).toEqual([]);
+      await expect(contacts.sendInvitation(secondId, added.id, adminId)).rejects.toMatchObject({ statusCode: 409 });
+    });
+
+    it('a second invitation accepted after the first finds the login made', async () => {
+      const first = await contacts.createContact(customerId, { email: 'twice@example.test' }, adminId);
+      const second = await contacts.createContact(secondId, { email: 'twice@example.test' }, adminId);
+      await contacts.sendInvitation(customerId, first.id, adminId);
+      await contacts.sendInvitation(secondId, second.id, adminId);
+      const tokens = ['a'.repeat(64), 'b'.repeat(64)];
+      await db('customer_invitations').where({ contact_id: first.id }).update(capabilityTokenColumns(tokens[0]));
+      await db('customer_invitations').where({ contact_id: second.id }).update(capabilityTokenColumns(tokens[1]));
+      await accounts.acceptInvitation({ token: tokens[0], password: PASSWORD });
+      await expect(accounts.acceptInvitation({ token: tokens[1], password: 'Anders12345' }))
+        .rejects.toMatchObject({ statusCode: 409 });
+      expect((await login('twice@example.test')).res.body.customer.companies).toHaveLength(2);
+    });
+
+    it('a password change holds at both companies', async () => {
+      await inBoth();
+      const { agent } = await login('mia@example.test');
+      await agent.post('/api/customer/profile/password').send({ currentPassword: PASSWORD, newPassword: 'Neues12345' });
+      expect(await db('customer_logins').where({ email: 'mia@example.test' })).toHaveLength(1);
+      const fresh = await request.agent(app).post('/api/customer/auth/login')
+        .send({ email: 'mia@example.test', password: 'Neues12345' });
+      expect(fresh.body.customer.companies).toHaveLength(2);
+    });
+
+    it('removing one company leaves the login, the other company and its mail', async () => {
+      const { first } = await inBoth();
+      await db('email_queue').insert({
+        recipient_email: 'mia@example.test', email_type: 'gallery_created', status: 'pending',
+        email_data: JSON.stringify({ name: 'Mia' }), created_at: new Date(), scheduled_at: new Date(),
+      });
+      await contacts.deleteContact(customerId, first.id, adminId);
+      expect(await db('customer_logins').where({ email: 'mia@example.test' })).toHaveLength(1);
+      const { res } = await login('mia@example.test');
+      expect(res.status).toBe(200);
+      expect(res.body.customer.id).toBe(secondId);
+      expect(await db('email_queue').where({ recipient_email: 'mia@example.test', status: 'pending' })).toHaveLength(1);
+      await db('email_queue').where({ recipient_email: 'mia@example.test' }).del();
+    });
+
+    it('a holder\'s address change kills a reset link sent to the old address', async () => {
+      const contact = await contacts.createContact(secondId, { email: HOLDER_EMAIL, rights: ACCOUNTING }, adminId);
+      await contacts.createPasswordReset(secondId, contact.id, adminId);
+      await accounts.updateCustomer(customerId, { email: 'holder4@example.test' }, adminId);
+      expect(await db('customer_password_resets').where({ contact_id: contact.id })).toEqual([]);
+      await accounts.updateCustomer(customerId, { email: HOLDER_EMAIL }, adminId);
+    });
+
+    it('moving a contact onto an address with a login leaves no orphaned password', async () => {
+      const mia = await makeContact('mia@example.test', MARKETING);
+      await makeContact('tom@example.test', MARKETING);
+      await contacts.updateContact(customerId, mia.id, { email: 'neu@example.test' }, adminId);
+      expect((await db('customer_logins').where({ email: 'neu@example.test' }))).toHaveLength(1);
+      const other = await contacts.createContact(secondId, { email: 'tom@example.test' }, adminId);
+      await contacts.updateContact(customerId, mia.id, { email: 'tom2@example.test' }, adminId);
+      await db('customer_logins').insert({ email: 'tom3@example.test', password_hash: 'x' });
+      await contacts.updateContact(customerId, mia.id, { email: 'tom3@example.test' }, adminId);
+      expect(await db('customer_logins').where({ email: 'tom2@example.test' })).toEqual([]);
+      expect(other.hasLogin).toBe(true);
+    });
+
+    it('removing a person from one company cancels only the mail queued about it', async () => {
+      const { first } = await inBoth();
+      const row = (id) => ({
+        recipient_email: 'mia@example.test', email_type: 'customer_gallery_assigned', status: 'pending',
+        email_data: JSON.stringify({ gallery_list_text: 'x', __customerAccountId: id }),
+        created_at: new Date(), scheduled_at: new Date(),
+      });
+      await db('email_queue').insert(row(customerId));
+      await db('email_queue').insert(row(secondId));
+      await contacts.deleteContact(customerId, first.id, adminId);
+      const rows = await db('email_queue').where({ recipient_email: 'mia@example.test' });
+      const dataOf = (r) => (typeof r.email_data === 'string' ? JSON.parse(r.email_data) : r.email_data);
+      const stateOf = (id) => rows.find((r) => dataOf(r).__customerAccountId === id).status;
+      expect(stateOf(customerId)).toBe('cancelled');
+      expect(stateOf(secondId)).toBe('pending');
+      await db('email_queue').where({ recipient_email: 'mia@example.test' }).del();
+    });
+
+    it('erasing a company redacts what was queued about it to someone who stays elsewhere', async () => {
+      const erasedId = await insertId('customer_accounts', {
+        email: 'erase4@example.test', password_hash: 'x', is_active: true, created_at: new Date(), updated_at: new Date(),
+      });
+      await makeContact('mia@example.test', MARKETING);
+      await contacts.createContact(erasedId, { email: 'mia@example.test' }, adminId);
+      await db('email_queue').insert({
+        recipient_email: 'mia@example.test', email_type: 'customer_gallery_assigned', status: 'pending',
+        email_data: JSON.stringify({ gallery_list_text: 'Secret', __customerAccountId: erasedId }),
+        created_at: new Date(), scheduled_at: new Date(),
+      });
+      await accounts.eraseCustomer(erasedId, adminId);
+      const [row] = await db('email_queue').where({ recipient_email: 'mia@example.test' });
+      expect(row.status).toBe('cancelled');
+      expect(JSON.stringify(row.email_data)).not.toContain('Secret');
+      await db('email_queue').where({ recipient_email: 'mia@example.test' }).del();
+    });
+
+    it('removing the last company removes the login', async () => {
+      const { first, second } = await inBoth();
+      await contacts.deleteContact(customerId, first.id, adminId);
+      await contacts.deleteContact(secondId, second.id, adminId);
+      expect(await db('customer_logins').where({ email: 'mia@example.test' })).toEqual([]);
+    });
+
+    it('erasing one company leaves a person who stays at another', async () => {
+      const erasedId = await insertId('customer_accounts', {
+        email: 'erase3@example.test', password_hash: 'x', is_active: true, created_at: new Date(), updated_at: new Date(),
+      });
+      await makeContact('mia@example.test', MARKETING);
+      await contacts.createContact(erasedId, { email: 'mia@example.test' }, adminId);
+      await accounts.eraseCustomer(erasedId, adminId);
+      expect(await db('customer_contacts').where({ customer_account_id: erasedId })).toEqual([]);
+      expect((await login('mia@example.test')).res.status).toBe(200);
+    });
+
+    it('a contact at a passive customer does not open that customer', async () => {
+      const passiveId = await insertId('customer_accounts', {
+        email: 'passive2@example.test', is_active: true, created_at: new Date(), updated_at: new Date(),
+      });
+      await makeContact('mia@example.test', MARKETING);
+      await contacts.createContact(passiveId, { email: 'mia@example.test' }, adminId);
+      const { agent, res } = await login('mia@example.test');
+      expect(res.body.customer.companies.map((c) => c.id)).toEqual([customerId]);
+      expect((await agent.post('/api/customer/auth/switch-company').send({ customerId: passiveId })).status).toBe(404);
     });
   });
 
@@ -562,7 +809,7 @@ describe('customer contacts', () => {
       const contact = await makeContact('tom@example.test', ACCOUNTING);
       const inserted = await db('email_queue').insert({
         recipient_email: HOLDER_EMAIL, email_type: 'invoice_sent', status: 'pending',
-        email_data: JSON.stringify({ cc: ['Tom@example.test', 'keep@example.test'], name: 'x' }),
+        email_data: JSON.stringify({ cc: ['Tom@example.test', 'keep@example.test'], name: 'x', __customerAccountId: customerId }),
         created_at: new Date(), scheduled_at: new Date(),
       }).returning('id');
       const id = inserted[0]?.id ?? inserted[0];

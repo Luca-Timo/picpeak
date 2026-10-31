@@ -1495,6 +1495,9 @@ async function portalSigningAccess(customer, contractId) {
   // A contract sent before signatures v2 signs on the portal's own page with
   // the customer's session (upstream #1465): no token reaches the browser.
   if (!isV2(contract)) {
+    // The older flow takes any typed name and has no signer to match a contact
+    // against, so only the account holder signs there.
+    if (customer.contactId) throw new AppError('You are not a signer of this contract. Use the link from the signing email.', 403, 'SIGNER_NOT_FOUND');
     if (contract.status !== 'sent') throw new AppError('This contract is not waiting for your signature', 409, 'CONTRACT_NOT_SIGNABLE');
     return { mode: 'portal' };
   }

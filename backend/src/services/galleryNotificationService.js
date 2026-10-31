@@ -285,9 +285,9 @@ async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }
     preferPortal: true,
   });
 
-  const queue = async (email, data) => {
+  const queue = async (email, data, options) => {
     try {
-      return (await queueEmail(event.id, email, 'gallery_completed', data)) === true;
+      return (await queueEmail(event.id, email, 'gallery_completed', data, options)) === true;
     } catch (err) {
       logger.warn('gallery_completed mail could not be queued', { eventId: event.id, error: err.message });
       return false;
@@ -312,7 +312,7 @@ async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }
       for (const contact of await customerContactsService.mailRecipients(account.id, 'galleries')) {
         const contactData = buildEmailData({ email: contact.email, name: accountLabel(contact), link: portalLink });
         contactData.__language = contact.preferred_language || undefined;
-        await queue(contact.email, contactData);
+        await queue(contact.email, contactData, { customerAccountId: account.id });
       }
     }
   }
