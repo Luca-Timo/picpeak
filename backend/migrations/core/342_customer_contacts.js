@@ -1,5 +1,5 @@
 /**
- * Migration 340: customer contacts.
+ * Migration 342: customer contacts.
  *
  * A customer account is one company with one account holder. The holder stays
  * on customer_accounts and nothing about them changes; this table holds the

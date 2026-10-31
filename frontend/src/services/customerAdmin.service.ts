@@ -526,7 +526,7 @@ export const customerAdminService = {
   },
 
   // -------------------------------------------------------------------
-  // Contacts (migration 340).
+  // Contacts (migration 342).
   // -------------------------------------------------------------------
 
   async listContacts(customerId: number): Promise<CustomerContact[]> {

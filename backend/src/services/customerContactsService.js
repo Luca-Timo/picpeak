@@ -1,5 +1,5 @@
 /**
- * Customer contacts (migration 340).
+ * Customer contacts (migration 342).
  *
  * The additional people of a customer, each with own rights. The account holder
  * stays on customer_accounts and always has every right, so a customer without

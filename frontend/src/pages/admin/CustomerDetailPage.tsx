@@ -461,7 +461,7 @@ export const CustomerDetailPage: React.FC = () => {
         canManage={hasPermission('customers.groups.manage')}
       />
 
-      {/* Further logins of this customer (migration 340) */}
+      {/* Further logins of this customer (migration 342) */}
       <CustomerContactsCard
         customerId={customerId}
         isPassive={!!customer.isPassive}
