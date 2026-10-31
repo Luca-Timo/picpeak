@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Users } from 'lucide-react';
 
-import { Button, Card, ErrorState, Input, Switch } from '../common';
+import { Button, Card, ErrorState, Input, Switch, useConfirm } from '../common';
 import { useMutationWithToast } from '../../hooks';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import {
@@ -167,6 +167,7 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { format: fmtDate } = useLocalizedDate();
+  const confirm = useConfirm();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<DraftContact>(emptyDraft());
@@ -219,11 +220,13 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
     successMessage: t('customers.contacts.resetSent', 'Password reset link sent'),
   });
 
-  const confirmRemove = (contact: CustomerContact) => {
-    const question = t('customers.contacts.deleteConfirm', 'Remove {{name}}? Their login stops working right away.', {
+  const confirmRemove = async (contact: CustomerContact) => {
+    const message = t('customers.contacts.deleteConfirm', 'Remove {{name}}? Their login stops working right away.', {
       name: contactName(contact),
     });
-    if (window.confirm(question)) remove.mutate(contact.id);
+    if (await confirm({ message, variant: 'danger', confirmLabel: t('customers.contacts.delete', 'Remove') })) {
+      remove.mutate(contact.id);
+    }
   };
 
   const status = (contact: CustomerContact) => {
@@ -327,24 +330,24 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
                 <p className="break-words text-xs text-muted">{contact.email} · {status(contact)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {canEdit && (
+                {canEdit && !adding && editingId === null && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => { setAdding(false); setEditingId(contact.id); setDraft(toDraft(contact)); }}
+                    onClick={() => { setEditingId(contact.id); setDraft(toDraft(contact)); }}
                   >
                     {t('common.edit', 'Edit')}
                   </Button>
                 )}
                 {canCreate && !contact.hasLogin && contact.isActive && mayInvite && (
-                  <Button variant="outline" size="sm" isLoading={invite.isPending} onClick={() => invite.mutate(contact.id)}>
+                  <Button variant="outline" size="sm" isLoading={invite.isPending && invite.variables === contact.id} onClick={() => invite.mutate(contact.id)}>
                     {contact.invitationPending
                       ? t('customers.contacts.reinvite', 'Send invitation again')
                       : t('customers.contacts.invite', 'Invite')}
                   </Button>
                 )}
                 {canCreate && contact.hasLogin && contact.isActive && portalEnabled && (
-                  <Button variant="outline" size="sm" isLoading={reset.isPending} onClick={() => reset.mutate(contact.id)}>
+                  <Button variant="outline" size="sm" isLoading={reset.isPending && reset.variables === contact.id} onClick={() => reset.mutate(contact.id)}>
                     {t('customers.contacts.resetPassword', 'Reset password')}
                   </Button>
                 )}
@@ -352,7 +355,7 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    isLoading={setActive.isPending}
+                    isLoading={setActive.isPending && setActive.variables?.id === contact.id}
                     onClick={() => setActive.mutate({ id: contact.id, isActive: !contact.isActive })}
                   >
                     {contact.isActive
@@ -361,7 +364,7 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
                   </Button>
                 )}
                 {canDelete && (
-                  <Button variant="outline" size="sm" onClick={() => confirmRemove(contact)}>
+                  <Button variant="outline" size="sm" onClick={() => { void confirmRemove(contact); }}>
                     {t('customers.contacts.delete', 'Remove')}
                   </Button>
                 )}

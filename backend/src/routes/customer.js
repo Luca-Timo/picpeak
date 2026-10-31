@@ -152,8 +152,6 @@ function shapeProfile(row) {
 function shapeContactProfile(account, contact, rights) {
   const company = customerContactsService.hasRight(rights, 'company') ? shapeProfile(account) : {};
   return {
-    ...shapeProfile({}),
-    ...company,
     ...shapeProfile(contact),
     id: account.id,
     companyName: company.companyName ?? null,
@@ -399,6 +397,7 @@ router.put('/profile', [
       updates[snake] = value;
     }
     updates.updated_at = new Date();
+    const changedFields = Object.keys(updates).filter((k) => k !== 'updated_at');
 
     // The holder's row is both person and company. A contact's person is their
     // own row, and the company's fields take the company right.
@@ -425,7 +424,7 @@ router.put('/profile', [
     }
 
     await logActivity('customer_self_profile_update',
-      { customerId: req.customer.id, fields: Object.keys(updates).filter((k) => k !== 'updated_at') },
+      { customerId: req.customer.id, fields: changedFields },
       null,
       { type: 'customer', id: req.customer.id, name: req.customer.email }
     );
@@ -541,7 +540,8 @@ router.post('/profile/password', [
 
     const newHash = await bcrypt.hash(newPassword, getBcryptRounds());
     if (contactId) {
-      await customerContactsService.setPassword(req.customer.email, newHash);
+      const updated = await customerContactsService.setPassword(req.customer.email, newHash);
+      if (updated !== 1) return res.status(401).json({ error: 'Current password is incorrect' });
     } else {
       // Not a billing field, so this leaves no history entry.
       await auditedUpdate(db, 'customer_accounts', { id: req.customer.id }, {

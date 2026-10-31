@@ -64,13 +64,15 @@ function shapeEvent(e) {
 
 const money = (v) => Number(v) || 0;
 
-async function needsActionFor(customerId, features) {
+async function needsActionFor(customerId, features, session = null) {
   const today = todayDateOnly();
+  // Same rules as the lists these link to: only what this login can act on.
+  const mayAct = (area) => !session || hasRight(session.rights, area, 'act');
   const out = {
     quotes: [], contracts: [], contractDetails: [], invoices: [], documents: [], documentRequests: [],
   };
 
-  if (features.quotes) {
+  if (features.quotes && mayAct('quotes')) {
     const rows = await db('quotes')
       .where({ customer_account_id: customerId, status: 'sent' })
       .whereNull('response_locked_at')
@@ -89,13 +91,19 @@ async function needsActionFor(customerId, features) {
       }));
   }
 
-  if (features.contracts) {
-    const rows = await db('contracts')
+  if (features.contracts && mayAct('contracts')) {
+    const signingV2 = require('./contract/signingV2');
+    let rows = await db('contracts')
       .where({ customer_account_id: customerId })
       .whereIn('status', ['sent', 'signed_by_admin'])
       .whereNull('signed_by_customer_at')
       .orderBy('id', 'desc')
-      .select('id', 'contract_number', 'title', 'event_name', 'valid_until', 'sent_at');
+      .select('id', 'contract_number', 'title', 'event_name', 'valid_until', 'sent_at', 'status', 'signing_version');
+    // A contact signs only as a named signer of a signatures-v2 contract.
+    if (session?.contactId) {
+      const mine = await signingV2.portalSignerStates({ email: session.email }, rows);
+      rows = rows.filter((c) => mine.get(c.id)?.canSign);
+    }
     out.contracts = rows.map((c) => ({
       id: c.id,
       contractNumber: c.contract_number,
@@ -109,10 +117,14 @@ async function needsActionFor(customerId, features) {
     // can be rendered and sent for signature (#1446 collect-then-freeze,
     // issue 1590). Same guard as canCompleteDetails in customer.js:785 — only
     // a signing-v2 contract has a details-collection step.
-    const detailRows = await db('contracts')
+    let detailRows = await db('contracts')
       .where({ customer_account_id: customerId, status: 'awaiting_data', signing_version: 2 })
       .orderBy('id', 'desc')
-      .select('id', 'contract_number', 'title', 'event_name', 'valid_until', 'sent_at');
+      .select('id', 'contract_number', 'title', 'event_name', 'valid_until', 'sent_at', 'status', 'signing_version');
+    if (session?.contactId) {
+      const mine = await signingV2.portalDetailsContracts(session, detailRows);
+      detailRows = detailRows.filter((c) => mine.has(Number(c.id)));
+    }
     out.contractDetails = detailRows.map((c) => ({
       id: c.id,
       contractNumber: c.contract_number,
@@ -150,7 +162,7 @@ async function needsActionFor(customerId, features) {
     });
   }
 
-  if (features.documents) {
+  if (features.documents && mayAct('documents')) {
     // Only what the customer can act on: a rejected upload of theirs (upload
     // a corrected one, or delete it). A pending upload waits on the studio.
     //
@@ -271,7 +283,7 @@ async function getDashboard(customerId, session = null) {
     ? (await customerAccountsService.listEventsForCustomer(customerId)).map(shapeEvent)
     : [];
   return {
-    needsAction: await needsActionFor(customerId, features),
+    needsAction: await needsActionFor(customerId, features, session),
     recent: await recentFor(customerId, features, 10, { galleries }),
     galleries: {
       active: events.filter((e) => e.availability !== 'expired'),

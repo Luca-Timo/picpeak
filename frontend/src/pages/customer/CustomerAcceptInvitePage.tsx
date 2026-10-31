@@ -69,6 +69,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
   const { token = '' } = useParams<{ token: string }>();
 
   const [invitation, setInvitation] = useState<CustomerInvitationInfo | null>(null);
+  const forContact = !!invitation?.forContact;
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(true);
 
@@ -81,7 +82,6 @@ export const CustomerAcceptInvitePage: React.FC = () => {
   // (dark when branding_force_color_mode is dark / OS dark), so pick the
   // dark logo variant accordingly. No frame here — logo sits on the page bg.
   const { isDark } = usePublicDarkMode();
-  const [forContact, setForContact] = useState(false);
   const companyName = settingsData?.branding_company_name?.trim() || 'PicPeak';
   const lightLogo = settingsData?.branding_logo_url?.trim();
   const darkLogo = settingsData?.branding_logo_url_dark?.trim();
@@ -99,7 +99,6 @@ export const CustomerAcceptInvitePage: React.FC = () => {
       .then((info) => {
         if (cancelled) return;
         setInvitation(info);
-        setForContact(!!info.forContact);
         if (info.prefill) {
           setForm((prev) => ({ ...prev, ...mergePrefillIntoForm(prev, info.prefill!) }));
         }

@@ -105,6 +105,8 @@ async function applyReminder(invoice, lineItems, level, adminId, actor = adminId
     updated_at: new Date(),
   };
   if (await hasColumnCached('invoices', 'late_fee_vat_minor')) update.late_fee_vat_minor = lateFeeVat;
+  // Before the fee lands: a failed lookup must not charge it with no mail.
+  const contactRecipients = await customerContactsService.mailRecipients(customer?.id, 'bills');
   // Conditional on the row still waiting on the customer: every caller
   // checked that, but from a snapshot. A payment or a Storno landing in
   // between must not be overwritten with `overdue`, a fee and a Mahnung.
@@ -178,7 +180,7 @@ async function applyReminder(invoice, lineItems, level, adminId, actor = adminId
 
   const { to: reminderTo, cc: reminderCc } = resolveBillingRecipients(
     customer, invoice.cc_pdf_email,
-    (await customerContactsService.mailRecipients(customer?.id, 'bills')).map((contact) => contact.email),
+    contactRecipients.map((contact) => contact.email),
   );
   try {
     await emailProcessor.queueEmail(invoice.event_id || null, reminderTo, templateKey, {

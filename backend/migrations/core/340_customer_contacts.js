@@ -89,7 +89,7 @@ exports.up = async function (knex) {
   }
 
   for (const table of ['customer_invitations', 'customer_password_resets']) {
-    if (!(await knex.schema.hasColumn(table, 'contact_id'))) {
+    if ((await knex.schema.hasTable(table)) && !(await knex.schema.hasColumn(table, 'contact_id'))) {
       await knex.schema.alterTable(table, (t) => {
         const column = t.integer('contact_id').unsigned();
         if (isPg(knex)) column.references('id').inTable('customer_contacts').onDelete('CASCADE');

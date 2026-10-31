@@ -309,9 +309,17 @@ async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }
       const data = buildEmailData({ email: account.email, name: accountLabel(account), link: portalLink });
       data.__language = account.preferred_language || undefined;
       if (await queue(account.email, data)) notified.push(account);
-      for (const contact of await customerContactsService.mailRecipients(account.id, 'galleries')) {
+      // A customer's own mail is out by now: a failure here must not lose it,
+      // or the rest of the accounts.
+      let contacts = [];
+      try {
+        contacts = await customerContactsService.mailRecipients(account.id, 'galleries');
+      } catch (err) {
+        logger.warn('gallery_completed: contacts could not be resolved', { customerId: account.id, error: err.message });
+      }
+      for (const contact of contacts) {
         const contactData = buildEmailData({ email: contact.email, name: accountLabel(contact), link: portalLink });
-        contactData.__language = contact.preferred_language || undefined;
+        contactData.__language = contact.preferred_language || account.preferred_language || undefined;
         await queue(contact.email, contactData, { customerAccountId: account.id });
       }
     }

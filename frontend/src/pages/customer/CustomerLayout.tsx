@@ -87,15 +87,20 @@ export const CustomerLayout: React.FC = () => {
   // The dashboard is the one page every company has: an open document or
   // gallery may belong to the company being left.
   const switchCompany = async (customerId: number) => {
+    setSwitching(true);
     try {
       setSession(await customerService.switchCompany(customerId));
-      navigate('/customer/dashboard');
+      setSidebarOpen(false);
+      navigate('/customer/dashboard', { replace: true });
     } catch {
       toast.error(t('customer.nav.switchFailed', 'Could not switch company. Please try again.'));
+    } finally {
+      setSwitching(false);
     }
   };
   const { data: settingsData } = usePublicSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   useEscapeClose(sidebarOpen, () => setSidebarOpen(false));
   const isDrawer = useSyncExternalStore(subscribeDrawer, isDrawerLayout);
   // The open drawer covers the page behind a backdrop, so it holds the
@@ -258,6 +263,7 @@ export const CustomerLayout: React.FC = () => {
                   <select
                     className="input-themed w-full"
                     value={customer?.id}
+                    disabled={switching}
                     onChange={(e) => switchCompany(Number(e.target.value))}
                   >
                     {companies.map((company) => (

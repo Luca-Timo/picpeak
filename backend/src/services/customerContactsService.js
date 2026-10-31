@@ -54,6 +54,8 @@ const HOLDER_RIGHTS = Object.freeze(
 const PERSON_FIELDS = ['salutation', 'first_name', 'last_name', 'display_name', 'phone', 'preferred_language'];
 
 const asFlag = (value) => value === true || value === 1 || value === '1' || value === 't';
+// A customer a login can work in: active, and on the portal.
+const liveCustomer = (q) => q.where('is_active', formatBoolean(true)).whereNotNull('password_hash');
 const normaliseEmail = (email) => String(email || '').trim().toLowerCase();
 
 /** A stored value that is not a level of its area grants nothing. */
@@ -170,16 +172,15 @@ async function addressesWithLogin(emails) {
  */
 async function membershipsFor(email) {
   const address = normaliseEmail(email);
-  const live = (q) => q.where('is_active', formatBoolean(true)).whereNotNull('password_hash');
   const out = [];
-  const holder = await live(db('customer_accounts').whereRaw('LOWER(email) = ?', [address])).first();
+  const holder = await liveCustomer(db('customer_accounts').whereRaw('LOWER(email) = ?', [address])).first();
   if (holder) out.push({ customer: holder, contact: null });
   const contacts = await db('customer_contacts')
     .whereRaw('LOWER(email) = ?', [address])
     .where('is_active', formatBoolean(true))
     .orderBy('created_at', 'asc').orderBy('id', 'asc');
   for (const contact of contacts) {
-    const customer = await live(db('customer_accounts').where('id', contact.customer_account_id)).first();
+    const customer = await liveCustomer(db('customer_accounts').where('id', contact.customer_account_id)).first();
     if (customer) out.push({ customer, contact });
   }
   return out;
@@ -218,6 +219,15 @@ function shape(contact, openInvitation, hasLogin) {
 async function loadContact(customerId, contactId) {
   const contact = await db('customer_contacts')
     .where({ id: contactId, customer_account_id: customerId }).first();
+  if (!contact) throw new NotFoundError('Contact', contactId);
+  return contact;
+}
+
+// Everything that acts on a contact's address or links holds this row, so an
+// address change cannot pass a link being made for the old address.
+async function lockContact(trx, customerId, contactId) {
+  const contact = await trx('customer_contacts')
+    .where({ id: contactId, customer_account_id: customerId }).forUpdate().first();
   if (!contact) throw new NotFoundError('Contact', contactId);
   return contact;
 }
@@ -280,36 +290,45 @@ async function createContact(customerId, input, adminId) {
 }
 
 async function updateContact(customerId, contactId, input, adminId) {
-  const contact = await loadContact(customerId, contactId);
   const updates = { ...personColumns(input), ...rightColumns(input.rights) };
   if (input.receivesMail !== undefined) updates.receives_mail = formatBoolean(!!input.receivesMail);
+  const email = input.email === undefined ? undefined : normaliseEmail(input.email);
+  if (email === '') throw new ValidationError('Email is required');
 
-  if (input.email !== undefined) {
-    const email = normaliseEmail(input.email);
-    if (!email) throw new ValidationError('Email is required');
-    if (email !== contact.email) {
-      await assertEmailFree(customerId, email, { exceptContactId: contactId });
+  await db.transaction(async (trx) => {
+    const contact = await lockContact(trx, customerId, contactId);
+    const oldAddress = contact.email.toLowerCase();
+    const moves = email !== undefined && email !== contact.email;
+    const deactivates = input.isActive === false && asFlag(contact.is_active);
+    const lastUse = !(await usedElsewhere(contact, trx));
+
+    if (moves) {
+      await assertEmailFree(customerId, email, { exceptContactId: contactId, trx });
       updates.email = email;
       updates.password_changed_at = new Date();
       // The login follows the person, unless the old address still works
-      // elsewhere. Where the new one already has a password, the old one goes:
-      // no contact row would lead to it anymore, so nothing could remove it.
-      if (!(await usedElsewhere(contact))) {
-        const oldLogin = db('customer_logins').where('email', contact.email.toLowerCase());
-        if (await credentialFor(email)) await oldLogin.del();
-        else await oldLogin.update({ email, updated_at: new Date() });
+      // elsewhere. Where the new address is already someone, the old login
+      // goes: it must not open their customers, and no contact row would lead
+      // to it anymore, so nothing could remove it.
+      if (lastUse) {
+        const oldLogin = trx('customer_logins').where('email', oldAddress);
+        const taken = await credentialFor(email, trx)
+          || await trx('customer_contacts').whereRaw('LOWER(email) = ?', [email]).whereNot('id', contactId).first('id');
+        if (taken) await oldLogin.del();
+        else await oldLogin.update({ email, updated_at: new Date() }).catch(conflictOnDuplicate);
       }
       // The old address must not be able to finish setting up this login.
-      await db('customer_invitations').where('contact_id', contactId).whereNull('accepted_at').del();
-      await db('customer_password_resets').where('contact_id', contactId).whereNull('used_at').del();
+      await trx('customer_invitations').where('contact_id', contactId).whereNull('accepted_at').del();
+      await trx('customer_password_resets').where('contact_id', contactId).whereNull('used_at').del();
     }
-  }
-  if (input.isActive !== undefined) {
-    updates.is_active = formatBoolean(!!input.isActive);
-    if (!input.isActive) updates.password_changed_at = new Date();
-  }
-  updates.updated_at = new Date();
-  await db('customer_contacts').where('id', contactId).update(updates);
+    if (input.isActive !== undefined) {
+      updates.is_active = formatBoolean(!!input.isActive);
+      if (!input.isActive) updates.password_changed_at = new Date();
+    }
+    if (moves || deactivates) await cancelQueuedMail(trx, oldAddress, customerId, { lastUse });
+    updates.updated_at = new Date();
+    await trx('customer_contacts').where('id', contactId).update(updates).catch(conflictOnDuplicate);
+  });
 
   await logActivity('customer_contact_updated',
     { customerId, contactId, fields: Object.keys(updates).filter((k) => k !== 'updated_at') },
@@ -326,20 +345,22 @@ async function usedElsewhere(contact, trx = db) {
   return !!(holder || other);
 }
 
-// A removed person's unsent mail must not go out anymore. What was already sent
-// stays in the log until the customer is erased.
+// Unsent mail about this customer must not reach someone who left it. What was
+// already sent stays in the log until the customer is erased. Only this
+// customer's: the same address can also be a contract's signer or on a
+// campaign, and that mail is not the contact's.
 async function cancelQueuedMail(trx, email, customerId, { lastUse }) {
-  // Someone who stays at another customer keeps that customer's mail, and
-  // loses what is queued about this one.
+  for (const row of await mailAbout(trx, email, customerId, ['pending'])) {
+    await trx('email_queue').where('id', row.id).update({ status: 'cancelled' });
+  }
+  // Invitation and reset mail names no customer. It leads to this login, so it
+  // goes with the last contact row.
   if (lastUse) {
     await trx('email_queue')
       .whereRaw('LOWER(recipient_email) = ?', [email])
+      .whereIn('email_type', ['customer_invitation', 'customer_password_reset'])
       .whereIn('status', ['pending', PROTECTED_PENDING_STATUS])
       .update({ status: 'cancelled' });
-  } else {
-    for (const row of await mailAbout(trx, email, customerId, ['pending'])) {
-      await trx('email_queue').where('id', row.id).update({ status: 'cancelled' });
-    }
   }
   // Invoice mail reaches a contact as a CC on the customer's own row.
   const copied = await trx('email_queue')
@@ -377,6 +398,40 @@ async function mailAbout(trx, email, customerId, statuses) {
   });
 }
 
+/** Erasure must leave what is queued to this address about another customer. */
+async function mailAboutOthers(trx, email, customerId) {
+  const rows = await trx('email_queue')
+    .whereRaw('LOWER(recipient_email) = ?', [normaliseEmail(email)])
+    .select('id', 'email_data');
+  return rows.filter((row) => {
+    try {
+      const data = typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data;
+      return data?.__customerAccountId != null && Number(data.__customerAccountId) !== Number(customerId);
+    } catch (_) {
+      return false;
+    }
+  }).map((row) => row.id);
+}
+
+/**
+ * Erasure of a holder who is a contact elsewhere: their password was on the
+ * erased row, and the login there must outlive it. Same changed-at, so their
+ * sessions at the other customers stay valid.
+ */
+async function keepHolderLogin(trx, customer) {
+  if (!customer.password_hash) return;
+  const email = normaliseEmail(customer.email);
+  const elsewhere = await trx('customer_contacts').whereRaw('LOWER(email) = ?', [email]).first('id');
+  if (!elsewhere) return;
+  await trx('customer_logins').insert({
+    email,
+    password_hash: customer.password_hash,
+    password_changed_at: customer.password_changed_at || null,
+    created_at: new Date(),
+    updated_at: new Date(),
+  }).onConflict('email').ignore();
+}
+
 /**
  * Erasure of a customer whose contact stays elsewhere: their address is not
  * redacted wholesale, but what was queued to it about this customer is.
@@ -403,8 +458,11 @@ async function deleteContactLinks(trx, contactIds) {
 }
 
 async function deleteContact(customerId, contactId, adminId) {
-  const contact = await loadContact(customerId, contactId);
   await db.transaction(async (trx) => {
+    const contact = await lockContact(trx, customerId, contactId);
+    // Removals of one address at two customers wait for each other here, so
+    // the later one sees it is the last and takes the login along.
+    await trx('customer_logins').where('email', contact.email.toLowerCase()).forUpdate().first('id');
     const lastUse = !(await usedElsewhere(contact, trx));
     await cancelQueuedMail(trx, contact.email.toLowerCase(), customerId, { lastUse });
     await deleteContactLinks(trx, [contactId]);
@@ -421,6 +479,14 @@ function conflictOnDuplicate(err) {
   throw err;
 }
 
+// The same refusal the holder's invitation and reset paths make.
+async function activeCustomer(trx, customerId) {
+  const customer = await trx('customer_accounts').where('id', customerId).first();
+  if (!customer) throw new NotFoundError('Customer', customerId);
+  if (!asFlag(customer.is_active)) throw new ValidationError('This customer is inactive');
+  return customer;
+}
+
 function passiveCustomerError() {
   const err = new ValidationError('Invite the customer to the portal first');
   err.code = 'CUSTOMER_PASSIVE';
@@ -428,23 +494,26 @@ function passiveCustomerError() {
 }
 
 async function sendInvitation(customerId, contactId, adminId) {
-  const contact = await loadContact(customerId, contactId);
-  if (await credentialFor(contact.email)) throw new ConflictError('This contact already has a login', 'email');
-  if (!asFlag(contact.is_active)) throw new ValidationError('This contact is inactive');
-  const customer = await db('customer_accounts').where('id', customerId).first();
-  if (!customer || !customer.password_hash) throw passiveCustomerError();
-
-  await db('customer_invitations').where('contact_id', contactId).whereNull('accepted_at').del();
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
-  await db('customer_invitations').insert({
-    email: contact.email,
-    ...capabilityTokenColumns(token),
-    contact_id: contactId,
-    invited_by: adminId,
-    expires_at: expiresAt,
-    created_at: new Date(),
-    prefill_data: JSON.stringify(personColumns(contact)),
+  const { contact, customer } = await db.transaction(async (trx) => {
+    const row = await lockContact(trx, customerId, contactId);
+    if (await credentialFor(row.email, trx)) throw new ConflictError('This contact already has a login', 'email');
+    if (!asFlag(row.is_active)) throw new ValidationError('This contact is inactive');
+    const account = await activeCustomer(trx, customerId);
+    if (!account.password_hash) throw passiveCustomerError();
+
+    await trx('customer_invitations').where('contact_id', contactId).whereNull('accepted_at').del();
+    await trx('customer_invitations').insert({
+      email: row.email,
+      ...capabilityTokenColumns(token),
+      contact_id: contactId,
+      invited_by: adminId,
+      expires_at: expiresAt,
+      created_at: new Date(),
+      prefill_data: JSON.stringify(personColumns(row)),
+    });
+    return { contact: row, customer: account };
   });
 
   const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
@@ -474,6 +543,7 @@ async function acceptInvitation(invitation, { name, password, profile }) {
     // invited one, and only once.
     const row = await trx('customer_contacts')
       .where({ id: invitation.contact_id, email: invitation.email, is_active: formatBoolean(true) })
+      .forUpdate()
       .first();
     const customer = row && await trx('customer_accounts')
       .where({ id: row.customer_account_id, is_active: formatBoolean(true) }).first('id');
@@ -500,27 +570,31 @@ async function acceptInvitation(invitation, { name, password, profile }) {
 }
 
 async function createPasswordReset(customerId, contactId, adminId) {
-  const contact = await loadContact(customerId, contactId);
-  if (!asFlag(contact.is_active)) throw new ValidationError('Cannot reset password for an inactive contact');
-  if (!(await credentialFor(contact.email))) throw new ValidationError('This contact has no login yet');
-
-  await db('customer_password_resets').where('contact_id', contactId).whereNull('used_at').del();
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
-  await db('customer_password_resets').insert({
-    ...capabilityTokenColumns(token),
-    customer_account_id: customerId,
-    contact_id: contactId,
-    requested_by_admin_id: adminId || null,
-    expires_at: expiresAt,
-    created_at: new Date(),
+  const { contact, customer } = await db.transaction(async (trx) => {
+    const row = await lockContact(trx, customerId, contactId);
+    if (!asFlag(row.is_active)) throw new ValidationError('Cannot reset password for an inactive contact');
+    const account = await activeCustomer(trx, customerId);
+    if (!(await credentialFor(row.email, trx))) throw new ValidationError('This contact has no login yet');
+
+    await trx('customer_password_resets').where('contact_id', contactId).whereNull('used_at').del();
+    await trx('customer_password_resets').insert({
+      ...capabilityTokenColumns(token),
+      customer_account_id: customerId,
+      contact_id: contactId,
+      requested_by_admin_id: adminId || null,
+      expires_at: expiresAt,
+      created_at: new Date(),
+    });
+    return { contact: row, customer: account };
   });
 
   const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
   await queueEmail(null, contact.email, 'customer_password_reset', {
     reset_link: `${frontendUrl}/customer/reset-password/${token}`,
     expires_at: expiresAt.toISOString(),
-    __language: contact.preferred_language || undefined,
+    __language: contact.preferred_language || customer.preferred_language || undefined,
   });
   await logActivity('customer_password_reset_requested',
     { customerId, contactId, email: contact.email }, null, { type: 'admin', id: adminId });
@@ -531,7 +605,10 @@ async function createPasswordReset(customerId, contactId, adminId) {
 async function contactForReset(row) {
   const contact = await db('customer_contacts')
     .where({ id: row.contact_id, is_active: formatBoolean(true) }).first();
-  return contact || null;
+  if (!contact) return null;
+  const customer = await db('customer_accounts')
+    .where({ id: contact.customer_account_id, is_active: formatBoolean(true) }).first('id');
+  return customer ? contact : null;
 }
 
 /** A session's right, read fresh: a gallery token does not carry rights. */
@@ -572,13 +649,16 @@ async function endSessions(trx, customerId) {
  * customer's own addresses already receive.
  */
 async function mailRecipients(customerId, area) {
-  if (!customerId || !(await db.schema.hasTable('customer_contacts'))) return [];
+  if (!customerId) return [];
   const contacts = await db('customer_contacts')
     .where({
       customer_account_id: customerId,
       is_active: formatBoolean(true),
       receives_mail: formatBoolean(true),
     });
+  if (contacts.length === 0) return [];
+  // Same customers as the switcher: their portal links would not open otherwise.
+  if (!(await liveCustomer(db('customer_accounts').where('id', customerId)).first('id'))) return [];
   // A right cannot reach past what is switched on for this customer.
   const feature = FEATURE_OF_AREA[area];
   if (feature) {
@@ -591,7 +671,8 @@ async function mailRecipients(customerId, area) {
 
 /**
  * Erasure of the whole customer: the addresses it must also redact. A person
- * who stays at another customer keeps their mail and their login there.
+ * who stays at another customer keeps their mail and their login there, also
+ * when their password was on the erased row (keepHolderLogin).
  */
 async function contactEmailsForErasure(trx, customerId) {
   const rows = await trx('customer_contacts').where('customer_account_id', customerId).select('id', 'email');
@@ -603,8 +684,11 @@ async function contactEmailsForErasure(trx, customerId) {
 }
 
 async function deleteAllForErasure(trx, customerId) {
-  const rows = await trx('customer_contacts').where('customer_account_id', customerId).select('id');
+  const rows = await trx('customer_contacts').where('customer_account_id', customerId).select('id', 'email');
   await deleteContactLinks(trx, rows.map((row) => row.id));
+  // Same wait as deleteContact, in one order so two erasures cannot deadlock.
+  await trx('customer_logins').whereIn('email', rows.map((row) => row.email.toLowerCase()))
+    .orderBy('email').forUpdate().select('id');
   const emails = await contactEmailsForErasure(trx, customerId);
   await trx('customer_contacts').where('customer_account_id', customerId).del();
   if (emails.length > 0) await trx('customer_logins').whereIn('email', emails).del();
@@ -619,6 +703,7 @@ module.exports = {
   applyRights,
   asFlag,
   isContactEmail,
+  conflictOnDuplicate,
   credentialFor,
   setPassword,
   membershipsFor,
@@ -637,6 +722,8 @@ module.exports = {
   mailRecipients,
   contactEmailsForErasure,
   redactContactMail,
+  mailAboutOthers,
+  keepHolderLogin,
   deleteAllForErasure,
 };
 

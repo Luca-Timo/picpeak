@@ -834,7 +834,8 @@ async function updateCustomer(id, updates, updatedByAdminId) {
       .where('email', allowed.email)
       .whereNot('id', id)
       .first();
-    if (conflict || await customerContactsService.isContactEmail(allowed.email)) {
+    const sameAddress = allowed.email.toLowerCase() === customer.email.toLowerCase();
+    if (conflict || (!sameAddress && await customerContactsService.isContactEmail(allowed.email))) {
       throw new ConflictError('Email already in use', 'email');
     }
   }
@@ -846,28 +847,27 @@ async function updateCustomer(id, updates, updatedByAdminId) {
   allowed.updated_at = new Date();
   const emailChanged = !!allowed.email && allowed.email !== customer.email;
   await db.transaction(async (trx) => {
+    // The holder's password also opens the customers where this person is a
+    // contact, and that link is the address.
+    const moved = trx('customer_contacts').whereRaw('LOWER(email) = LOWER(?)', [customer.email]);
     // A reset link already mailed to the old address must not set the
-    // password of the account at its new one. Reset rows before the
-    // account, the order applyPasswordReset locks them in, so the two
-    // cannot deadlock on PostgreSQL.
+    // password of the account at its new one, wherever it was requested
+    // from. Reset rows before the account, the order applyPasswordReset
+    // locks them in, so the two cannot deadlock on PostgreSQL.
     if (emailChanged) {
       await trx('customer_password_resets')
         .where('customer_account_id', id)
         .whereNull('contact_id')
         .whereNull('used_at')
         .del();
+      await trx('customer_password_resets').whereIn('contact_id', moved.clone().select('id')).whereNull('used_at').del();
     }
     await auditedUpdate(trx, 'customer_accounts', { id }, allowed, {
       actor: updatedByAdminId || null, source: 'customer.update',
     });
-    // The holder's password also opens the customers where this person is a
-    // contact, and that link is the address.
     if (emailChanged) {
-      const moved = trx('customer_contacts').whereRaw('LOWER(email) = LOWER(?)', [customer.email]);
-      // Same rule as above: a link mailed to the old address sets this
-      // person's password, wherever it was requested from.
-      await trx('customer_password_resets').whereIn('contact_id', moved.clone().select('id')).whereNull('used_at').del();
-      await moved.update({ email: allowed.email, updated_at: new Date() });
+      await moved.update({ email: allowed.email, updated_at: new Date() })
+        .catch(customerContactsService.conflictOnDuplicate);
     }
   });
 
@@ -1379,13 +1379,15 @@ async function eraseCustomer(id, erasedByAdminId) {
     // Contact addresses are logins of this customer, with mail of their own.
     const contactEmails = await customerContactsService.contactEmailsForErasure(trx, id);
     await customerContactsService.redactContactMail(trx, id);
+    await customerContactsService.keepHolderLogin(trx, customer);
+    const otherCustomersMail = await customerContactsService.mailAboutOthers(trx, customer.email, id);
     const matchQueue = (q) => q.where((w) => {
       forCustomer(w);
       if (extraQueueIds.length > 0) w.orWhereIn('id', extraQueueIds);
       if (contactEmails.length > 0) {
         w.orWhereRaw(`LOWER(recipient_email) IN (${contactEmails.map(() => '?').join(', ')})`, contactEmails);
       }
-    });
+    }).whereNotIn('id', otherCustomersMail);
 
     const cancelledQueueRows = await matchQueue(trx('email_queue'))
       .whereIn('status', ['pending', PROTECTED_PENDING_STATUS])
@@ -1785,6 +1787,8 @@ async function notifyCustomerOfNewAssignments(customerId, addedEventIds) {
     || customer.first_name?.trim()
     || (customer.email ? customer.email.split('@')[0] : '');
 
+  // Before the customer's own mail: a failure must not leave a retry mailing them twice.
+  const contacts = await customerContactsService.mailRecipients(customerId, 'galleries');
   const queued = await queueEmail(null, customer.email, 'customer_gallery_assigned', {
     customer_name: customerName,
     gallery_count: String(events.length),
@@ -1798,7 +1802,7 @@ async function notifyCustomerOfNewAssignments(customerId, addedEventIds) {
     dashboard_link: `${frontendUrl}/customer/dashboard`,
   });
   // People of this customer who follow its galleries get the same notice.
-  for (const contact of await customerContactsService.mailRecipients(customerId, 'galleries')) {
+  for (const contact of contacts) {
     await queueEmail(null, contact.email, 'customer_gallery_assigned', {
       customer_name: contact.display_name?.trim() || contact.first_name?.trim() || contact.email.split('@')[0],
       gallery_count: String(events.length),
@@ -1807,7 +1811,7 @@ async function notifyCustomerOfNewAssignments(customerId, addedEventIds) {
       gallery_list_html: galleryListHtml,
       gallery_list_text: galleryListText,
       dashboard_link: `${frontendUrl}/customer/dashboard`,
-      __language: contact.preferred_language || undefined,
+      __language: contact.preferred_language || customer.preferred_language || undefined,
     }, { customerAccountId: customerId });
   }
   // queueEmail resolves false when nothing was queued.

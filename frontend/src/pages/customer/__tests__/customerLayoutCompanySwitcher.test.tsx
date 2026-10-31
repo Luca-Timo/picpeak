@@ -84,6 +84,23 @@ describe('company switcher', () => {
     expect(await screen.findByText('dashboard page')).toBeTruthy();
   });
 
+  it('closes the phone menu after a switch', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }));
+    auth.customer = {
+      id: 1,
+      email: 'kim@example.com',
+      companies: [{ id: 1, name: 'Firma XYZ' }, { id: 2, name: 'Firma ABC' }],
+    };
+    switchCompany.mockResolvedValue({ customer: { id: 2 }, features: {}, branding: {} });
+    renderLayout();
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }));
+    await userEvent.selectOptions(screen.getByLabelText('Company'), '2');
+    expect(await screen.findByText('dashboard page')).toBeTruthy();
+    await waitFor(() => expect(document.querySelector('aside')?.hasAttribute('inert')).toBe(true));
+  });
+
   it('stays where it is when the switch fails', async () => {
     auth.customer = {
       id: 1,

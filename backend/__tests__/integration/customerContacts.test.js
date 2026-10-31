@@ -972,4 +972,221 @@ describe('customer contacts', () => {
       expect(await db('email_queue').where({ recipient_email: 'gone@example.test' })).toEqual([]);
     });
   });
+
+  describe('at the edges', () => {
+    let otherId;
+    let counter = 0;
+
+    const newCustomer = async (extra = {}) => {
+      counter += 1;
+      return insertId('customer_accounts', {
+        email: `edge${counter}@example.test`, password_hash: await bcrypt.hash(PASSWORD, 4),
+        is_active: true, created_at: new Date(), updated_at: new Date(), ...extra,
+      });
+    };
+
+    const queueMail = async (row) => {
+      const inserted = await db('email_queue').insert({
+        status: 'pending', created_at: new Date(), scheduled_at: new Date(), ...row,
+      }).returning('id');
+      return inserted[0]?.id ?? inserted[0];
+    };
+
+    beforeAll(async () => { otherId = await newCustomer(); });
+
+    afterEach(async () => {
+      jest.restoreAllMocks();
+      await db('email_queue').del();
+    });
+
+    it('moves two contacts to one address without losing the loser\'s login', async () => {
+      const a = await makeContact('a@example.test', MARKETING);
+      const b = await makeContact('b@example.test', MARKETING);
+      const results = await Promise.allSettled([
+        contacts.updateContact(customerId, a.id, { email: 'same@example.test' }, adminId),
+        contacts.updateContact(customerId, b.id, { email: 'same@example.test' }, adminId),
+      ]);
+      const refused = results.filter((r) => r.status === 'rejected');
+      expect(refused).toHaveLength(1);
+      expect(refused[0].reason.statusCode).toBe(409);
+      const rows = await db('customer_contacts').whereIn('id', [a.id, b.id]).orderBy('email');
+      const loser = rows.find((row) => row.email !== 'same@example.test');
+      expect(await contacts.credentialFor(loser.email)).toBeTruthy();
+      expect(await db('customer_logins').where({ email: 'same@example.test' })).toHaveLength(1);
+    });
+
+    it('does not open another customer when an address is changed to one of its contacts', async () => {
+      const moved = await makeContact('old@example.test', MARKETING);
+      const invited = await contacts.createContact(otherId, { email: 'theirs@example.test', rights: ACCOUNTING }, adminId);
+      await contacts.updateContact(customerId, moved.id, { email: 'theirs@example.test' }, adminId);
+      expect(await contacts.credentialFor('theirs@example.test')).toBeNull();
+      expect(await db('customer_logins').where({ email: 'old@example.test' })).toEqual([]);
+      await expect(contacts.sendInvitation(otherId, invited.id, adminId)).resolves.toBeTruthy();
+      await db('customer_invitations').where({ email: 'theirs@example.test' }).del();
+    });
+
+    it('still moves the login when nobody else has the new address', async () => {
+      const moved = await makeContact('old@example.test', MARKETING);
+      await contacts.updateContact(customerId, moved.id, { email: 'new@example.test' }, adminId);
+      expect(await db('customer_logins').where({ email: 'new@example.test' })).toHaveLength(1);
+    });
+
+    it('leaves a scheduled invoice and an unreminded one alone when the recipients cannot be read', async () => {
+      const scheduled = await insertId('invoices', {
+        customer_account_id: customerId, invoice_number: 'R-EDGE-1', status: 'scheduled', currency: 'CHF',
+        issue_date: '2026-01-01', due_date: '2026-02-01', total_amount_minor: 1000,
+      });
+      const open = await insertId('invoices', {
+        customer_account_id: customerId, invoice_number: 'R-EDGE-2', status: 'sent', currency: 'CHF',
+        issue_date: '2026-01-01', due_date: '2026-02-01', total_amount_minor: 1000, sent_at: new Date(),
+      });
+      jest.spyOn(contacts, 'mailRecipients').mockRejectedValue(new Error('lookup failed'));
+      const { sendInvoice } = require('../../src/services/invoice/sending');
+      const { sendReminder } = require('../../src/services/invoice/reminders');
+      await expect(sendInvoice(scheduled, adminId)).rejects.toThrow('lookup failed');
+      await expect(sendReminder(open, 1, adminId)).rejects.toThrow('lookup failed');
+      expect((await db('invoices').where({ id: scheduled }).first()).status).toBe('scheduled');
+      const reminded = await db('invoices').where({ id: open }).first();
+      expect(reminded.status).toBe('sent');
+      expect(Number(reminded.reminder_level || 0)).toBe(0);
+    });
+
+    it('keeps the login and the mail of a holder who stays a contact elsewhere', async () => {
+      const erasedId = await newCustomer({ email: 'both@example.test' });
+      await db('customer_contacts').insert({
+        customer_account_id: customerId, email: 'both@example.test', right_quotes: 'view', is_active: true,
+        created_at: new Date(), updated_at: new Date(),
+      });
+      const kept = await queueMail({
+        recipient_email: 'both@example.test', email_type: 'customer_gallery_assigned',
+        email_data: JSON.stringify({ __customerAccountId: customerId }),
+      });
+      const gone = await queueMail({
+        recipient_email: 'both@example.test', email_type: 'customer_gallery_assigned',
+        email_data: JSON.stringify({ __customerAccountId: erasedId }),
+      });
+      await accounts.eraseCustomer(erasedId, adminId);
+      expect(await contacts.credentialFor('both@example.test')).toBeTruthy();
+      const { res } = await login('both@example.test');
+      expect(res.status).toBe(200);
+      expect(res.body.customer.id).toBe(customerId);
+      expect((await db('email_queue').where({ id: kept }).first()).status).toBe('pending');
+      expect((await db('email_queue').where({ id: gone }).first()).status).toBe('cancelled');
+    });
+
+    it('shows a view-only contact nothing to act on', async () => {
+      const quote = await insertId('quotes', {
+        customer_account_id: customerId, quote_number: 'Q-EDGE', status: 'sent', currency: 'CHF', issue_date: '2026-01-01',
+      });
+      await makeContact('view@example.test', ACCOUNTING);
+      await makeContact('act@example.test', { quotes: 'act' });
+      const viewOnly = await (await login('view@example.test')).agent.get('/api/customer/dashboard');
+      expect(viewOnly.body.needsAction.quotes).toEqual([]);
+      const acting = await (await login('act@example.test')).agent.get('/api/customer/dashboard');
+      expect(acting.body.needsAction.quotes.map((q) => q.id)).toContain(quote);
+      await db('quotes').where({ id: quote }).del();
+    });
+
+    it('hands out no links for an inactive customer, and a live link stops working', async () => {
+      const customer = await newCustomer();
+      const withLogin = await contacts.createContact(customer, { email: 'in@example.test' }, adminId);
+      const without = await contacts.createContact(customer, { email: 'out@example.test' }, adminId);
+      await db('customer_logins').insert({ email: 'in@example.test', password_hash: 'x' });
+      const token = 'edge-reset-token';
+      await db('customer_password_resets').insert({
+        ...capabilityTokenColumns(token), customer_account_id: customer, contact_id: withLogin.id,
+        expires_at: new Date(Date.now() + 60000), created_at: new Date(),
+      });
+      await db('customer_accounts').where({ id: customer }).update({ is_active: false });
+      await expect(contacts.sendInvitation(customer, without.id, adminId)).rejects.toThrow('inactive');
+      await expect(contacts.createPasswordReset(customer, withLogin.id, adminId)).rejects.toThrow('inactive');
+      await expect(accounts.applyPasswordReset({ token, password: PASSWORD })).rejects.toThrow();
+      await db('customer_password_resets').where({ contact_id: withLogin.id }).del();
+    });
+
+    it.each([
+      ['deactivated', { isActive: false }],
+      ['moved to a new address', { email: 'moved@example.test' }],
+    ])('stops queued mail to a contact who is %s', async (_, change) => {
+      const contact = await makeContact('tom@example.test', ACCOUNTING);
+      const own = await queueMail({
+        recipient_email: 'tom@example.test', email_type: 'customer_gallery_assigned',
+        email_data: JSON.stringify({ __customerAccountId: customerId }),
+      });
+      const copied = await queueMail({
+        recipient_email: HOLDER_EMAIL, email_type: 'invoice_sent',
+        email_data: JSON.stringify({ cc: ['tom@example.test'], __customerAccountId: customerId }),
+      });
+      await contacts.updateContact(customerId, contact.id, change, adminId);
+      expect((await db('email_queue').where({ id: own }).first()).status).toBe('cancelled');
+      const row = await db('email_queue').where({ id: copied }).first();
+      const data = typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data;
+      expect(data.cc).toEqual([]);
+    });
+
+    it('leaves mail that is not the contact\'s when they are removed', async () => {
+      const contact = await makeContact('tom@example.test', ACCOUNTING);
+      const signing = await queueMail({
+        recipient_email: 'tom@example.test', email_type: 'contract_signature_request',
+        email_data: JSON.stringify({ contract_number: 'V-1' }),
+      });
+      const about = await queueMail({
+        recipient_email: 'tom@example.test', email_type: 'customer_gallery_assigned',
+        email_data: JSON.stringify({ __customerAccountId: customerId }),
+      });
+      await contacts.deleteContact(customerId, contact.id, adminId);
+      expect((await db('email_queue').where({ id: signing }).first()).status).toBe('pending');
+      expect((await db('email_queue').where({ id: about }).first()).status).toBe('cancelled');
+    });
+
+    it('mails no contact of a passive or inactive customer', async () => {
+      const passive = await newCustomer({ password_hash: null });
+      const inactive = await newCustomer({ is_active: false });
+      for (const id of [passive, inactive]) {
+        await db('customer_contacts').insert({
+          customer_account_id: id, email: 'mia@example.test', right_galleries: 'view', is_active: true,
+          created_at: new Date(), updated_at: new Date(),
+        });
+      }
+      await db('customer_logins').insert({ email: 'mia@example.test', password_hash: 'x' });
+      expect(await contacts.mailRecipients(passive, 'galleries')).toEqual([]);
+      expect(await contacts.mailRecipients(inactive, 'galleries')).toEqual([]);
+    });
+
+    it('refuses an overlong language on the public accept route', async () => {
+      const res = await request(app).post('/api/customer/auth/accept-invite').send({
+        token: 'x', password: PASSWORD, profile: { preferred_language: 'x'.repeat(9) },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.errors.map((error) => error.path)).toContain('profile.preferred_language');
+    });
+
+    it('ends the session it switched away from', async () => {
+      await makeContact('mia@example.test', MARKETING);
+      await contacts.createContact(otherId, { email: 'mia@example.test', rights: MARKETING }, adminId);
+      const { agent, res } = await login('mia@example.test');
+      const cookie = res.headers['set-cookie'];
+      expect((await request(app).get('/api/customer/auth/session').set('Cookie', cookie)).status).toBe(200);
+      expect((await agent.post('/api/customer/auth/switch-company').send({ customerId: otherId })).status).toBe(200);
+      expect((await request(app).get('/api/customer/auth/session').set('Cookie', cookie)).status).toBe(401);
+    });
+
+    it('lets a view-only contact read documents but not change them', async () => {
+      await db('customer_accounts').where({ id: customerId }).update({ feature_documents: true });
+      await makeContact('view@example.test', { documents: 'view' });
+      const { agent } = await login('view@example.test');
+      expect((await agent.get('/api/customer/documents')).status).toBe(200);
+      expect((await agent.post('/api/customer/documents')).status).toBe(403);
+      expect((await agent.delete('/api/customer/documents/1')).status).toBe(403);
+    });
+
+    it('lets a holder who is a contact elsewhere change the case of their own address', async () => {
+      const holder = await newCustomer({ email: 'Case@example.test' });
+      await db('customer_contacts').insert({
+        customer_account_id: otherId, email: 'case@example.test', is_active: true,
+        created_at: new Date(), updated_at: new Date(),
+      });
+      await expect(accounts.updateCustomer(holder, { email: 'case@example.test' }, adminId)).resolves.toBeTruthy();
+    });
+  });
 });

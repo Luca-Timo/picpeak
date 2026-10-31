@@ -362,6 +362,7 @@ router.post('/accept-invite', [
   body('profile.last_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
   body('profile.display_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('profile.phone').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('profile.preferred_language').optional({ nullable: true }).isString().isLength({ max: 8 }),
   body('profile.company_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('profile.vat_id').optional({ nullable: true }).isString().isLength({ max: 40 }),
   body('profile.address_line1').optional({ nullable: true }).isString().isLength({ max: 255 }),

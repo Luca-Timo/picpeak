@@ -746,9 +746,9 @@ router.post('/:id/password-reset', [
  * Contacts of a customer (migration 340): further people with an own login and
  * own rights. Same permission split as the customer's own account:
  * customers.create invites and resets, customers.edit changes the record,
- * customers.delete removes. Only handing out a login needs the customerPortal
- * flag: login itself is not gated by it, so a contact must stay removable
- * while the flag is off.
+ * customers.delete removes. Adding a contact and handing out a login need the
+ * customerPortal flag. Login itself is not gated by it, so a contact must stay
+ * editable and removable while the flag is off.
  */
 const requirePortal = requireFeatureFlag('customerPortal', 'CUSTOMER_PORTAL_DISABLED');
 const contactGuards = (permission, ...gates) => [
