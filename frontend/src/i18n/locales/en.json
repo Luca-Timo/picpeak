@@ -7553,7 +7553,8 @@
         "personal": "Personal information",
         "contact": "Contact & business",
         "address": "Billing address",
-        "password": "Change password"
+        "password": "Change password",
+        "contactOnly": "Contact"
       },
       "field": {
         "email": "Email (login)",

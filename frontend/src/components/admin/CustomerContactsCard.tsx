@@ -310,7 +310,7 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
       ) : (
         <div className="space-y-3">
           {adding && form}
-          {(contacts || []).length === 0 && !adding && (
+          {(contacts || []).length === 0 && !adding && !isPassive && (
             <p className="text-sm text-muted">
               {t('customers.contacts.empty', 'Only the account holder has access. Add people who need their own login.')}
             </p>

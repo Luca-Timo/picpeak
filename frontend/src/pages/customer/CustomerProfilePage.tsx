@@ -298,7 +298,9 @@ export const CustomerProfilePage: React.FC = () => {
           <div className="flex items-center gap-2 mb-4">
             <Phone className="w-5 h-5 text-muted-theme" />
             <h2 className="text-lg font-semibold text-theme">
-              {t('customer.profile.section.contact', 'Contact & business')}
+              {canEditCompany
+                ? t('customer.profile.section.contact', 'Contact & business')
+                : t('customer.profile.section.contactOnly', 'Contact')}
             </h2>
           </div>
 

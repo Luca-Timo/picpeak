@@ -7518,7 +7518,8 @@
         "personal": "Persönliche Angaben",
         "contact": "Kontakt & Firma",
         "address": "Rechnungsadresse",
-        "password": "Passwort ändern"
+        "password": "Passwort ändern",
+        "contactOnly": "Kontakt"
       },
       "field": {
         "email": "E-Mail (Login)",
