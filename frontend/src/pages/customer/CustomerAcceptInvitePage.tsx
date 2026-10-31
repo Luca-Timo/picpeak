@@ -296,7 +296,9 @@ export const CustomerAcceptInvitePage: React.FC = () => {
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-theme flex items-center gap-2">
                   <Phone className="w-4 h-4" />
-                  {t('customer.acceptInvite.section.contact', 'Contact & business (optional)')}
+                  {forContact
+                    ? t('customer.profile.section.contactOnly', 'Contact')
+                    : t('customer.acceptInvite.section.contact', 'Contact & business (optional)')}
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>

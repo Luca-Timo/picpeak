@@ -788,6 +788,116 @@ describe('customer contacts', () => {
     }, 20000);
   });
 
+  describe('through the real flows', () => {
+    const setFlag = async (key) => {
+      const updated = await db('feature_flags').where({ key }).update({ value: true });
+      if (!updated) await db('feature_flags').insert({ key, value: true });
+      require('../../src/middleware/requireFeatureFlag').invalidateFeatureFlagCache();
+    };
+
+    it('invitation mail, accept page and first login', async () => {
+      const { decryptEmailData } = require('../../src/utils/emailQueueEncryption');
+      await contacts.createContact(customerId, {
+        email: 'flow@example.test', first_name: 'Flo', preferred_language: 'de', rights: MARKETING, invite: true,
+      }, adminId);
+      const row = await db('email_queue').where({ recipient_email: 'flow@example.test', email_type: 'customer_invitation' }).first();
+      const stored = typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data;
+      const mail = decryptEmailData(row.email_type, stored, row.recipient_email);
+      expect(mail.__language).toBe('de');
+      const token = mail.invite_link.split('/').pop();
+
+      const lookup = await request(app).get(`/api/customer/auth/invite/${token}`);
+      expect(lookup.status).toBe(200);
+      expect(lookup.body.invitation.forContact).toBe(true);
+      expect(lookup.body.invitation.prefill.first_name).toBe('Flo');
+
+      const accepted = await request(app).post('/api/customer/auth/accept-invite').send({
+        token, password: PASSWORD, profile: { first_name: 'Florian', company_name: 'Evil' },
+      });
+      expect(accepted.status).toBe(200);
+      const { res } = await login('flow@example.test');
+      expect(res.status).toBe(200);
+      expect(res.body.customer.firstName).toBe('Florian');
+      expect(res.body.customer.rights.galleries).toBe('view');
+      expect((await db('customer_accounts').where({ id: customerId }).first()).company_name).toBe('Firma XYZ');
+      expect((await request(app).post('/api/customer/auth/accept-invite').send({ token, password: PASSWORD })).status).toBe(400);
+      await db('email_queue').where({ recipient_email: 'flow@example.test' }).del();
+    });
+
+    it('a contact signs a v2 contract when named on it, and only then', async () => {
+      const signers = require('../../src/services/contract/signers');
+      const contractId = await insertId('contracts', {
+        customer_account_id: customerId, contract_number: 'C-CONTACT-1', status: 'draft', signing_version: 2, language: 'de',
+        issue_date: '2026-01-01', created_at: new Date(),
+      });
+      await signers.setSigners(contractId, { signers: [{ name: 'Tom Frei', email: 'tom@example.test' }], order: 'parallel' });
+      await db('contracts').where({ id: contractId }).update({ status: 'sent' });
+      await makeContact('tom@example.test', { contracts: 'act' });
+      await makeContact('mia@example.test', { contracts: 'act' });
+
+      const tom = await login('tom@example.test');
+      const opened = await tom.agent.post(`/api/customer/contracts/${contractId}/signing-access`);
+      expect(opened.status).toBe(200);
+      expect(opened.body.mode).toBe('session');
+
+      const mia = await login('mia@example.test');
+      const refused = await mia.agent.post(`/api/customer/contracts/${contractId}/signing-access`);
+      expect(refused.status).toBe(403);
+      expect(refused.body.code).toBe('SIGNER_NOT_FOUND');
+      const holder = await login(HOLDER_EMAIL);
+      expect((await holder.agent.post(`/api/customer/contracts/${contractId}/signing-access`)).status).toBe(403);
+    });
+
+    const portalGallery = async (slug) => {
+      const eventId = await insertId('events', {
+        slug, event_name: 'Gallery', event_type: 'wedding', event_date: '2026-01-01',
+        share_link: slug, password_hash: 'x', created_at: new Date(),
+      });
+      await db('event_customer_assignments').insert({ event_id: eventId, customer_account_id: customerId });
+      return eventId;
+    };
+
+    it('an album choice goes through the real route: view is refused, act gets past the gate', async () => {
+      await setFlag('albumProducts');
+      const galleryApp = express();
+      galleryApp.use(express.json());
+      galleryApp.use(cookieParser());
+      galleryApp.use('/api/customer/auth', require('../../src/routes/customerAuth'));
+      galleryApp.use('/api/customer', require('../../src/routes/customer'));
+      galleryApp.use('/api/gallery', require('../../src/routes/gallery'));
+      // eslint-disable-next-line no-unused-vars
+      galleryApp.use((err, req, res, next) => res.status(err.statusCode || 500).json({ error: err.message }));
+
+      await portalGallery('album-gallery');
+      const offer = '11111111-1111-4111-8111-111111111111';
+      const choose = async (email) => {
+        const agent = request.agent(galleryApp);
+        await agent.post('/api/customer/auth/login').send({ email, password: PASSWORD });
+        const access = await agent.get('/api/customer/events/album-gallery/access-token');
+        expect(access.status).toBe(200);
+        return agent.put(`/api/gallery/album-gallery/album-products/${offer}`)
+          .set('Authorization', `Bearer ${access.body.token}`)
+          .send({});
+      };
+      await makeContact('mia@example.test', { galleries: 'view' });
+      await makeContact('anna2@example.test', { galleries: 'act' });
+      expect((await choose('mia@example.test')).status).toBe(403);
+      // The empty body fails validation, which comes after the right.
+      expect((await choose('anna2@example.test')).status).toBe(400);
+    });
+
+    it('a contact\'s download notice goes to the contact, and stops when they leave', async () => {
+      const notifier = require('../../src/services/downloadJobNotifier');
+      const contact = await makeContact('mia@example.test', MARKETING);
+      const req = { viaCustomer: true, galleryAccess: { session: { customerId, contactId: contact.id } } };
+      expect(await notifier.recipientFor(req)).toEqual({ email: 'mia@example.test', customerId });
+      const holder = { viaCustomer: true, galleryAccess: { session: { customerId } } };
+      expect((await notifier.recipientFor(holder)).email).toBe(HOLDER_EMAIL);
+      await contacts.updateContact(customerId, contact.id, { isActive: false }, adminId);
+      expect(await notifier.recipientFor(req)).toBeNull();
+    });
+  });
+
   describe('schema', () => {
     it('leaves the account-recovery write guards in place on SQLite', async () => {
       if (db.client.config.client === 'pg') return;
