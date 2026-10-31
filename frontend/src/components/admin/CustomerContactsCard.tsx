@@ -242,7 +242,7 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
   if (!portalEnabled && (contacts || []).length === 0) return null;
 
   const form = (
-    <div className="space-y-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-700">
+    <div className="space-y-3 rounded-lg border border-line p-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <Input
           label={t('customers.contacts.email', 'Email')}
@@ -320,7 +320,7 @@ export const CustomerContactsCard: React.FC<CustomerContactsCardProps> = ({
           ) : (
             <div
               key={contact.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-700"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3"
             >
               <div className="min-w-0">
                 <p className="break-words text-sm font-medium text-body">{contactName(contact)}</p>
