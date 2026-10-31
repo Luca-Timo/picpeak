@@ -87,8 +87,23 @@ class SessionAccessService {
       .select('id', 'email', 'display_name', 'first_name', 'last_name', 'password_changed_at', 'preferred_language')
       .first();
     if (!account) throw new AppError('Invalid token', 401, 'CUSTOMER_NOT_FOUND');
-    this.assertPasswordCurrent(account, session);
-    return account;
+    if (session.contactId === undefined) {
+      this.assertPasswordCurrent(account, session);
+      return account;
+    }
+    // A contact's session stands on the contact's own password and active
+    // state, plus the customer being active. The holder changing their
+    // password ends no one else's session.
+    if (!Number.isInteger(session.contactId)) {
+      throw new AppError('Invalid customer session', 401, 'CUSTOMER_NOT_FOUND');
+    }
+    const contact = await db('customer_contacts')
+      .where({ id: session.contactId, customer_account_id: account.id, is_active: formatBoolean(true) })
+      .whereNotNull('password_hash')
+      .first();
+    if (!contact) throw new AppError('Invalid token', 401, 'CUSTOMER_NOT_FOUND');
+    this.assertPasswordCurrent(contact, session);
+    return { ...account, contact };
   }
 }
 

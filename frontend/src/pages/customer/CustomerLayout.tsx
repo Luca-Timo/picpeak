@@ -114,7 +114,11 @@ export const CustomerLayout: React.FC = () => {
 
   // Filter out feature-gated entries the customer can't see. Galleries +
   // Profile have no feature property, so they're always present.
-  const visibleNav = NAV.filter((item) => !item.feature || features[item.feature] === true);
+  const visibleNav = NAV.filter((item) => !item.feature || features[item.feature] === true)
+    // The dashboard stays the home page of a login without galleries.
+    .map((item) => (item.to === '/customer/dashboard' && customer?.rights?.galleries === 'none'
+      ? { ...item, labelKey: 'customer.nav.overview', fallback: 'Overview' }
+      : item));
 
   // Branding visibility — admin can hide either piece independently. If
   // both are hidden the brand link still exists (you can click it to

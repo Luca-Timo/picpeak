@@ -67,7 +67,13 @@ async function recipientFor(req) {
     if (!Number.isInteger(customerId)) return null;
     const account = await db('customer_accounts')
       .where({ id: customerId, is_active: formatBoolean(true) }).first('email');
-    const email = normalise(account?.email);
+    const contactId = req.galleryAccess?.session?.contactId;
+    const contact = account && contactId !== undefined
+      ? await db('customer_contacts')
+        .where({ id: contactId, customer_account_id: customerId, is_active: formatBoolean(true) }).first('email')
+      : null;
+    if (contactId !== undefined && !contact) return null;
+    const email = normalise(contact?.email || account?.email);
     return email ? { email, customerId } : null;
   }
   if (req.guest?.emailVerified && req.guest.email) {
@@ -91,6 +97,14 @@ async function stillHolds(recipient, trx) {
   if (recipient.customer_account_id) {
     owner = await read(conn('customer_accounts')
       .where({ id: recipient.customer_account_id, is_active: formatBoolean(true) }));
+    if (owner && normalise(owner.email) !== recipient.email) {
+      // A contact of this customer asked, on their own address.
+      owner = await read(conn('customer_contacts').where({
+        customer_account_id: recipient.customer_account_id,
+        email: recipient.email,
+        is_active: formatBoolean(true),
+      }));
+    }
   } else if (recipient.guest_id) {
     owner = await read(conn('gallery_guests')
       .where({ id: recipient.guest_id, is_deleted: formatBoolean(false) })

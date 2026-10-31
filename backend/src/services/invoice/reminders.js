@@ -6,6 +6,7 @@ const { getAppSetting } = require('../../utils/appSettings');
 const { AppError } = require('../../utils/errors');
 const { formatShortDate } = require('../../utils/dateFormatter');
 const { resolveBillingRecipients } = require('../_billingRecipients');
+const customerContactsService = require('../customerContactsService');
 const pdfService = require('../pdfService');
 const emailProcessor = require('../emailProcessor');
 const { ensureInt } = require('../../utils/numericHelpers');
@@ -175,7 +176,10 @@ async function applyReminder(invoice, lineItems, level, adminId, actor = adminId
   }
   attachments.push({ filename: `${fresh.invoice_number}_Mahnung.pdf`, contentPath: mahnungPath, contentType: 'application/pdf' });
 
-  const { to: reminderTo, cc: reminderCc } = resolveBillingRecipients(customer, invoice.cc_pdf_email);
+  const { to: reminderTo, cc: reminderCc } = resolveBillingRecipients(
+    customer, invoice.cc_pdf_email,
+    (await customerContactsService.mailRecipients(customer?.id, 'bills')).map((contact) => contact.email),
+  );
   try {
     await emailProcessor.queueEmail(invoice.event_id || null, reminderTo, templateKey, {
       // Render in the customer/invoice language, not the gallery event's (#760).

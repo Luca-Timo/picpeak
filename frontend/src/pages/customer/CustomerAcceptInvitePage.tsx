@@ -81,6 +81,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
   // (dark when branding_force_color_mode is dark / OS dark), so pick the
   // dark logo variant accordingly. No frame here — logo sits on the page bg.
   const { isDark } = usePublicDarkMode();
+  const [forContact, setForContact] = useState(false);
   const companyName = settingsData?.branding_company_name?.trim() || 'PicPeak';
   const lightLogo = settingsData?.branding_logo_url?.trim();
   const darkLogo = settingsData?.branding_logo_url_dark?.trim();
@@ -98,6 +99,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
       .then((info) => {
         if (cancelled) return;
         setInvitation(info);
+        setForContact(!!info.forContact);
         if (info.prefill) {
           setForm((prev) => ({ ...prev, ...mergePrefillIntoForm(prev, info.prefill!) }));
         }
@@ -311,7 +313,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       onChange={(e) => update('phone', e.target.value)}
                     />
                   </div>
-                  <div>
+                  {!forContact && <div>
                     <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-company">
                       {t('customer.profile.field.companyName', 'Company name')}
                     </label>
@@ -323,8 +325,8 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       value={form.company_name}
                       onChange={(e) => update('company_name', e.target.value)}
                     />
-                  </div>
-                  <div>
+                  </div>}
+                  {!forContact && <div>
                     <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-vat">
                       {t('customer.profile.field.vatId', 'VAT ID')}
                     </label>
@@ -335,12 +337,12 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                       value={form.vat_id}
                       onChange={(e) => update('vat_id', e.target.value)}
                     />
-                  </div>
+                  </div>}
                 </div>
               </section>
 
               {/* Address */}
-              <section className="space-y-3">
+              {!forContact && <section className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-theme flex items-center gap-2">
                   <MapPin className="w-4 h-4" />
                   {t('customer.acceptInvite.section.address', 'Billing address (optional)')}
@@ -425,7 +427,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                     />
                   </div>
                 </div>
-              </section>
+              </section>}
 
               {/* Password — required */}
               <section className="space-y-3">

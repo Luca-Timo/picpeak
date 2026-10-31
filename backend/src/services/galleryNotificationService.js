@@ -23,6 +23,7 @@ const { getFrontendBaseUrl, getAbsoluteFrontendUrl } = require('../utils/fronten
 const { hasColumnCached } = require('../utils/schemaCache');
 const { formatBoolean } = require('../utils/dbCompat');
 const { parseBooleanInput } = require('../utils/parsers');
+const customerContactsService = require('./customerContactsService');
 
 /**
  * Can this assigned customer account actually receive — and act on — the
@@ -308,6 +309,11 @@ async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }
       const data = buildEmailData({ email: account.email, name: accountLabel(account), link: portalLink });
       data.__language = account.preferred_language || undefined;
       if (await queue(account.email, data)) notified.push(account);
+      for (const contact of await customerContactsService.mailRecipients(account.id, 'galleries')) {
+        const contactData = buildEmailData({ email: contact.email, name: accountLabel(contact), link: portalLink });
+        contactData.__language = contact.preferred_language || undefined;
+        await queue(contact.email, contactData);
+      }
     }
   }
 

@@ -1525,6 +1525,21 @@ async function portalSigningAccess(customer, contractId) {
 }
 
 /**
+ * Which of these contracts wait for details from this person: portalSigningAccess
+ * opens a contract in `awaiting_data` for its first customer signer only. A
+ * contact usually is not one, the holder always was.
+ */
+async function portalDetailsContracts(customer, contracts) {
+  const ids = contracts.filter((c) => isV2(c) && c.status === 'awaiting_data').map((c) => c.id);
+  if (!ids.length) return new Set();
+  const rows = await db('contract_signers')
+    .whereIn('contract_id', ids)
+    .where({ role: 'customer', position: 1, email_hash: fieldEncryption.hashEmail(customer.email) })
+    .select('contract_id');
+  return new Set(rows.map((row) => Number(row.contract_id)));
+}
+
+/**
  * Where the signed-in customer stands on each of their v2 contracts that
  * is out for signature (#1446), for the portal's Sign button: their signer
  * row is the one `portalSigningAccess` opens a session for (same email
@@ -1636,6 +1651,7 @@ module.exports = {
   clearFollowUpFailure,
   portalSigningAccess,
   portalSignerStates,
+  portalDetailsContracts,
   adminOverview,
   revealEvidence,
   notifyAdmin,

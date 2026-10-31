@@ -57,6 +57,8 @@ const PORTAL_SHARED_NAME_QUERY_KEYS = new Set([
   'customer-invoices',
 ]);
 
+const customerSessionKey = (customer: CustomerProfile) => `${customer.id}:${customer.contactId ?? ''}`;
+
 function clearCustomerPortalQueryCache(queryClient: QueryClient) {
   queryClient.removeQueries({
     predicate: (query) => {
@@ -137,7 +139,7 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
   // Tracks the last-rendered customer id outside React state so refreshSession
   // (a stable useCallback, not recreated per render) can always compare
   // against the *current* identity rather than a stale closure over `customer`.
-  const customerIdRef = React.useRef<CustomerProfile['id'] | null>(null);
+  const customerIdRef = React.useRef<string | null>(null);
 
   /**
    * Refetch the session from /api/customer/auth/session and update both
@@ -180,10 +182,12 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
       // render labeled as customer B's session (#1594). Also fires on a
       // fresh login (previous id null); harmless since there's nothing
       // stale to leak yet.
-      if (customerIdRef.current !== response.customer.id) {
+      // A contact has the same customer id as the holder but other rights.
+      const sessionKey = customerSessionKey(response.customer);
+      if (customerIdRef.current !== sessionKey) {
         clearCustomerPortalQueryCache(queryClient);
       }
-      customerIdRef.current = response.customer.id;
+      customerIdRef.current = sessionKey;
       setCustomerState(response.customer);
       setFeatures(response.features);
       setBranding(response.branding);
@@ -264,7 +268,7 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
   // Same identity check as refreshSession's success branch: a direct A→B
   // switch through setSession/setCustomer (a login without an intervening
   // logout or 401) must not keep A's cached portal queries around.
-  const adoptCustomerId = (id: CustomerProfile['id']) => {
+  const adoptCustomerId = (id: string) => {
     if (customerIdRef.current !== id) {
       clearCustomerPortalQueryCache(queryClient);
     }
@@ -272,14 +276,14 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
   };
 
   const setCustomer = (c: CustomerProfile) => {
-    adoptCustomerId(c.id);
+    adoptCustomerId(customerSessionKey(c));
     setCustomerState(c);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(c));
     applyCustomerLocale(c.preferredLanguage);
   };
 
   const setSession = (s: { customer: CustomerProfile; features: CustomerFeatureFlags; branding: CustomerBrandingFlags }) => {
-    adoptCustomerId(s.customer.id);
+    adoptCustomerId(customerSessionKey(s.customer));
     setCustomerState(s.customer);
     setFeatures(s.features);
     setBranding(s.branding);

@@ -8,6 +8,7 @@ const logger = require('../../utils/logger');
 const { AppError } = require('../../utils/errors');
 const { formatShortDate } = require('../../utils/dateFormatter');
 const { resolveBillingRecipients } = require('../_billingRecipients');
+const customerContactsService = require('../customerContactsService');
 const pdfService = require('../pdfService');
 const emailProcessor = require('../emailProcessor');
 const { ensureInt, ensureNumber } = require('../../utils/numericHelpers');
@@ -18,6 +19,11 @@ const { createInvoice } = require('./create');
 const { buildInvoiceRenderContext } = require('./render');
 const { collectRebillProofAttachments } = require('./rebillProofs');
 const { auditedInsert, auditedUpdate } = require('../accountingHistory');
+
+async function billingContactEmails(customer) {
+  const contacts = await customerContactsService.mailRecipients(customer?.id, 'bills');
+  return contacts.map((contact) => contact.email);
+}
 
 
 /**
@@ -186,7 +192,9 @@ async function sendInvoiceOnce(id, adminId, options = {}) {
     return { sent: false, alreadySent: true };
   }
 
-  const { to: invoiceTo, cc: invoiceCc } = resolveBillingRecipients(customer, invoice.cc_pdf_email);
+  const { to: invoiceTo, cc: invoiceCc } = resolveBillingRecipients(
+    customer, invoice.cc_pdf_email, await billingContactEmails(customer),
+  );
 
   // Re-bill/passthrough proof attachments (#866). Separate attachments — the
   // invoice PDF above is never touched. Selection comes from the Send dialog on
@@ -514,7 +522,9 @@ async function sendStornoOnce(stornoId, adminId) {
       .select('invoice_number', 'issue_date').first()
     : null;
 
-  const { to: stornoTo, cc: stornoCc } = resolveBillingRecipients(customer, storno.cc_pdf_email);
+  const { to: stornoTo, cc: stornoCc } = resolveBillingRecipients(
+    customer, storno.cc_pdf_email, await billingContactEmails(customer),
+  );
   await emailProcessor.queueEmail(storno.event_id || null, stornoTo, 'storno_issued', {
     storno_number: storno.invoice_number,
     original_invoice_number: originalRow?.invoice_number || '',

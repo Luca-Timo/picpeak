@@ -11,8 +11,21 @@ import { api } from '../config/api';
 import type { ContractStatus, PublicContractView } from './contracts.service';
 import type { PublicQuoteView, QuoteStatus } from './quotes.service';
 
+/** What this login may do. The account holder has every right. */
+export interface CustomerRights {
+  galleries: 'none' | 'view' | 'act';
+  quotes: 'none' | 'view' | 'act';
+  contracts: 'none' | 'view' | 'act';
+  bills: 'none' | 'view';
+  documents: 'none' | 'view' | 'act';
+  company: 'none' | 'act';
+}
+
 export interface CustomerProfile {
   id: number;
+  /** Set when a contact is signed in; `id` stays the customer account. */
+  contactId?: number | null;
+  rights?: CustomerRights;
   email: string;
   displayName: string | null;
   firstName: string | null;
@@ -96,6 +109,8 @@ export interface CustomerInvitationInfo {
   email: string;
   expiresAt: string;
   invitedBy: string | null;
+  /** A contact joins an existing customer: no company data to ask for. */
+  forContact?: boolean;
   /** Admin-supplied prefill — populates the accept-invite profile form. */
   prefill: CustomerProfilePrefill | null;
 }

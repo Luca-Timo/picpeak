@@ -13,6 +13,7 @@
  */
 
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { body, param, validationResult } = require('express-validator');
@@ -42,6 +43,7 @@ const { getClientIp } = require('../utils/requestIp');
 // human-readable rule below: minimum length, at least one uppercase letter,
 // at least one digit. No special-character or breach-list requirement.
 const customerAccountsService = require('../services/customerAccountsService');
+const customerContactsService = require('../services/customerContactsService');
 const { customerAuth } = require('../middleware/customerAuth');
 const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../utils/emailNormalization');
 const { auditedUpdate } = require('../services/accountingHistory');
@@ -102,35 +104,49 @@ router.post('/login', [
       return res.status(400).json({ error: 'reCAPTCHA verification failed' });
     }
 
-    const customer = await db('customer_accounts').where('email', email).first();
+    let customer = await db('customer_accounts').where('email', email).first();
+    // An address is either a customer's own or a contact's, never both.
+    const contact = customer ? null : await customerContactsService.findLoginByEmail(email);
+    if (contact) customer = await db('customer_accounts').where('id', contact.customer_account_id).first();
+    const person = contact || customer;
     // Generic error to prevent user enumeration — same wording as admin login.
     // One bcrypt compare on every path so an unknown email is not a timing
     // oracle (the dummy hash matches nothing).
-    const passwordMatches = customer && customer.password_hash
-      ? await bcrypt.compare(password, customer.password_hash)
+    const passwordMatches = person && person.password_hash
+      ? await bcrypt.compare(password, person.password_hash)
       : await bcrypt.compare(password, DUMMY_BCRYPT_HASH).then(() => false);
     if (!passwordMatches) {
       await trackFailedAttempt(lockoutKey, ipAddress, userAgent);
       return res.status(401).json({ error: getGenericAuthError() });
     }
-    if (!customer.is_active) {
+    if (!customer || !customer.is_active || !person.is_active) {
       await trackFailedAttempt(lockoutKey, ipAddress, userAgent);
       return res.status(401).json({ error: getGenericAuthError() });
     }
 
     await trackSuccessfulLogin(lockoutKey, ipAddress, userAgent);
-    // Not a billing field, so this leaves no history entry.
-    await auditedUpdate(db, 'customer_accounts', { id: customer.id }, {
-      last_login: new Date(),
-      last_login_ip: ipAddress,
-    }, { actor: { type: 'customer', id: customer.id }, source: 'customer.login' });
+    if (contact) {
+      await db('customer_contacts').where('id', contact.id).update({
+        last_login: new Date(),
+        last_login_ip: ipAddress,
+      });
+    } else {
+      // Not a billing field, so this leaves no history entry.
+      await auditedUpdate(db, 'customer_accounts', { id: customer.id }, {
+        last_login: new Date(),
+        last_login_ip: ipAddress,
+      }, { actor: { type: 'customer', id: customer.id }, source: 'customer.login' });
+    }
 
     const token = jwt.sign({
       customerId: customer.id,
-      email: customer.email,
+      email: person.email,
       type: 'customer',
       ip: ipAddress,
       loginTime: Date.now(),
+      // One customer has several logins, which the iat-based revocation key
+      // cannot tell apart: a contact's session is revoked by its own jti.
+      ...(contact && { contactId: contact.id, jti: crypto.randomUUID() }),
     }, process.env.JWT_SECRET, {
       expiresIn: TOKEN_TTL_SECONDS,
       issuer: 'picpeak-auth',
@@ -139,9 +155,9 @@ router.post('/login', [
     setCustomerAuthCookie(res, token);
 
     await logActivity('customer_login',
-      { customerId: customer.id, email: customer.email, ipAddress },
+      { customerId: customer.id, email: person.email, ipAddress, ...(contact && { contactId: contact.id }) },
       null,
-      { type: 'customer', id: customer.id, name: customer.email }
+      { type: 'customer', id: customer.id, name: person.email }
     );
 
     // Resolve effective features + branding right here so the login
@@ -151,10 +167,12 @@ router.post('/login', [
     // CustomerAuthProvider mount (e.g. after the user navigates to a
     // gallery and back). Mirroring the /session resolution keeps the
     // frontend on a single source of truth.
+    const rights = contact ? customerContactsService.rightsOf(contact) : customerContactsService.HOLDER_RIGHTS;
     let features = { calendar: false, quotes: false, bills: false, hoursLogging: false, contracts: false, documents: false };
     let branding = { showLogo: true, showCompanyName: true };
     try {
       features = await customerAccountsService.getEffectiveFeaturesForCustomer(customer);
+      if (contact) features = customerContactsService.applyRights(features, rights);
       const globals = await customerAccountsService.getCustomerSurfaceGlobals();
       branding = { showLogo: globals.showLogo, showCompanyName: globals.showCompanyName };
     } catch (e) {
@@ -164,11 +182,13 @@ router.post('/login', [
     res.json({
       customer: {
         id: customer.id,
-        email: customer.email,
-        displayName: customer.display_name,
-        firstName: customer.first_name,
-        lastName: customer.last_name,
-        preferredLanguage: customer.preferred_language || 'en',
+        contactId: contact?.id ?? null,
+        rights,
+        email: person.email,
+        displayName: person.display_name,
+        firstName: person.first_name,
+        lastName: person.last_name,
+        preferredLanguage: person.preferred_language || customer.preferred_language || 'en',
       },
       features,
       branding,
@@ -211,7 +231,7 @@ router.get('/session', customerAuth, async (req, res) => {
   let features = { calendar: false, quotes: false, bills: false, hoursLogging: false, contracts: false, documents: false };
   let branding = { showLogo: true, showCompanyName: true };
   try {
-    features = await customerAccountsService.getEffectiveFeaturesForCustomer(req.customer.id);
+    features = await customerAccountsService.getEffectiveFeaturesForSession(req.customer);
     const globals = await customerAccountsService.getCustomerSurfaceGlobals();
     branding = { showLogo: globals.showLogo, showCompanyName: globals.showCompanyName };
   } catch (e) {
@@ -243,6 +263,9 @@ router.get('/invite/:token', [
         // its profile form. Customer can still edit any field — we just
         // saved them some typing.
         prefill: invitation.prefill || null,
+        // A contact joins an existing customer, so the accept page asks only
+        // for the person, not for company data.
+        forContact: !!invitation.contact_id,
       },
     });
   } catch (error) {

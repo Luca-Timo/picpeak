@@ -7439,7 +7439,8 @@
       "bills": "Rechnungen",
       "profile": "Profil",
       "contracts": "Verträge",
-      "documents": "Dokumente"
+      "documents": "Dokumente",
+      "overview": "Übersicht"
     },
     "comingSoon": {
       "tag": "Demnächst"
@@ -8176,6 +8177,60 @@
     "statusFilter": {
       "label": "Status",
       "all": "Alle Status"
+    },
+    "contacts": {
+      "title": "Kontakte",
+      "add": "Kontakt hinzufügen",
+      "empty": "Nur der Kontoinhaber hat Zugang. Fügen Sie Personen hinzu, die ein eigenes Login brauchen.",
+      "passiveHint": "Laden Sie diesen Kunden zuerst ins Portal ein. Bis dahin können Kontakte kein Login erhalten.",
+      "email": "E-Mail",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "created": "Kontakt hinzugefügt",
+      "saved": "Kontakt gespeichert",
+      "deleted": "Kontakt entfernt",
+      "invited": "Einladung gesendet",
+      "resetSent": "Link zum Zurücksetzen gesendet",
+      "deleteConfirm": "{{name}} entfernen? Das Login funktioniert danach sofort nicht mehr.",
+      "saveOnly": "Ohne Login speichern",
+      "saveInvite": "Speichern und einladen",
+      "invite": "Einladen",
+      "reinvite": "Einladung erneut senden",
+      "resetPassword": "Passwort zurücksetzen",
+      "deactivate": "Deaktivieren",
+      "reactivate": "Reaktivieren",
+      "delete": "Entfernen",
+      "rightsHint": "Ein Recht reicht nie weiter als das, was für diesen Kunden unter Kundenfunktionen aktiviert ist.",
+      "receivesMail": "Kopie von Galerie- und Rechnungs-E-Mails senden",
+      "receivesMailHint": "Nur für Bereiche, auf die dieser Kontakt ein Recht hat. Der Kunde erhält seine E-Mails weiterhin.",
+      "area": {
+        "galleries": "Galerien",
+        "quotes": "Angebote",
+        "contracts": "Verträge",
+        "bills": "Rechnungen",
+        "documents": "Dokumente",
+        "company": "Firmendaten"
+      },
+      "level": {
+        "none": "Kein Zugriff",
+        "view": "Ansehen",
+        "act": "Ansehen und handeln",
+        "edit": "Bearbeiten"
+      },
+      "preset": {
+        "admin": "Admin",
+        "accounting": "Buchhaltung",
+        "marketing": "Marketing",
+        "viewer": "Betrachter"
+      },
+      "status": {
+        "inactive": "Inaktiv",
+        "lastLogin": "Letztes Login {{date}}",
+        "login": "Hat ein Login",
+        "invited": "Eingeladen",
+        "noLogin": "Kein Login"
+      },
+      "signerHint": "Kontakte unterzeichnen einen Vertrag nur, wenn sie darauf als Unterzeichner eingetragen sind."
     }
   },
   "clients": {

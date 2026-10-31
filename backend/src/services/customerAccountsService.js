@@ -23,6 +23,7 @@ const logger = require('../utils/logger');
 const { ConflictError, NotFoundError, ValidationError } = require('../utils/errors');
 const { capabilityTokenColumns, digestCapabilityToken } = require('../utils/capabilityToken');
 const { PROTECTED_PENDING_STATUS } = require('../utils/emailQueueEncryption');
+const customerContactsService = require('./customerContactsService');
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, matches admin invites
 
@@ -124,6 +125,10 @@ async function createInvitation({ email, invitedById, prefill }) {
   const normalisedEmail = String(email || '').trim().toLowerCase();
   if (!normalisedEmail) {
     throw new ValidationError('Email is required');
+  }
+
+  if (await customerContactsService.isContactEmail(normalisedEmail)) {
+    throw new ConflictError('A customer contact with this email already exists', 'email');
   }
 
   const existingCustomer = await db('customer_accounts')
@@ -239,7 +244,7 @@ async function createDirect({ email, prefill, createdByAdminId, withinTransactio
   const existing = await db('customer_accounts')
     .where('email', normalisedEmail)
     .first();
-  if (existing) {
+  if (existing || await customerContactsService.isContactEmail(normalisedEmail)) {
     throw new ConflictError('A customer account with this email already exists', 'email');
   }
 
@@ -336,6 +341,9 @@ async function acceptInvitationOnce({ token, name, password, profile }) {
 
   if (!invitation) {
     throw new ValidationError('Invalid or expired invitation');
+  }
+  if (invitation.contact_id) {
+    return customerContactsService.acceptInvitation(invitation, { name, password, profile });
   }
 
   // Race-condition guard: an admin may have created the customer
@@ -457,6 +465,9 @@ async function acceptInvitationOnce({ token, name, password, profile }) {
         throw new ConflictError('Email already registered', 'email');
       }
     } else {
+      if (await customerContactsService.isContactEmail(invitation.email, trx)) {
+        throw new ConflictError('Email already registered', 'email');
+      }
       const [inserted] = await auditedInsert(trx, 'customer_accounts', {
         email: invitation.email,
         // Profile fields land directly on the customer row. Anything the user
@@ -532,6 +543,7 @@ async function validateInvitationToken(token) {
       'customer_invitations.email',
       'customer_invitations.expires_at',
       'customer_invitations.prefill_data',
+      'customer_invitations.contact_id',
       'admin_users.username as invited_by_username'
     )
     .first();
@@ -819,7 +831,7 @@ async function updateCustomer(id, updates, updatedByAdminId) {
       .where('email', allowed.email)
       .whereNot('id', id)
       .first();
-    if (conflict) {
+    if (conflict || await customerContactsService.isContactEmail(allowed.email)) {
       throw new ConflictError('Email already in use', 'email');
     }
   }
@@ -838,6 +850,7 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     if (emailChanged) {
       await trx('customer_password_resets')
         .where('customer_account_id', id)
+        .whereNull('contact_id')
         .whereNull('used_at')
         .del();
     }
@@ -884,6 +897,7 @@ async function deactivateCustomer(id, deactivatedByAdminId) {
     password_changed_at: new Date(),
     updated_at: new Date(),
   }, { actor: deactivatedByAdminId || null, source: 'customer.deactivate' });
+  await customerContactsService.endSessions(db, id);
 
   await logActivity('customer_deactivated',
     { customerId: id, email: customer.email },
@@ -1350,9 +1364,15 @@ async function eraseCustomer(id, erasedByAdminId) {
       }
     }
     const extraQueueIds = [...signerQueueIds, ...await acceptedInvitationQueueIds(trx, id)];
-    const matchQueue = (q) => (extraQueueIds.length > 0
-      ? q.where((w) => forCustomer(w).orWhereIn('id', extraQueueIds))
-      : forCustomer(q));
+    // Contact addresses are logins of this customer, with mail of their own.
+    const contactEmails = await customerContactsService.contactEmailsForErasure(trx, id);
+    const matchQueue = (q) => q.where((w) => {
+      forCustomer(w);
+      if (extraQueueIds.length > 0) w.orWhereIn('id', extraQueueIds);
+      if (contactEmails.length > 0) {
+        w.orWhereRaw(`LOWER(recipient_email) IN (${contactEmails.map(() => '?').join(', ')})`, contactEmails);
+      }
+    });
 
     const cancelledQueueRows = await matchQueue(trx('email_queue'))
       .whereIn('status', ['pending', PROTECTED_PENDING_STATUS])
@@ -1429,6 +1449,7 @@ async function eraseCustomer(id, erasedByAdminId) {
 
     // Active reset tokens for this customer should be invalidated.
     await trx('customer_password_resets').where('customer_account_id', id).del();
+    await customerContactsService.deleteAllForErasure(trx, id);
 
     // Group memberships (#1443) say something about the person, a group name
     // can be one, and an anonymised row that still counted as a member would
@@ -1763,6 +1784,19 @@ async function notifyCustomerOfNewAssignments(customerId, addedEventIds) {
     gallery_list_text: galleryListText,
     dashboard_link: `${frontendUrl}/customer/dashboard`,
   });
+  // People of this customer who follow its galleries get the same notice.
+  for (const contact of await customerContactsService.mailRecipients(customerId, 'galleries')) {
+    await queueEmail(null, contact.email, 'customer_gallery_assigned', {
+      customer_name: contact.display_name?.trim() || contact.first_name?.trim() || contact.email.split('@')[0],
+      gallery_count: String(events.length),
+      singular: events.length === 1 ? 'true' : '',
+      multiple: events.length > 1 ? 'true' : '',
+      gallery_list_html: galleryListHtml,
+      gallery_list_text: galleryListText,
+      dashboard_link: `${frontendUrl}/customer/dashboard`,
+      __language: contact.preferred_language || undefined,
+    });
+  }
   // queueEmail resolves false when nothing was queued.
   return queued === true;
 }
@@ -1849,6 +1883,7 @@ async function getPendingInvitations() {
   return db('customer_invitations')
     .leftJoin('admin_users', 'admin_users.id', 'customer_invitations.invited_by')
     .whereNull('customer_invitations.accepted_at')
+    .whereNull('customer_invitations.contact_id')
     .where('customer_invitations.expires_at', '>', new Date())
     .select(
       'customer_invitations.id',
@@ -2025,6 +2060,14 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
  * we delete it before creating the new one — admins re-clicking the
  * "Send reset" button shouldn't fan out two valid links.
  */
+/** The features of a portal session: the customer's, narrowed to this login. */
+async function getEffectiveFeaturesForSession(sessionCustomer) {
+  const features = await getEffectiveFeaturesForCustomer(sessionCustomer.id);
+  return sessionCustomer.contactId
+    ? customerContactsService.applyRights(features, sessionCustomer.rights)
+    : features;
+}
+
 async function createPasswordReset({ customerId, requestedByAdminId }) {
   const customer = await db('customer_accounts').where('id', customerId).first();
   if (!customer) {
@@ -2034,9 +2077,11 @@ async function createPasswordReset({ customerId, requestedByAdminId }) {
     throw new ValidationError('Cannot reset password for an inactive customer');
   }
 
-  // Clean up any previous unused reset for this customer.
+  // Clean up any previous unused reset for this customer. A contact's reset is
+  // that contact's own.
   await db('customer_password_resets')
     .where('customer_account_id', customerId)
+    .whereNull('contact_id')
     .whereNull('used_at')
     .del();
 
@@ -2073,6 +2118,17 @@ async function createPasswordReset({ customerId, requestedByAdminId }) {
  * password for X" before they submit.
  */
 async function validatePasswordResetToken(token) {
+  const contactRow = await db('customer_password_resets')
+    .where('token_digest', digestCapabilityToken(token))
+    .whereNotNull('contact_id')
+    .whereNull('used_at')
+    .where('expires_at', '>', new Date())
+    .first();
+  if (contactRow) {
+    const contact = await customerContactsService.contactForReset(contactRow);
+    return contact ? { ...contactRow, email: contact.email } : null;
+  }
+
   const row = await db('customer_password_resets')
     .join('customer_accounts', 'customer_accounts.id', 'customer_password_resets.customer_account_id')
     .where('customer_password_resets.token_digest', digestCapabilityToken(token))
@@ -2107,6 +2163,7 @@ async function applyPasswordReset({ token, password }) {
   if (!row) {
     throw new ValidationError('Invalid or expired reset link');
   }
+  if (row.contact_id) return customerContactsService.applyPasswordReset(row, password);
 
   const customer = await db('customer_accounts').where('id', row.customer_account_id).first();
   if (!customer || !customer.is_active) {
@@ -2172,6 +2229,7 @@ module.exports = {
   isCustomerPortalEnabled,
   getCustomerSurfaceGlobals,
   getEffectiveFeaturesForCustomer,
+  getEffectiveFeaturesForSession,
   createPasswordReset,
   validatePasswordResetToken,
   applyPasswordReset,

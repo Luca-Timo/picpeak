@@ -19,6 +19,7 @@ const { toIso } = require('../utils/dateNormalize');
 const { toMillis } = require('../utils/queueTimestamps');
 const customerAccountsService = require('./customerAccountsService');
 const customerDocumentsService = require('./customerDocumentsService');
+const { hasRight } = require('./customerContactsService');
 const { followSlugRedirect } = require('./slugRedirects');
 
 const isTrue = (v) => v === true || v === 1 || v === '1';
@@ -203,7 +204,7 @@ async function needsActionFor(customerId, features) {
  *
  * Each item: { kind, id, title, at, link }.
  */
-async function recentFor(customerId, features, limit = 10) {
+async function recentFor(customerId, features, limit = 10, { galleries = true } = {}) {
   const items = [];
   const push = (kind, id, title, at, link) => {
     const ms = toMillis(at);
@@ -245,8 +246,9 @@ async function recentFor(customerId, features, limit = 10) {
       .select('id', 'invoice_number', 'sent_at');
     for (const i of rows) push('invoice_sent', i.id, i.invoice_number, i.sent_at, '/customer/bills');
   }
-  const events = (await customerAccountsService.listEventsForCustomer(customerId))
-    .filter((e) => !isTrue(e.is_draft));
+  const events = galleries
+    ? (await customerAccountsService.listEventsForCustomer(customerId)).filter((e) => !isTrue(e.is_draft))
+    : [];
   for (const e of events) {
     push('gallery_assigned', e.id, e.event_name, e.assigned_at, `/customer/events/${encodeURIComponent(e.slug)}`);
   }
@@ -255,12 +257,22 @@ async function recentFor(customerId, features, limit = 10) {
   return items.slice(0, limit);
 }
 
-async function getDashboard(customerId) {
-  const features = await customerAccountsService.getEffectiveFeaturesForCustomer(customerId);
-  const events = (await customerAccountsService.listEventsForCustomer(customerId)).map(shapeEvent);
+// `session` is req.customer. Without one, the view of the whole customer.
+async function featuresFor(customerId, session) {
+  return session
+    ? customerAccountsService.getEffectiveFeaturesForSession(session)
+    : customerAccountsService.getEffectiveFeaturesForCustomer(customerId);
+}
+
+async function getDashboard(customerId, session = null) {
+  const features = await featuresFor(customerId, session);
+  const galleries = !session || hasRight(session.rights, 'galleries');
+  const events = galleries
+    ? (await customerAccountsService.listEventsForCustomer(customerId)).map(shapeEvent)
+    : [];
   return {
     needsAction: await needsActionFor(customerId, features),
-    recent: await recentFor(customerId, features),
+    recent: await recentFor(customerId, features, 10, { galleries }),
     galleries: {
       active: events.filter((e) => e.availability !== 'expired'),
       expired: events.filter((e) => e.availability === 'expired'),
@@ -315,7 +327,7 @@ async function dealLineageForEvent(customerId, event) {
  * for all three so the endpoint can't be used to probe for other customers'
  * events.
  */
-async function getEventOverview(customerId, slug) {
+async function getEventOverview(customerId, slug, session = null) {
   let event = await db('events').where({ slug }).first();
   // Links mailed before a rename carry the old slug. The access check below
   // still decides, so this finds nothing a slug lookup would not.
@@ -323,7 +335,7 @@ async function getEventOverview(customerId, slug) {
   if (!event || isTrue(event.is_archived)) return null;
   if (!(await customerAccountsService.customerHasAccessToEvent(customerId, event.id))) return null;
 
-  const features = await customerAccountsService.getEffectiveFeaturesForCustomer(customerId);
+  const features = await featuresFor(customerId, session);
 
   const lineage = await dealLineageForEvent(customerId, event);
   const dealList = lineage.dealUuids;
@@ -402,6 +414,7 @@ async function getEventOverview(customerId, slug) {
       projectIds: lineage.projectIds,
     })
     : [];
+  const mayActOnDocuments = !session || hasRight(session.rights, 'documents', 'act');
 
   return {
     event: shapeEvent(event),
@@ -414,7 +427,7 @@ async function getEventOverview(customerId, slug) {
     quotes,
     contracts,
     invoices,
-    documents,
+    documents: mayActOnDocuments ? documents : documents.map((doc) => ({ ...doc, canDelete: false })),
   };
 }
 
