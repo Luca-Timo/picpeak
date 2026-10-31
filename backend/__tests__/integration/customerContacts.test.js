@@ -20,7 +20,9 @@ const crypto = require('crypto');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const request = require('supertest');
-const { bootCrmDb, seedMinimal } = require('./helpers/crmDb');
+const {
+  bootCrmDb, seedMinimal, assignAdminRole, mintAdminToken, buildRouteApp,
+} = require('./helpers/crmDb');
 const { capabilityTokenColumns } = require('../../src/utils/capabilityToken');
 
 const PASSWORD = 'Sicher12345';
@@ -457,6 +459,78 @@ describe('customer contacts', () => {
       expect(resolveBillingRecipients({ email: 'a@x.test', billing_email: 'b@x.test' }, null, ['t@x.test', 'B@x.test']))
         .toEqual({ to: 'b@x.test', cc: ['a@x.test', 't@x.test'] });
     });
+  });
+
+  describe('admin routes', () => {
+    let adminApp;
+    let token;
+    let otherCustomerId;
+
+    const call = (method, url) => request(adminApp)[method](url).set('Authorization', `Bearer ${token}`);
+
+    beforeAll(async () => {
+      adminApp = buildRouteApp('/api/admin/customers', require('../../src/routes/adminCustomers'));
+      token = mintAdminToken(adminId);
+      otherCustomerId = await insertId('customer_accounts', {
+        email: 'other@example.test', password_hash: 'x', is_active: true, created_at: new Date(), updated_at: new Date(),
+      });
+    });
+
+    it('need an admin, and the permission of the route', async () => {
+      const contact = await makeContact('mia@example.test', MARKETING);
+      const url = `/api/admin/customers/${customerId}/contacts`;
+      expect((await request(adminApp).get(url)).status).toBe(401);
+      expect((await request(adminApp).post(url).send({ email: 'a@example.test' })).status).toBe(401);
+      for (const [method, path] of [
+        ['get', url],
+        ['post', url],
+        ['put', `${url}/${contact.id}`],
+        ['delete', `${url}/${contact.id}`],
+        ['post', `${url}/${contact.id}/send-invite`],
+        ['post', `${url}/${contact.id}/password-reset`],
+      ]) {
+        const res = await call(method, path).send({ email: 'a@example.test' });
+        expect(res.status).toBe(403);
+      }
+      await assignAdminRole(db, adminId, 'super_admin');
+    });
+
+    it('reach a contact only through its own customer', async () => {
+      const contact = await makeContact('mia@example.test', MARKETING);
+      const url = `/api/admin/customers/${otherCustomerId}/contacts/${contact.id}`;
+      expect((await call('put', url).send({ first_name: 'X', rights: { bills: 'view' } })).status).toBe(404);
+      expect((await call('post', `${url}/password-reset`)).status).toBe(404);
+      expect((await call('post', `${url}/send-invite`)).status).toBe(404);
+      expect((await call('delete', url)).status).toBe(404);
+      const row = await db('customer_contacts').where({ id: contact.id }).first();
+      expect(row.first_name).toBe('Mia');
+      expect(row.right_bills).toBe('none');
+      const list = await call('get', `/api/admin/customers/${otherCustomerId}/contacts`);
+      expect(list.body.contacts).toEqual([]);
+    });
+
+    it('never return a password hash', async () => {
+      await makeContact('mia@example.test', MARKETING);
+      const res = await call('get', `/api/admin/customers/${customerId}/contacts`);
+      expect(res.status).toBe(200);
+      expect(res.body.contacts[0].hasLogin).toBe(true);
+      expect(JSON.stringify(res.body)).not.toMatch(/password_hash|\$2[aby]\$/);
+    });
+
+    it('keep a contact removable while the portal is off, but hand out no login', async () => {
+      const contact = await makeContact('mia@example.test', MARKETING);
+      const url = `/api/admin/customers/${customerId}/contacts`;
+      await db('feature_flags').where({ key: 'customerPortal' }).update({ value: false });
+      await new Promise((resolve) => { setTimeout(resolve, 10100); });
+      try {
+        expect((await call('post', url).send({ email: 'new@example.test' })).status).toBe(403);
+        expect((await call('post', `${url}/${contact.id}/password-reset`)).status).toBe(403);
+        expect((await call('put', `${url}/${contact.id}`).send({ isActive: false })).status).toBe(200);
+        expect((await call('delete', `${url}/${contact.id}`)).status).toBe(200);
+      } finally {
+        await db('feature_flags').where({ key: 'customerPortal' }).update({ value: true });
+      }
+    }, 20000);
   });
 
   describe('schema', () => {
