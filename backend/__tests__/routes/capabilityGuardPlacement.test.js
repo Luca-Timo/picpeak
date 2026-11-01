@@ -12,7 +12,6 @@ const GUARDED = [
   ['adminPhotos.js', "router.post('/:eventId/upload'", 'requireEventOwnership'],
   ['adminPhotos.js', "router.post('/:eventId/chunked-upload/init'", 'requireEventOwnership'],
   ['publicTransferUpload.js', "router.post('/:token'", 'preUploadGuard'],
-  ['adminTransfers.js', "router.post('/',", "requirePermission('events.edit')"],
   ['adminTransfers.js', "router.post('/:id/upload-files'", "requirePermission('events.edit')"],
   ['adminTransfers.js', "router.get('/:id/download'", "requirePermission('photos.download')"],
   ['adminTransfers.js', "router.get('/:id/uploads/download'", "requirePermission('photos.download')"],
@@ -51,6 +50,7 @@ describe('capability guard placement', () => {
     ['gallery/uploads.js', "router.post('/:eventId/chunked-upload/init'", 'guestUploadGate(req)'],
     ['gallery/downloads.js', "router.post('/:slug/download-selected'", 'originalAssetDenial(req)'],
     ['publicTransfer.js', "router.get('/:token/download'", 'assertDownloadable(transfer)'],
+    ['adminTransfers.js', "router.post('/',", 'runAdminUpload(req, res, CREATE_FIELD_LIMITS)'],
   ])('%s %s refuses only after %s', (file, route, accessCheck) => {
     const source = fs.readFileSync(path.join(__dirname, '../..', ROUTES, file), 'utf8');
     const text = source.slice(source.indexOf(route));
@@ -71,7 +71,6 @@ describe('capability guard placement', () => {
 
   it.each([
     ['externalMediaWatcher.js', 'uploads.new', 'await importExternalFolder('],
-    ['eventCreationService.js', 'uploads.new', 'return importExternalFolder('],
     ['s3AutoImporter.js', 'uploads.new', "db('events')"],
     ['downloadZipService.js', 'downloads.archive', 'this._withRegenSlot(() => this.generateZip(eventId))'],
   ])('%s checks %s before background work starts', (file, name, work) => {

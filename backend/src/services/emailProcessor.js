@@ -1429,14 +1429,20 @@ const processorStatus = {
 // refusal reaches System Health instead of a generic "check the settings".
 let transporterError = null;
 
-// nodemailer's connection-level codes and the SMTP "try again later" answers.
-// A 5xx, a refused address or a broken template is about the mail itself and
-// keeps going through the retry cap.
-const MAIL_OUTAGE_CODES = new Set([
-  'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'EAI_AGAIN',
-  'ENOTFOUND', 'EWEBHOOK_UNAVAILABLE',
+// What proves a send never reached the server. nodemailer reports a connection
+// lost after the body went out as ETIMEDOUT, ESOCKET or ECONNECTION with command
+// CONN, the same codes as a dead server, so the code alone must not decide: a
+// retry that skips the attempt cap could then deliver one mail every 5 minutes.
+// syscall and timeoutType tell the two apart. The shapes come from running real
+// nodemailer against a failing server at each stage.
+const MAIL_NEVER_CONNECTED_SYSCALLS = new Set(['connect', 'getaddrinfo']);
+const MAIL_NEVER_GREETED_TIMEOUTS = new Set(['CONNECTION_TIMEOUT', 'GREETING_TIMEOUT']);
+// Set by emailWebhookTransport only when nothing can have been delivered.
+const MAIL_UNDELIVERED_CODES = new Set([
+  'EDNS', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'EWEBHOOK_UNAVAILABLE',
 ]);
-const MAIL_OUTAGE_RESPONSE_CODES = new Set([421, 450, 451]);
+// A connection lost at an unknown stage. The mail may have arrived.
+const MAIL_UNCERTAIN_CODES = new Set(['ETIMEDOUT', 'ESOCKET', 'ECONNECTION', 'ECONNRESET']);
 const MAIL_OUTAGE_RETRY_MS = 5 * 60 * 1000;
 // Deferred mail is due again every 5 minutes, so a real outage fails more often
 // than this. A longer silence means it ended without a send to prove it, for
@@ -1453,18 +1459,19 @@ function isTemporaryAnswer(error) {
   return error?.responseCode >= 400 && error?.responseCode < 500;
 }
 
-// After DATA the server may already hold the mail, so a retry could deliver it
-// twice. A 4xx at MAIL FROM says the server is not taking mail at all.
+// A 4xx at MAIL FROM says the server is not taking mail at all.
 function isMailOutage(error) {
-  if (error?.command === 'DATA') return false;
   if (error?.code === 'EENVELOPE') return error.command === 'MAIL FROM' && isTemporaryAnswer(error);
-  return MAIL_OUTAGE_CODES.has(error?.code) || MAIL_OUTAGE_RESPONSE_CODES.has(error?.responseCode);
+  return MAIL_UNDELIVERED_CODES.has(error?.code)
+    || MAIL_NEVER_CONNECTED_SYSCALLS.has(error?.syscall)
+    || MAIL_NEVER_GREETED_TIMEOUTS.has(error?.timeoutType);
 }
 
-// A 4xx for this recipient (greylisting, a full mailbox) spends an attempt, but
-// waits first: three tries a minute apart would all land inside a greylist.
-function isRecipientDeferral(error) {
-  return error?.code === 'EENVELOPE' && error.command === 'RCPT TO' && isTemporaryAnswer(error);
+// These spend an attempt, but wait first. Three tries a minute apart would all
+// land inside a greylist, and an uncertain send must stay capped at three.
+function waitsBeforeRetry(error) {
+  return (error?.code === 'EENVELOPE' && error.command === 'RCPT TO' && isTemporaryAnswer(error))
+    || MAIL_UNCERTAIN_CODES.has(error?.code);
 }
 
 function currentMailOutage(now = Date.now()) {
@@ -1744,6 +1751,7 @@ async function processEmailQueueInternal({ ignoreSchedule = false, limit = 10, o
         }
         if (isMailOutage(error) && Date.now() - mailOutage.since < MAIL_OUTAGE_MAX_MS) {
           result.failed -= 1;
+          result.deferred = (result.deferred || 0) + 1;
           logger.warn(`Mail server unavailable, email ${email.id} deferred: ${error.message}`);
           try {
             await db('email_queue').where({ id: email.id, status: email.status }).update({
@@ -1767,7 +1775,7 @@ async function processEmailQueueInternal({ ignoreSchedule = false, limit = 10, o
             .update({
               retry_count: email.retry_count + 1,
               error_message: error.message,
-              ...(isRecipientDeferral(error) ? { scheduled_at: queueTimestamp(Date.now() + MAIL_OUTAGE_RETRY_MS) } : {}),
+              ...(waitsBeforeRetry(error) ? { scheduled_at: queueTimestamp(Date.now() + MAIL_OUTAGE_RETRY_MS) } : {}),
             });
         } catch (updateError) {
           logger.error(`Failed to update email retry count for ${email.id}:`, updateError);

@@ -14,7 +14,7 @@
  */
 
 const express = require('express');
-const { requireCapability } = require('../middleware/requireCapability');
+const { requireCapability, refuseCapability } = require('../middleware/requireCapability');
 const { body, param } = require('express-validator');
 const multer = require('multer');
 const path = require('path');
@@ -237,10 +237,16 @@ router.get('/', requirePermission('events.view'), handleAsync(async (req, res) =
 // the recipients the download link.
 router.post('/',
   requirePermission('events.edit'),
-  requireCapability('uploads.new'),
   handleAsync(withUploadAdmission(async (req, res) => {
     const up = await runAdminUpload(req, res, CREATE_FIELD_LIMITS);
     if (!up.ok) return; // 4xx already sent
+    // Only with files: sending gallery photos or a file request stores nothing.
+    if (req.files?.length && refuseCapability(req, res, 'uploads.new')) {
+      for (const file of req.files) {
+        try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); } catch (_) { /* noop */ }
+      }
+      return;
+    }
 
     const b = req.body || {};
     const kind = transferService.normalizeKind(b.kind);

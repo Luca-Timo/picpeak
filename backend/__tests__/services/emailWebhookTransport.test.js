@@ -325,13 +325,13 @@ describe('telling an outage from a failure about the mail', () => {
     expect(error.code).toBeUndefined();
   });
 
-  it.each([[503], [502], [429]])('marks a %i answer as the receiver being unavailable', async (status) => {
+  it.each([[503], [429]])('marks a %i answer as the receiver being unavailable', async (status) => {
     axios.post.mockResolvedValue({ status, data: streamOf('') });
     await expect(transport.send(MAIL)).rejects.toMatchObject({ code: 'EWEBHOOK_UNAVAILABLE' });
   });
 
-  it('leaves a 400 answer as a failure about this mail', async () => {
-    axios.post.mockResolvedValue({ status: 400, data: streamOf('') });
+  it.each([[400], [500], [502], [504]])('leaves a %i answer to the attempt cap', async (status) => {
+    axios.post.mockResolvedValue({ status, data: streamOf('') });
     const error = await transport.send(MAIL).catch((e) => e);
     expect(error.code).toBeUndefined();
   });

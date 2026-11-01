@@ -729,7 +729,7 @@
       },
       "available": "Available",
       "unavailable": "Paused",
-      "banner": "Some features are limited because a dependency has a problem.",
+      "banner": "Some features are paused.",
       "bannerLink": "View status"
     },
     "backupAuthentication": {
@@ -5646,6 +5646,7 @@
     "testEmailAddressLabel": "Test Email Address",
     "sendTestEmailButton": "Send Test Email",
     "flushQueue": {
+      "deferred": "The mail server is unreachable. Queued mail stays queued and is retried automatically.",
       "title": "Send queued emails now",
       "help": "Immediately send every pending email, ignoring the business-hours schedule. Useful for draining the queue before maintenance or updates.",
       "button": "Send queued emails now",

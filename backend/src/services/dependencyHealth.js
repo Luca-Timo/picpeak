@@ -220,6 +220,10 @@ class DependencyHealth {
   }
 
   async runProbes(options) {
+    // Beside the probes, so a stored force-off holds from the first pass.
+    const settings = withTimeout(this.refreshSettings()).catch((error) => {
+      logger.warn('Degradation settings not refreshed', { error: error.message });
+    });
     await Promise.all(Object.entries(this.probes).map(async ([name, probe]) => {
       // A timeout abandons a probe but cannot cancel it. On a hung mount each new
       // one would pin another libuv thread, so it waits for the last to return.
@@ -240,9 +244,7 @@ class DependencyHealth {
       else this.dependencies.delete(name);
     }));
     // Bounded: a hung database must not freeze every other dependency's state.
-    await withTimeout(this.refreshSettings()).catch((error) => {
-      logger.warn('Degradation settings not refreshed', { error: error.message });
-    });
+    await settings;
   }
 
   /** One pass at a time: a slow probe must not pile up on the next tick. */

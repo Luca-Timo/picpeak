@@ -729,7 +729,7 @@
       },
       "available": "Verfügbar",
       "unavailable": "Pausiert",
-      "banner": "Einige Funktionen sind eingeschränkt, weil eine Abhängigkeit ein Problem hat.",
+      "banner": "Einige Funktionen sind pausiert.",
       "bannerLink": "Status ansehen"
     },
     "backupAuthentication": {
@@ -6187,6 +6187,7 @@
     "testEmailAddressLabel": "Test-E-Mail-Adresse",
     "sendTestEmailButton": "Test-E-Mail senden",
     "flushQueue": {
+      "deferred": "Der Mailserver ist nicht erreichbar. Mails bleiben in der Warteschlange und werden automatisch erneut versucht.",
       "title": "Wartende E-Mails jetzt senden",
       "help": "Sendet sofort alle ausstehenden E-Mails, unabhängig von den Geschäftszeiten. Nützlich, um die Warteschlange vor Wartungsarbeiten oder Updates zu leeren.",
       "button": "Wartende E-Mails jetzt senden",

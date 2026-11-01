@@ -14,6 +14,16 @@ process.env.STORAGE_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'picpeak-mail-o
 
 const { bootCrmDb, seedMinimal } = require('./helpers/crmDb');
 
+// Recorded from real nodemailer 10 against a local server failing at each stage.
+const REAL = {
+  refused: { code: 'ESOCKET', command: 'CONN', syscall: 'connect' },
+  dns: { code: 'EDNS', command: 'CONN', syscall: 'getaddrinfo' },
+  noGreeting: { code: 'ETIMEDOUT', command: 'CONN', timeoutType: 'GREETING_TIMEOUT' },
+  stalledAfterBody: { code: 'ETIMEDOUT', command: 'CONN', timeoutType: 'SOCKET_TIMEOUT' },
+  droppedAfterBody: { code: 'ECONNECTION', command: 'CONN' },
+  resetAfterBody: { code: 'ESOCKET', command: 'CONN', syscall: 'read' },
+};
+
 describe('mail server outage', () => {
   let db; let cleanup; let transport; let enabled; let send;
 
@@ -53,7 +63,7 @@ describe('mail server outage', () => {
 
   it('defers a mail on a connection failure without spending an attempt', async () => {
     const id = await queueMail();
-    send.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+    send.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), REAL.refused));
     await run();
     const deferred = await row(id);
     expect(deferred).toMatchObject({ status: 'pending', retry_count: 0 });
@@ -64,7 +74,7 @@ describe('mail server outage', () => {
 
   it('skips a deferred mail until its time comes, then sends it', async () => {
     const id = await queueMail();
-    send.mockRejectedValueOnce(Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }));
+    send.mockRejectedValueOnce(Object.assign(new Error('Greeting never received'), REAL.noGreeting));
     await run();
     const { queueTimestamp, toMillis } = require('../../src/utils/queueTimestamps');
     expect(toMillis((await row(id)).scheduled_at)).toBeGreaterThan(Date.now() + 4 * 60 * 1000);
@@ -85,7 +95,7 @@ describe('mail server outage', () => {
   it('stops the pass instead of hitting a dead server once per mail', async () => {
     await queueMail();
     await queueMail();
-    send.mockRejectedValue(Object.assign(new Error('greeting never received'), { code: 'ETIMEDOUT' }));
+    send.mockRejectedValue(Object.assign(new Error('Greeting never received'), REAL.noGreeting));
     await run();
     expect(send).toHaveBeenCalledTimes(1);
   });
@@ -99,7 +109,7 @@ describe('mail server outage', () => {
   });
 
   const status = () => require('../../src/services/emailProcessor').getQueueProcessorStatus();
-  const refused = () => Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+  const refused = () => Object.assign(new Error('connect ECONNREFUSED'), REAL.refused);
 
   async function endOutage() {
     send.mockResolvedValue({ html: '<p>ok</p>' });
@@ -192,13 +202,32 @@ describe('mail server outage', () => {
   });
 
   it.each([
-    ['a failure after DATA', { code: 'ETIMEDOUT', command: 'DATA' }],
+    ['a stall after the body went out', REAL.stalledAfterBody],
+    ['a drop after the body went out', REAL.droppedAfterBody],
+    ['a reset after the body went out', REAL.resetAfterBody],
     ['a recipient the server refuses for good', { code: 'EENVELOPE', responseCode: 550, command: 'RCPT TO' }],
-  ])('spends an attempt on %s', async (_label, shape) => {
+  ])('spends an attempt on %s, so it can never repeat past the cap', async (_label, shape) => {
     await endOutage();
     const id = await queueMail();
     send.mockRejectedValue(Object.assign(new Error('try later'), shape));
     await run();
     expect((await row(id)).retry_count).toBe(1);
+    expect(status().outage).toBeNull();
+  });
+
+  it('waits before retrying a send that may have arrived', async () => {
+    await endOutage();
+    const id = await queueMail();
+    send.mockRejectedValue(Object.assign(new Error('Timeout'), REAL.stalledAfterBody));
+    await run();
+    const { toMillis } = require('../../src/utils/queueTimestamps');
+    expect(toMillis((await row(id)).scheduled_at)).toBeGreaterThan(Date.now() + 4 * 60 * 1000);
+  });
+
+  it('reports a deferred mail apart from sent and failed', async () => {
+    await endOutage();
+    await queueMail();
+    send.mockRejectedValue(refused());
+    expect(await run()).toMatchObject({ sent: 0, failed: 0, deferred: 1 });
   });
 });
