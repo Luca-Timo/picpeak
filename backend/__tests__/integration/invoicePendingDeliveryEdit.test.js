@@ -196,6 +196,14 @@ test('a delivery invoice takes no payment until it is marked delivered', async (
   expect(Number(after.paid_amount_minor)).toBe(0);
 });
 
+test('reissuing an unpaid delivery invoice points to Edit', async () => {
+  const invoiceService = require('../../src/services/invoiceService');
+  const invoiceId = await makeInvoice('pending_delivery');
+
+  await expect(invoiceService.reissueInvoice(invoiceId, adminId))
+    .rejects.toMatchObject({ statusCode: 409, code: 'USE_EDIT_INSTEAD' });
+});
+
 test('an older delivery invoice with a payment on it still cancels through Storno', async () => {
   const invoiceService = require('../../src/services/invoiceService');
   const invoiceId = await makeInvoice('pending_delivery');

@@ -565,7 +565,7 @@ async function reissueInvoice(id, adminId) {
   if (original.kind === 'storno') {
     throw new AppError('Cannot reissue a Storno document', 409, 'IS_STORNO');
   }
-  if (original.status === 'scheduled') {
+  if (isInvoiceEditable(original)) {
     throw new AppError(
       'This invoice has not been sent yet — use Edit instead of Cancel & reissue.',
       409,
