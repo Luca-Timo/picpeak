@@ -47,7 +47,8 @@ const { formatMinor, formatDate } = pdfService._internal;
 
 // Rows we WANT to surface in the tax report. `cancelled` is included
 // for audit visibility; the totals math filters it out separately.
-const REPORTABLE_STATUSES = ['sent', 'paid', 'overdue', 'pending_delivery', 'cancelled'];
+// An invoice awaiting delivery is not issued yet, so it reports once it is sent.
+const REPORTABLE_STATUSES = ['sent', 'paid', 'overdue', 'cancelled'];
 
 // D.2 — `ensureInt` consolidated into utils/numericHelpers.
 const { ensureInt } = require('../utils/numericHelpers');

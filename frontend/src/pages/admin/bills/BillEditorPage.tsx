@@ -164,6 +164,7 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
     queryFn: () => billsService.get(parseInt(id!, 10)),
     enabled: !!isEdit,
   });
+  const awaitingDelivery = existing?.invoice.status === 'pending_delivery';
 
   // Dirty tracking: the payload the fields build right after a saved
   // invoice is loaded into them is the snapshot to compare against.
@@ -607,7 +608,19 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
       <Card>
         <h3 className="font-semibold mb-2">{t('bills.section.details', 'Details')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <LocalizedDateInput label={t('bills.field.issueDate', 'Issue date') as string} value={issueDate} onChange={setIssueDate} />
+          <div>
+            <LocalizedDateInput
+              label={t('bills.field.issueDate', 'Issue date') as string}
+              value={issueDate}
+              onChange={setIssueDate}
+              disabled={awaitingDelivery}
+            />
+            {awaitingDelivery && (
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                {t('bills.field.issueDateOnDelivery', 'Set when you mark this invoice delivered. The due date then counts from it, unless you changed it.')}
+              </p>
+            )}
+          </div>
           <div>
             <LocalizedDateInput
               label={t('bills.field.dueDate', 'Due date') as string}
@@ -628,7 +641,7 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
             </label>
           </div>
           {/* A delivery invoice goes out with "Mark delivered & send", not by date. */}
-          {existing?.invoice.status !== 'pending_delivery' && (
+          {!awaitingDelivery && (
           <div>
             <label className="block text-sm font-medium mb-1">{t('bills.field.scheduledSendAt', 'Scheduled send (optional)')}</label>
             {/* Localized date + time (honours general_date_format +
@@ -802,14 +815,14 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
             a multi-row plan and clicks Save, the backend spawns one
             invoice per row via spawnInstallmentInvoices (commit #4)
             and returns the array of new ids. */}
-        <div className="mt-4 pt-4 border-t border-line">
+        {!isEdit && <div className="mt-4 pt-4 border-t border-line">
           <InstallmentsPanel
             value={installments}
             onChange={setInstallments}
             onValidityChange={setInstallmentsValid}
             eventDate={eventDate || null}
           />
-        </div>
+        </div>}
       </Card>
 
       <Card>

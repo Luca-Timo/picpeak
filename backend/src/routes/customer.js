@@ -583,8 +583,7 @@ router.get('/invoices', customerAuth, async (req, res) => {
       .leftJoin('invoices as cancels_inv', 'invoices.cancels_invoice_id', 'cancels_inv.id')
       .leftJoin('invoices as cancellation_storno', 'invoices.cancellation_storno_id', 'cancellation_storno.id')
       .where({ 'invoices.customer_account_id': req.customer.id })
-      .whereNot('invoices.status', 'scheduled')
-      .whereNot('invoices.status', 'skipped')
+      .whereNotIn('invoices.status', ['scheduled', 'pending_delivery', 'skipped'])
       .andWhere(function () {
         this.whereNot('invoices.status', 'cancelled').orWhereNotNull('invoices.cancellation_storno_id');
       })
@@ -692,9 +691,9 @@ router.get('/invoices/:id/pdf', customerAuth, async (req, res) => {
       .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
       .first();
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
-    if (['scheduled', 'cancelled', 'skipped'].includes(invoice.status)) {
-      // Don't expose scheduled drafts, cancelled docs, or
-      // skipped empty-monthly placeholders.
+    if (['scheduled', 'pending_delivery', 'cancelled', 'skipped'].includes(invoice.status)) {
+      // Don't expose scheduled drafts, invoices awaiting delivery,
+      // cancelled docs, or skipped empty-monthly placeholders.
       return res.status(404).json({ error: 'Invoice not found' });
     }
     const invoiceService = require('../services/invoiceService');

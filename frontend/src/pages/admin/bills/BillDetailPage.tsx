@@ -128,7 +128,7 @@ export const BillDetailPage: React.FC = () => {
 
   const confirm = useConfirm();
   const canManage = usePermission('bills.manage');
-  // A scheduled invoice's page is its editor; the form reports unsaved edits.
+  // An unissued invoice's page is its editor; the form reports unsaved edits.
   const formRef = useRef<BillFormHandle>(null);
   const [formState, setFormState] = useState<BillFormState>({ dirty: false, busy: false, valid: true, spawnCount: 0 });
   const onFormState = useCallback((next: BillFormState) => setFormState(next), []);
@@ -140,7 +140,7 @@ export const BillDetailPage: React.FC = () => {
   const noMail = !!inv.customer?.noAdminEmails;
   // Not issued yet: the server still takes edits. Issued invoices never
   // change again (§ 14 UStG) — Storno and reissue instead.
-  const editable = canManage && inv.kind !== 'storno' && (inv.status === 'scheduled' || (inv.status === 'pending_delivery' && !Number(inv.paidAmountMinor)));
+  const editable = canManage && inv.kind !== 'storno' && (inv.status === 'scheduled' || inv.status === 'pending_delivery') && !Number(inv.paidAmountMinor);
   const dirty = editable && formState.dirty;
 
   const handlePreview = async () => {
@@ -301,6 +301,8 @@ export const BillDetailPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['invoice', id] });
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'Release failed');
+      // A failed send leaves the invoice released for the scheduler to retry.
+      qc.invalidateQueries({ queryKey: ['invoice', id] });
     }
   };
   const submitPayment = async () => {
@@ -363,7 +365,7 @@ export const BillDetailPage: React.FC = () => {
   const menu: ActionMenuItem[] = canManage ? [
     // Resend only re-mails an issued invoice — nothing to do when the customer takes no mail.
     ...(canSend && !noMail && inv.status !== 'scheduled' ? [{ key: 'resend', icon: <Send />, label: t('bills.resend', 'Resend'), disabled: sending, onSelect: () => { void handleSend(); } }] : []),
-    ...(canPay && primary !== 'pay' ? [{ key: 'pay', icon: <CheckCircle />, label: t('bills.markPaid', 'Mark paid'), onSelect: openPay }] : []),
+    ...(canPay && primary !== 'pay' ? [{ key: 'pay', icon: <CheckCircle />, label: t('bills.markPaid', 'Mark paid'), disabled: dirty, onSelect: openPay }] : []),
     ...(inv.kind !== 'storno' && (inv.status === 'sent' || inv.status === 'overdue') && inv.reminderLevel < 2
       ? [{ key: 'reminder', icon: <BellRing />, label: noMail ? t('bills.recordReminder', 'Record reminder') : t('bills.sendReminder', 'Send reminder'), onSelect: () => { void handleReminder(); } }] : []),
     // Cancel & reissue: the legally clean alternative to editing an issued

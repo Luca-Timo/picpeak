@@ -28,8 +28,9 @@ const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'revenue', 'expense'];
 const VAT_DIRECTIONS = ['output', 'input'];
 
 // Statuses we book. Mirrors taxReportService: cancelled originals are excluded
-// (the storno reissue, a negative-total row, carries the reversal).
-const REVENUE_STATUSES = ['sent', 'paid', 'overdue', 'pending_delivery'];
+// (the storno reissue, a negative-total row, carries the reversal), and an
+// invoice awaiting delivery is not issued yet, so it books once it is sent.
+const REVENUE_STATUSES = ['sent', 'paid', 'overdue'];
 
 // ── helpers ──────────────────────────────────────────────────────────
 function rateKey(rate) {

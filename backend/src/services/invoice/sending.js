@@ -13,7 +13,7 @@ const pdfService = require('../pdfService');
 const emailProcessor = require('../emailProcessor');
 const { ensureInt, ensureNumber } = require('../../utils/numericHelpers');
 const { extendedLineColumns } = require('../../utils/lineItemTotals');
-const { computeDueDate, ensureCustomerCanBill, formatMajor, getHierarchyHelpers, nextInvoiceNumber, resolveNetDaysForRow } = require('./helpers');
+const { computeDueDate, ensureCustomerCanBill, formatMajor, getHierarchyHelpers, nextInvoiceNumber, resolveNetDaysForRow, UNISSUED_INVOICE_STATUSES } = require('./helpers');
 const { getInvoiceById } = require('./queries');
 const { createInvoice } = require('./create');
 const { buildInvoiceRenderContext } = require('./render');
@@ -308,7 +308,7 @@ async function createStorno(originalId, adminId, trx = db) {
   if (original.kind === 'storno') {
     throw new AppError('Cannot Storno a Storno', 409, 'IS_STORNO');
   }
-  if (original.status === 'scheduled') {
+  if (UNISSUED_INVOICE_STATUSES.has(original.status)) {
     throw new AppError(
       'This invoice has not been sent yet — Storno only applies to issued documents.',
       409,
@@ -729,7 +729,7 @@ async function releaseForDelivery(id, adminId) {
  * Cancel an invoice. The behaviour depends on whether the document
  * was ever issued:
  *
- *   - `scheduled` (draft, no PDF emitted): soft cancel — status
+ *   - `scheduled` / `pending_delivery` (not issued, no PDF emitted): soft cancel — status
  *     flips to 'cancelled', nothing leaves the system. No Storno is
  *     generated because no document exists for the customer to
  *     reverse.
@@ -763,7 +763,7 @@ async function cancelInvoice(id, adminId) {
   }
 
   // Draft path: nothing was issued, soft cancel and we're done.
-  if (invoice.status === 'scheduled') {
+  if (UNISSUED_INVOICE_STATUSES.has(invoice.status)) {
     await auditedUpdate(db, 'invoices', { id }, {
       status: 'cancelled', updated_at: new Date(),
     }, { actor: adminId, source: 'invoice.cancel' });

@@ -2,14 +2,15 @@
  * Editing an invoice that is awaiting delivery.
  *
  * An `after_delivery` installment sits in `pending_delivery` until the admin
- * clicks "Mark delivered & send". Nothing has left the system in that state —
- * no PDF is rendered and the scheduler only picks up `scheduled` rows — so a
- * wrong date on it has to stay fixable. The PUT gate used to accept
- * `scheduled` only, which locked those rows with no way out short of cancel +
- * reissue. This pins both halves of the gate: pre-send rows save, issued rows
- * stay locked, and an edit never releases the invoice by accident.
+ * clicks "Mark delivered & send". The customer and the books do not see it
+ * in that state and the scheduler only picks up `scheduled` rows, so it has
+ * to stay fixable without a Storno. This pins the gate (pre-send rows save,
+ * issued rows stay locked, an edit never releases the invoice), the
+ * visibility that makes it safe, and what marking delivered does to the dates.
  */
 
+const express = require('express');
+const cookieParser = require('cookie-parser');
 const request = require('supertest');
 const { toDateOnly } = require('../../src/utils/dateOnly');
 const {
@@ -24,6 +25,7 @@ let tmpDir;
 let customerId;
 let token;
 let invoiceApp;
+let adminId;
 
 const prevCwd = process.cwd();
 const auth = { get Authorization() { return `Bearer ${token}`; } };
@@ -51,7 +53,6 @@ beforeAll(async () => {
   ({ db, cleanup, tmpDir } = await bootCrmDb());
   process.chdir(tmpDir);
   db.client.pool.acquireTimeoutMillis = 2000;
-  let adminId;
   ({ adminId, customerId } = await seedMinimal(db));
   await assignAdminRole(db, adminId, 'super_admin');
   token = mintAdminToken(adminId);
@@ -104,13 +105,14 @@ test('a pending_delivery invoice can still be edited and stays pending', async (
   expect(after.scheduled_send_at).toBeFalsy();
 });
 
-test('a delivery invoice cannot pick up a send date', async () => {
+test('a delivery invoice refuses a send date instead of dropping it', async () => {
   const invoiceId = await makeInvoice('pending_delivery');
 
   const saved = await request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`).set(auth).send({
     scheduledSendAt: '2026-12-01T09:00',
   });
-  expect(saved.status).toBe(200);
+  expect(saved.status).toBe(409);
+  expect(saved.body.code).toBe('INVOICE_SENDS_ON_DELIVERY');
 
   const after = await db('invoices').where({ id: invoiceId }).first();
   expect(after.status).toBe('pending_delivery');
@@ -163,6 +165,87 @@ test('marking delivered keeps a due date an admin set by hand', async () => {
 
   const after = await db('invoices').where({ id: invoiceId }).first();
   expect(toDateOnly(after.due_date)).toBe('2030-06-30');
+});
+
+test('a scheduled invoice with a payment on it stays locked too', async () => {
+  const invoiceId = await makeInvoice('scheduled');
+  await db('invoices').where({ id: invoiceId }).update({ paid_amount_minor: 50000 });
+
+  const saved = await request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`).set(auth).send({ skontoDisabled: true });
+  expect(saved.status).toBe(409);
+  expect(saved.body.code).toBe('INVOICE_LOCKED');
+});
+
+test('a plan cannot be reshaped over a payment', async () => {
+  const invoiceService = require('../../src/services/invoiceService');
+  const invoiceId = await makeInvoice('pending_delivery');
+  await db('invoices').where({ id: invoiceId }).update({ paid_amount_minor: 50000, installment_total: 2 });
+  const { deal_uuid: dealUuid } = await db('invoices').where({ id: invoiceId }).first();
+
+  await expect(db.transaction((trx) => invoiceService.updateInstallmentPlan({
+    trx,
+    dealUuid,
+    installments: [{ label: 'Full', percent: 100, trigger: 'after_delivery', offset_days: 0 }],
+    adminId,
+  }))).rejects.toMatchObject({ code: 'INVOICE_LOCKED' });
+});
+
+test('cancelling a delivery invoice takes no Storno, since nothing was issued', async () => {
+  const invoiceService = require('../../src/services/invoiceService');
+  const invoiceId = await makeInvoice('pending_delivery');
+  const before = await db('invoices').where({ kind: 'storno' }).count('id as c').first();
+
+  const result = await invoiceService.cancelInvoice(invoiceId, adminId);
+
+  expect(result).toEqual({ cancelled: true, stornoId: null });
+  const after = await db('invoices').where({ kind: 'storno' }).count('id as c').first();
+  expect(Number(after.c)).toBe(Number(before.c));
+});
+
+test('the customer sees a delivery invoice only once it is sent', async () => {
+  const jwt = require('jsonwebtoken');
+  const customerApp = express();
+  customerApp.use(express.json());
+  customerApp.use(cookieParser());
+  customerApp.use('/api/customer', require('../../src/routes/customer'));
+  await db('customer_accounts').where({ id: customerId }).update({ feature_bills: true });
+  const billsSwitch = { setting_key: 'customer_feature_bills_enabled' };
+  const switched = await db('app_settings').where(billsSwitch).update({ setting_value: 'true' });
+  if (!switched) await db('app_settings').insert({ ...billsSwitch, setting_value: 'true', setting_type: 'customer_surface' });
+  const session = jwt.sign(
+    { type: 'customer', customerId, iat: Math.floor(Date.now() / 1000) - 5 },
+    process.env.JWT_SECRET,
+    { algorithm: 'HS256', issuer: 'picpeak-auth', expiresIn: '1h' },
+  );
+  const asCustomer = (req) => req.set('Cookie', `customer_token=${session}`);
+  const invoiceId = await makeInvoice('pending_delivery');
+
+  const listed = async () => {
+    const res = await asCustomer(request(customerApp).get('/api/customer/invoices'));
+    expect(res.status).toBe(200);
+    return res.body;
+  };
+  expect(JSON.stringify(await listed())).not.toContain(`"id":${invoiceId},`);
+  const pdf = await asCustomer(request(customerApp).get(`/api/customer/invoices/${invoiceId}/pdf`));
+  expect(pdf.status).toBe(404);
+
+  await db('invoices').where({ id: invoiceId }).update({ status: 'sent' });
+  expect(JSON.stringify(await listed())).toContain(`"id":${invoiceId},`);
+});
+
+test('the ledger books a delivery invoice only once it is sent', async () => {
+  const ledgerService = require('../../src/services/ledgerService');
+  const invoiceId = await makeInvoice('pending_delivery');
+  const row = await db('invoices').where({ id: invoiceId }).first();
+  const day = toDateOnly(row.issue_date);
+  const posted = async () => {
+    const postings = await ledgerService.buildPostings({ from: day, to: day, currency: 'CHF' });
+    return JSON.stringify(postings).includes(row.invoice_number);
+  };
+
+  expect(await posted()).toBe(false);
+  await db('invoices').where({ id: invoiceId }).update({ status: 'sent' });
+  expect(await posted()).toBe(true);
 });
 
 test('an issued invoice stays locked', async () => {

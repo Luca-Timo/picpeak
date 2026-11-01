@@ -39,7 +39,8 @@ const expenseService = require('../services/expenseService');
 const { requireFeatureFlag, isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { db } = require('../database/db');
 const { canLinkCrmToEvent, ownsProject } = require('../middleware/ownership');
-const { ensureEventMatchesCustomer, EDITABLE_INSTALLMENT_STATUSES } = require('../services/invoice/helpers');
+const { AppError } = require('../utils/errors');
+const { ensureEventMatchesCustomer, UNISSUED_INVOICE_STATUSES, isInvoiceEditable } = require('../services/invoice/helpers');
 const { hasColumnCached } = require('../utils/schemaCache');
 const { toDateOnly } = require('../utils/dateOnly');
 
@@ -745,22 +746,32 @@ router.put(
     // trail — the correct workflow is to cancel the original +
     // issue a new one. Only invoices that have not left the system
     // remain editable: `scheduled`, and `pending_delivery`, which has
-    // no PDF yet and waits for "Mark delivered & send".
-    if (!EDITABLE_INSTALLMENT_STATUSES.has(existing.status)) {
+    // is hidden from the customer and the books until "Mark delivered & send".
+    if (!UNISSUED_INVOICE_STATUSES.has(existing.status)) {
       return res.status(409).json({
         error: `Cannot edit invoice with status '${existing.status}'. Sent invoices are locked — cancel and reissue if changes are needed.`,
         code: 'INVOICE_LOCKED',
       });
     }
-    // A delivery invoice can take a payment before it goes out; its amounts
-    // are then settled against, so correct it through Storno like a sent one.
-    if (existing.status === 'pending_delivery' && Number(existing.paid_amount_minor) > 0) {
+    if (!isInvoiceEditable(existing)) {
       return res.status(409).json({
         error: 'This invoice already has a payment recorded. Cancel and reissue it if changes are needed.',
         code: 'INVOICE_LOCKED',
       });
     }
     const payload = mapPayloadToService(req.body);
+    // A delivery invoice goes out with "Mark delivered & send", never by date.
+    if (existing.status === 'pending_delivery' && (payload.scheduledSendAt
+        || (payload.installmentTrigger && payload.installmentTrigger !== existing.installment_trigger))) {
+      return res.status(409).json({
+        error: 'An invoice awaiting delivery is sent by marking it delivered. It cannot take a send date or another trigger.',
+        code: 'INVOICE_SENDS_ON_DELIVERY',
+      });
+    }
+    // The checks above are reads; this makes the write lose to a send or a
+    // payment that landed since, instead of changing what was just issued.
+    const unchanged = { id, status: existing.status, paid_amount_minor: existing.paid_amount_minor };
+    const lockedError = () => new AppError('This invoice was sent or paid in the meantime. Reload it.', 409, 'INVOICE_LOCKED');
 
     const history = { actor: req.admin.id, source: 'invoice.update' };
     // Configured lines carry an agreed specification and, for gallery items,
@@ -822,8 +833,6 @@ router.put(
     for (const [api, col] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(payload, api)) updates[col] = payload[api];
     }
-    // A delivery invoice is sent by "Mark delivered & send", never by date.
-    if (existing.status === 'pending_delivery') delete updates.scheduled_send_at;
     // Payment-term selection: re-snapshot the template when the admin
     // changes it. Mirrors createInvoice — once the column is set the
     // PDF renderer prefers it over the source-quote fallback.
@@ -940,15 +949,15 @@ router.put(
       const quoteService = require('../services/quoteService');
       const { validateLineItemHierarchy, insertLineItemsHierarchical } = quoteService._internal;
       await db.transaction(async (trx) => {
+        if (!(await accountingHistory.auditedUpdate(trx, 'invoices', unchanged, updates, history))) throw lockedError();
         await accountingHistory.auditedDelete(trx, 'invoice_line_items', { invoice_id: id }, history);
         if (items.length > 0) {
           validateLineItemHierarchy(items);
           await insertLineItemsHierarchical(trx, 'invoice_line_items', 'invoice_id', id, items, history);
         }
-        await accountingHistory.auditedUpdate(trx, 'invoices', { id }, updates, history);
       });
-    } else {
-      await accountingHistory.auditedUpdate(db, 'invoices', { id }, updates, history);
+    } else if (!(await accountingHistory.auditedUpdate(db, 'invoices', unchanged, updates, history))) {
+      throw lockedError();
     }
 
     const data = await invoiceService.getInvoiceById(id);
