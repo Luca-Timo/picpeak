@@ -17,6 +17,7 @@ const fsp = require('fs/promises');
 const cookieParser = require('cookie-parser');
 const request = require('supertest');
 const { bootCrmDb, seedMinimal, assignAdminRole, mintAdminToken } = require('./helpers/crmDb');
+const { decodeSettingValue } = require('../helpers/settingValue');
 
 const GIB = 1024 ** 3;
 
@@ -223,10 +224,10 @@ describe('outage drills', () => {
       const res = await request(app).put('/api/admin/settings/general').set('Authorization', `Bearer ${token}`)
         .send({ degradation_enforcement: 'observe', degradation_forced_off: ['uploads.new'], degradation_cpu_throttle_percent: 5 });
       expect(res.status).toBeLessThan(500);
-      const rows = await db('app_settings').whereIn('setting_key', ['degradation_forced_off', 'degradation_cpu_throttle_percent']);
-      expect(rows.filter((row) => row.setting_value.includes('uploads.new') || row.setting_key.endsWith('throttle_percent'))).toEqual([]);
-      const stored = await db('app_settings').where({ setting_key: 'degradation_enforcement' }).first();
-      expect(JSON.parse(stored.setting_value)).toBe('enforce');
+      const value = async (key) => decodeSettingValue(db, (await db('app_settings').where({ setting_key: key }).first())?.setting_value);
+      expect(await value('degradation_enforcement')).toBe('enforce');
+      expect(await value('degradation_forced_off')).toEqual([]);
+      expect(await db('app_settings').where({ setting_key: 'degradation_cpu_throttle_percent' }).first()).toBeUndefined();
     });
 
     it('gives no way to force a paused capability on', async () => {
