@@ -150,7 +150,9 @@ const DegradationControls: React.FC<{ status: DegradationStatus }> = ({ status }
           min={20}
           max={95}
           disabled={save.isPending}
-          onSave={(value, onError) => save.mutate({ cpuThrottlePercent: value }, { onError })}
+          onSave={(value, onError) => save.mutate({
+            cpuThresholds: { throttlePercent: value, resumePercent: status.load.resumePercent },
+          }, { onError })}
         />
         <ThresholdInput
           label={t('systemHealth.dependencies.cpuResume')}
@@ -158,7 +160,9 @@ const DegradationControls: React.FC<{ status: DegradationStatus }> = ({ status }
           min={5}
           max={90}
           disabled={save.isPending}
-          onSave={(value, onError) => save.mutate({ cpuResumePercent: value }, { onError })}
+          onSave={(value, onError) => save.mutate({
+            cpuThresholds: { throttlePercent: status.load.throttlePercent, resumePercent: value },
+          }, { onError })}
         />
       </div>
       <Button variant="secondary" size="sm" onClick={() => recheck.mutate()} disabled={recheck.isPending}>

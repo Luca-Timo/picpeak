@@ -7,6 +7,12 @@ const logger = require('../utils/logger');
 const OBSERVE_LOG_INTERVAL_MS = 60_000;
 const RETRY_AFTER_SECONDS = 60;
 const lastObserved = new Map();
+const PAUSED_PAGE = '<!doctype html><html><head><meta charset="utf-8"><title>PicPeak</title>'
+  + '<meta name="viewport" content="width=device-width, initial-scale=1"></head>'
+  + '<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem">'
+  + '<p>This download is paused for a moment. Please go back and try again shortly.</p>'
+  + '<p lang="de">Dieser Download ist kurz pausiert. Bitte gehen Sie zur&uuml;ck und versuchen Sie es gleich noch einmal.</p>'
+  + '</body></html>';
 
 /**
  * Refuses a request while a capability is unavailable.
@@ -49,6 +55,12 @@ function refuseCapability(req, res, name) {
   // all of it before seeing the answer, as the sibling refusals note.
   if (req.method !== 'GET' && !req.readableEnded) res.set('Connection', 'close');
   res.set({ 'Retry-After': String(RETRY_AFTER_SECONDS), 'Cache-Control': 'no-store' });
+  // A plain link, such as a transfer's Download all: the visitor navigated here,
+  // so JSON would be the whole page. Fixed text only, nothing from the request.
+  if (req.method === 'GET' && req.accepts(['json', 'html']) === 'html') {
+    res.status(503).type('html').send(PAUSED_PAGE);
+    return true;
+  }
   res.status(503).json({
     error: 'This feature is temporarily unavailable',
     code: 'CAPABILITY_UNAVAILABLE',

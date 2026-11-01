@@ -46,6 +46,15 @@ describe('breaker transitions', () => {
     expect(health.states().storage).toBe('degraded');
   });
 
+  it('does not let one failure after slow readings take it down', async () => {
+    const probe = jest.fn().mockResolvedValue({ state: 'degraded', detail: 'slow', slow: true });
+    const health = build({ storage: probe });
+    await ticks(health, DOWN_AFTER - 1);
+    probe.mockRejectedValueOnce(new Error('timed out'));
+    await ticks(health, 1);
+    expect(health.states().storage).toBe('healthy');
+  });
+
   it('does not let a bad reading improve the state', async () => {
     const probe = jest.fn().mockRejectedValue(new Error('EIO'));
     const health = build({ storage: probe });

@@ -69,6 +69,18 @@ describe('capability guard placement', () => {
     expect(check).toBeLessThan(route.indexOf('Fallback: on-the-fly streaming'));
   });
 
+  it.each([
+    ['externalMediaWatcher.js', 'uploads.new', 'await importExternalFolder('],
+    ['eventCreationService.js', 'uploads.new', 'return importExternalFolder('],
+    ['s3AutoImporter.js', 'uploads.new', "db('events')"],
+    ['downloadZipService.js', 'downloads.archive', 'this._withRegenSlot(() => this.generateZip(eventId))'],
+  ])('%s checks %s before background work starts', (file, name, work) => {
+    const source = fs.readFileSync(path.join(__dirname, '../../src/services', file), 'utf8');
+    const check = source.indexOf(`evaluate('${name}').paused`);
+    expect(check).toBeGreaterThan(-1);
+    expect(source.indexOf(work, check)).toBeGreaterThan(check);
+  });
+
   it.each(NEVER_GUARDED)('%s %s lets a running upload finish', (file, route) => {
     expect(declaration(file, route)).not.toContain('requireCapability(');
   });

@@ -222,12 +222,12 @@ describe('outage drills', () => {
 
     it('does not let settings.edit write around system.manage', async () => {
       const res = await request(app).put('/api/admin/settings/general').set('Authorization', `Bearer ${token}`)
-        .send({ degradation_enforcement: 'observe', degradation_forced_off: ['uploads.new'], degradation_cpu_throttle_percent: 5 });
+        .send({ degradation_enforcement: 'observe', degradation_forced_off: ['uploads.new'], degradation_cpu_thresholds: { throttlePercent: 5 } });
       expect(res.status).toBeLessThan(500);
       const value = async (key) => decodeSettingValue(db, (await db('app_settings').where({ setting_key: key }).first())?.setting_value);
       expect(await value('degradation_enforcement')).toBe('enforce');
       expect(await value('degradation_forced_off')).toEqual([]);
-      expect(await db('app_settings').where({ setting_key: 'degradation_cpu_throttle_percent' }).first()).toBeUndefined();
+      expect(await db('app_settings').where({ setting_key: 'degradation_cpu_thresholds' }).first()).toBeUndefined();
     });
 
     it('gives no way to force a paused capability on', async () => {

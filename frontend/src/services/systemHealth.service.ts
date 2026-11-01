@@ -133,7 +133,7 @@ export const systemHealthService = {
 
   async updateDegradationSettings(
     settings: Partial<Pick<DegradationStatus, 'enforcement' | 'forcedOff'>>
-      & { cpuThrottlePercent?: number; cpuResumePercent?: number },
+      & { cpuThresholds?: { throttlePercent: number; resumePercent: number } },
   ): Promise<DegradationStatus> {
     const { data } = await api.put('/admin/system-health/status/settings', settings);
     return data;

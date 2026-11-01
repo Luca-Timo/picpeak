@@ -157,6 +157,10 @@ async function runImportInternal(eventId, reason) {
   ) {
     return null;
   }
+  if (require('./dependencyHealth').evaluate('uploads.new').paused) {
+    scheduleImport(eventId);
+    return null;
+  }
   try {
     const result = await importExternalFolder({
       eventId,

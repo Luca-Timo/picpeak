@@ -108,6 +108,47 @@ describe('mail server outage', () => {
     await db('email_queue').del();
   }
 
+  it('waits before retrying a greylisted recipient, and moves on to the next mail', async () => {
+    await endOutage();
+    const id = await queueMail();
+    const next = await queueMail();
+    send.mockRejectedValueOnce(Object.assign(new Error('greylisted'), { code: 'EENVELOPE', responseCode: 450, command: 'RCPT TO' }));
+    send.mockResolvedValue({ html: '<p>ok</p>' });
+    await run();
+    const { toMillis } = require('../../src/utils/queueTimestamps');
+    const row1 = await row(id);
+    expect(row1.retry_count).toBe(1);
+    expect(toMillis(row1.scheduled_at)).toBeGreaterThan(Date.now() + 4 * 60 * 1000);
+    expect((await row(next)).status).toBe('sent');
+  });
+
+  it('treats a server refusing the sender for now as an outage', async () => {
+    await endOutage();
+    const id = await queueMail();
+    send.mockRejectedValue(Object.assign(new Error('try later'), { code: 'EENVELOPE', responseCode: 421, command: 'MAIL FROM' }));
+    await run();
+    expect((await row(id)).retry_count).toBe(0);
+    expect(status().outage).toBeTruthy();
+  });
+
+  it('treats the webhook transport being down as an outage', async () => {
+    await endOutage();
+    const id = await queueMail();
+    send.mockRejectedValue(Object.assign(new Error('email webhook returned 503'), { code: 'EWEBHOOK_UNAVAILABLE' }));
+    await run();
+    expect((await row(id)).retry_count).toBe(0);
+  });
+
+  it('forgets an outage that went quiet, so old time does not count against a new one', async () => {
+    await endOutage();
+    await queueMail();
+    send.mockRejectedValue(refused());
+    await run();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 3 * 60 * 60 * 1000);
+    expect(status().outage).toBeNull();
+    clock.mockRestore();
+  });
+
   it('reports the outage until a mail gets through', async () => {
     await endOutage();
     expect(status().outage).toBeNull();
@@ -129,22 +170,30 @@ describe('mail server outage', () => {
 
   it('goes back to the attempt cap once an outage has lasted three days', async () => {
     await endOutage();
-    await queueMail();
-    send.mockRejectedValue(refused());
-    await run();
-    await db('email_queue').del();
-
     const id = await queueMail();
-    const now = Date.now();
-    const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 4 * 24 * 60 * 60 * 1000);
-    await run();
-    clock.mockRestore();
+    send.mockRejectedValue(refused());
+    const started = Date.now();
+    const clock = jest.spyOn(Date, 'now');
+    try {
+      // Failing every 14 minutes: inside the gap, so one outage. The count runs
+      // from the first failure, 14 minutes in, so step 310 is past three days.
+      const failAt = async (step) => {
+        clock.mockReturnValue(started + step * 14 * 60 * 1000);
+        await db('email_queue').where({ id }).update({ scheduled_at: null });
+        await run();
+      };
+      for (let step = 1; step <= 309; step += 1) await failAt(step);
+      expect(await row(id)).toMatchObject({ status: 'pending', retry_count: 0 });
+      await failAt(310);
+    } finally {
+      clock.mockRestore();
+    }
     expect((await row(id)).retry_count).toBe(1);
   });
 
   it.each([
-    ['one recipient greylisted', { code: 'EENVELOPE', responseCode: 450 }],
     ['a failure after DATA', { code: 'ETIMEDOUT', command: 'DATA' }],
+    ['a recipient the server refuses for good', { code: 'EENVELOPE', responseCode: 550, command: 'RCPT TO' }],
   ])('spends an attempt on %s', async (_label, shape) => {
     await endOutage();
     const id = await queueMail();

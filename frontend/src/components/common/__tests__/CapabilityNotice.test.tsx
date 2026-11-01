@@ -11,7 +11,7 @@ vi.mock('react-toastify', () => ({ toast: { info } }));
 
 import { CapabilityNotice } from '../CapabilityNotice';
 import { publicUploadErrorKey } from '../../../utils/publicUploadErrors';
-import { isTransientUploadRefusal } from '../../../utils/uploadCapacityRetry';
+import { isTransientUploadRefusal, stopsBatchAfterRetries } from '../../../utils/uploadCapacityRetry';
 
 // The real locale files on a real i18next: a mocked lookup hid a key that never resolved.
 const i18n = i18next.createInstance();
@@ -45,6 +45,11 @@ describe('CapabilityNotice', () => {
 describe('a paused upload', () => {
   it('waits and retries in the admin uploader', () => {
     expect(isTransientUploadRefusal('CAPABILITY_UNAVAILABLE')).toBe(true);
+  });
+
+  it('stops the batch once that wait is over, since a pause has no known end', () => {
+    expect(stopsBatchAfterRetries('CAPABILITY_UNAVAILABLE')).toBe(true);
+    expect(stopsBatchAfterRetries('UPLOAD_CONCURRENCY_LIMIT')).toBe(false);
   });
 
   it('has its own message in both shipped languages', () => {

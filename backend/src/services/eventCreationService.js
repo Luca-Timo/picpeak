@@ -821,6 +821,10 @@ async function resolveCreationSource({ source_mode, external_path, external_watc
  */
 function startInitialImport(eventId, externalPath, actor) {
   applicationWork.defer('initial external import', () => {
+    if (require('./dependencyHealth').evaluate('uploads.new').paused) {
+      logger.warn('Initial external import skipped while new uploads are paused', { eventId });
+      return undefined;
+    }
     return importExternalFolder({
       eventId,
       externalPath,

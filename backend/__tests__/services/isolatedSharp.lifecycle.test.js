@@ -109,6 +109,22 @@ describe('image worker queue and pool', () => {
     await expect(Promise.all(jobs)).resolves.toHaveLength(12);
   });
 
+  test('a request someone is waiting on goes ahead of queued background work', async () => {
+    const jobs = [
+      sharp('/fixture/running.jpg').metadata(),
+      sharp('/fixture/background.jpg').metadata(),
+      sharp('/fixture/guest.jpg', { interactive: true }).metadata(),
+    ];
+    const order = [];
+    for (let index = 0; index < jobs.length; index++) {
+      await waitFor(() => children[0]?.jobs.length === index + 1);
+      order.push(JSON.stringify(children[0].jobs[index]).match(/fixture\/(\w+)/)[1]);
+      children[0].answer(metadata);
+    }
+    await Promise.all(jobs);
+    expect(order).toEqual(['running', 'guest', 'background']);
+  });
+
   test('an interactive caller is refused with a 503 only once the queue is full', async () => {
     const running = sharp('/fixture/running.jpg').metadata();
     await waitFor(() => children[0]?.jobs.length === 1);

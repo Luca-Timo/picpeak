@@ -5,9 +5,9 @@ const logger = require('../utils/logger');
 /**
  * Slows background work down when the server is busy, so guests stay fast.
  *
- * Fed by the `load` probe every 15 seconds. Two readings in a row above the
- * limit raise the level one step, two below the resume point lower it one step,
- * and anything between holds. The gap keeps it from flipping on and off, which
+ * Fed by the `load` probe every 15 seconds. When the average of two fresh
+ * readings is above the limit the level rises one step, below the resume point
+ * (with a calm event loop) it falls one step, and anything between holds. The gap keeps it from flipping on and off, which
  * matters because preview generation causes much of the load it reacts to.
  *
  *   level 0  normal

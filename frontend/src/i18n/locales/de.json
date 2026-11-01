@@ -5233,6 +5233,8 @@
     "close": "Schließen",
     "noNotificationsMessage": "Keine Benachrichtigungen",
     "notificationMessages": {
+      "degradationRechecked": "Abhängigkeitsprüfung durch einen Admin ausgeführt",
+      "degradationSettingsUpdated": "Einstellungen zur Funktionspause durch einen Admin geändert",
       "backupRunDeleted": "Backup-Lauf {{backup_run_id}} wurde gelöscht ({{destination}}, Dateien: {{artifact}})",
       "backupRunDeleteFailed": "Löschen von Backup-Lauf {{backup_run_id}} fehlgeschlagen ({{code}})",
       "eventCreated": "Neues Event \"{{eventName}}\" wurde erstellt",

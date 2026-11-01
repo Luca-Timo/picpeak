@@ -4713,6 +4713,8 @@
     "close": "Close",
     "noNotificationsMessage": "No notifications",
     "notificationMessages": {
+      "degradationRechecked": "Dependency check run by an admin",
+      "degradationSettingsUpdated": "Degradation settings changed by an admin",
       "backupRunDeleted": "Backup run {{backup_run_id}} was deleted ({{destination}}, files: {{artifact}})",
       "backupRunDeleteFailed": "Deleting backup run {{backup_run_id}} failed ({{code}})",
       "eventCreated": "New event \"{{eventName}}\" was created",

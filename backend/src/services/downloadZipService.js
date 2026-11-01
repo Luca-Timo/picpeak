@@ -549,6 +549,8 @@ class DownloadZipService {
     // Debounce regeneration
     const newTimer = setTimeout(() => {
       this.debounceTimers.delete(eventId);
+      // While paused the rebuild waits: the next download streams or rebuilds it.
+      if (require('./dependencyHealth').evaluate('downloads.archive').paused) return;
       // Through the cap (#1399): invalidateAll arms every one of these in the
       // same tick, so without it they all start building together.
       this._withRegenSlot(() => this.generateZip(eventId)).catch(err =>

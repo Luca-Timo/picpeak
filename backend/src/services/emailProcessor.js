@@ -1434,9 +1434,14 @@ let transporterError = null;
 // keeps going through the retry cap.
 const MAIL_OUTAGE_CODES = new Set([
   'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'EAI_AGAIN',
+  'ENOTFOUND', 'EWEBHOOK_UNAVAILABLE',
 ]);
 const MAIL_OUTAGE_RESPONSE_CODES = new Set([421, 450, 451]);
 const MAIL_OUTAGE_RETRY_MS = 5 * 60 * 1000;
+// Deferred mail is due again every 5 minutes, so a real outage fails more often
+// than this. A longer silence means it ended without a send to prove it, for
+// example because the waiting mail was cancelled.
+const MAIL_OUTAGE_GAP_MS = 15 * 60 * 1000;
 // After this long mail goes back to the cap, so a server that never returns
 // ends in failed mail an admin can see, not in retries for ever.
 const MAIL_OUTAGE_MAX_MS = 3 * 24 * 60 * 60 * 1000;
@@ -1444,11 +1449,26 @@ const MAIL_OUTAGE_MAX_MS = 3 * 24 * 60 * 60 * 1000;
 // just as new to the outage. In memory, so a restart starts the count again.
 let mailOutage = null;
 
-// EENVELOPE is one recipient's answer (greylisting, a full mailbox), and after
-// DATA the server may already hold the mail, so a retry could deliver it twice.
+function isTemporaryAnswer(error) {
+  return error?.responseCode >= 400 && error?.responseCode < 500;
+}
+
+// After DATA the server may already hold the mail, so a retry could deliver it
+// twice. A 4xx at MAIL FROM says the server is not taking mail at all.
 function isMailOutage(error) {
-  if (error?.code === 'EENVELOPE' || error?.command === 'DATA') return false;
+  if (error?.command === 'DATA') return false;
+  if (error?.code === 'EENVELOPE') return error.command === 'MAIL FROM' && isTemporaryAnswer(error);
   return MAIL_OUTAGE_CODES.has(error?.code) || MAIL_OUTAGE_RESPONSE_CODES.has(error?.responseCode);
+}
+
+// A 4xx for this recipient (greylisting, a full mailbox) spends an attempt, but
+// waits first: three tries a minute apart would all land inside a greylist.
+function isRecipientDeferral(error) {
+  return error?.code === 'EENVELOPE' && error.command === 'RCPT TO' && isTemporaryAnswer(error);
+}
+
+function currentMailOutage(now = Date.now()) {
+  return mailOutage && now - mailOutage.lastFailureAt < MAIL_OUTAGE_GAP_MS ? mailOutage : null;
 }
 
 function getQueueProcessorStatus() {
@@ -1458,7 +1478,7 @@ function getQueueProcessorStatus() {
     lastResult: processorStatus.lastResult,
     lastError: processorStatus.lastError,
     lastErrorCode: processorStatus.lastErrorCode,
-    outage: mailOutage,
+    outage: currentMailOutage(),
   };
 }
 
@@ -1718,8 +1738,12 @@ async function processEmailQueueInternal({ ignoreSchedule = false, limit = 10, o
         // mail and must not spend one of its three attempts: at one pass a
         // minute, a short outage would strand everything queued. It waits and
         // the pass ends, since the next row would only hit the same server.
-        if (isMailOutage(error)) mailOutage = { since: mailOutage?.since ?? Date.now(), error: error.message };
+        if (isMailOutage(error)) {
+          const now = Date.now();
+          mailOutage = { since: currentMailOutage(now)?.since ?? now, lastFailureAt: now, error: error.message };
+        }
         if (isMailOutage(error) && Date.now() - mailOutage.since < MAIL_OUTAGE_MAX_MS) {
+          result.failed -= 1;
           logger.warn(`Mail server unavailable, email ${email.id} deferred: ${error.message}`);
           try {
             await db('email_queue').where({ id: email.id, status: email.status }).update({
@@ -1742,7 +1766,8 @@ async function processEmailQueueInternal({ ignoreSchedule = false, limit = 10, o
             .where('id', email.id)
             .update({
               retry_count: email.retry_count + 1,
-              error_message: error.message
+              error_message: error.message,
+              ...(isRecipientDeferral(error) ? { scheduled_at: queueTimestamp(Date.now() + MAIL_OUTAGE_RETRY_MS) } : {}),
             });
         } catch (updateError) {
           logger.error(`Failed to update email retry count for ${email.id}:`, updateError);

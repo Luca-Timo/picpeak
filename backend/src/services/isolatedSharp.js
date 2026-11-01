@@ -295,7 +295,8 @@ function pump() {
  * Background work (the default) waits for a free worker however long the
  * queue is: back-pressure, never a refusal. A caller that answers a request
  * passes `interactive: true` and gets IMAGE_QUEUE_FULL (503) instead of
- * joining a queue that is already `queueLength` deep.
+ * joining a queue that is already `queueLength` deep. Someone is waiting on
+ * that request, so it goes ahead of queued background work, in its own order.
  */
 function submit(job, { signal, interactive } = {}) {
   let policy;
@@ -307,7 +308,7 @@ function submit(job, { signal, interactive } = {}) {
     return Promise.reject(refusal('Image processing is busy; try again shortly', 'IMAGE_QUEUE_FULL', { retryAfter: 5 }));
   }
   return new Promise((resolve, reject) => {
-    const entry = { job, policy, signal, resolve, reject, done: false, running: false, worker: null };
+    const entry = { job, policy, signal, interactive, resolve, reject, done: false, running: false, worker: null };
     entry.fail = error => {
       if (entry.done) return;
       entry.done = true;
@@ -323,7 +324,9 @@ function submit(job, { signal, interactive } = {}) {
     };
     entry.cancel = () => entry.fail(refusal('Image processing was cancelled', 'IMAGE_CANCELLED'));
     signal?.addEventListener('abort', entry.cancel, { once: true });
-    queue.push(entry);
+    const firstBackground = interactive ? queue.findIndex(queued => !queued.interactive) : -1;
+    if (firstBackground >= 0) queue.splice(firstBackground, 0, entry);
+    else queue.push(entry);
     pump();
   });
 }

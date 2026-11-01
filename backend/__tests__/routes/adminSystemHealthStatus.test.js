@@ -81,14 +81,17 @@ describe('PUT /api/admin/system-health/status/settings', () => {
   });
 
   it('saves thresholds with a gap between them', async () => {
-    const res = await put({ cpuThrottlePercent: 80, cpuResumePercent: 60 });
+    const res = await put({ cpuThresholds: { throttlePercent: 80, resumePercent: 60 } });
     expect(res.status).toBe(200);
-    expect(dependencyHealth.updateSettings).toHaveBeenCalledWith(expect.objectContaining({ cpuThrottlePercent: 80 }));
+    expect(dependencyHealth.updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      cpuThresholds: { throttlePercent: 80, resumePercent: 60 },
+    }));
   });
 
   it.each([
-    ['no gap', { cpuThrottlePercent: 60, cpuResumePercent: 60 }, 'INVALID_LOAD_THRESHOLDS'],
-    ['a limit that would throttle constantly', { cpuThrottlePercent: 5 }, undefined],
+    ['no gap', { cpuThresholds: { throttlePercent: 60, resumePercent: 60 } }, 'INVALID_LOAD_THRESHOLDS'],
+    ['a limit that would throttle constantly', { cpuThresholds: { throttlePercent: 5, resumePercent: 2 } }, undefined],
+    ['half a pair', { cpuThresholds: { throttlePercent: 80 } }, undefined],
   ])('rejects %s', async (_label, body, code) => {
     const res = await put(body);
     expect(res.status).toBe(400);

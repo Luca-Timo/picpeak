@@ -43,6 +43,27 @@ describe('requireCapability', () => {
     });
   });
 
+  describe('a plain link', () => {
+    const appWithDownload = () => {
+      const app = express();
+      app.get('/download', requireCapability('uploads.new'), (req, res) => res.json({ ok: true }));
+      return app;
+    };
+
+    it('gets a short page instead of raw JSON', async () => {
+      const res = await request(appWithDownload()).get('/download').set('Accept', 'text/html,application/xhtml+xml,*/*;q=0.8');
+      expect(res.status).toBe(503);
+      expect(res.headers['content-type']).toContain('text/html');
+      expect(res.headers['retry-after']).toBe('60');
+      expect(res.text).toContain('paused for a moment');
+    });
+
+    it('still answers an API client with JSON', async () => {
+      const res = await request(appWithDownload()).get('/download').set('Accept', '*/*');
+      expect(res.body.code).toBe('CAPABILITY_UNAVAILABLE');
+    });
+  });
+
   it('only logs an automatic pause in observe mode', async () => {
     dependencyHealth.evaluate.mockReturnValue({ ...blocked, paused: false });
     const res = await request(buildApp()).post('/upload').set('Authorization', 'Bearer x');

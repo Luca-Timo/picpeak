@@ -11,10 +11,12 @@ const applicationWork = require('../services/activeApplicationWork');
 
 const { canonicalStorageKey, sameStorageKey } = require('../utils/storageKey');
 
-// Library-wide runs yield to guests on a busy server. Capped well below the bulk
-// queues' pauses: this deferred work has to drain inside the shutdown window.
+// Library-wide runs yield to guests on a busy server. Capped below the bulk
+// queues' pauses, and dropped once admission closes: a shutdown or restore drains
+// this work with the load probe stopped, so a held level would never clear.
 const MAX_REGENERATION_PAUSE_MS = 2000;
 function paceRegeneration() {
+  if (applicationWork.isClosed()) return undefined;
   const pause = Math.min(require('../services/loadGovernor').bulkDelayMs(), MAX_REGENERATION_PAUSE_MS);
   return pause ? new Promise((resolve) => setTimeout(resolve, pause)) : undefined;
 }

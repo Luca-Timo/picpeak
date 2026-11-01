@@ -47,6 +47,7 @@ async function runTick() {
   if (stopped) return;
   const storage = getStorage();
   if (storage.kind() !== 's3') return; // no-op for local fs
+  if (require('./dependencyHealth').evaluate('uploads.new').paused) return; // next tick tries again
 
   try {
     const events = await db('events')

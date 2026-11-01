@@ -310,3 +310,29 @@ describe('delivery result', () => {
     await expect(transport.send(MAIL)).resolves.toBeTruthy();
   });
 });
+
+describe('telling an outage from a failure about the mail', () => {
+  const failing = (code) => axios.post.mockRejectedValue(Object.assign(new Error('failed'), { code }));
+
+  it.each([['ECONNREFUSED'], ['ENOTFOUND'], ['EAI_AGAIN'], ['EHOSTUNREACH']])('keeps %s, which proves nothing arrived', async (code) => {
+    failing(code);
+    await expect(transport.send(MAIL)).rejects.toMatchObject({ code });
+  });
+
+  it.each([['ETIMEDOUT'], ['ECONNRESET'], ['ECONNABORTED']])('drops %s, after which the mail may have arrived', async (code) => {
+    failing(code);
+    const error = await transport.send(MAIL).catch((e) => e);
+    expect(error.code).toBeUndefined();
+  });
+
+  it.each([[503], [502], [429]])('marks a %i answer as the receiver being unavailable', async (status) => {
+    axios.post.mockResolvedValue({ status, data: streamOf('') });
+    await expect(transport.send(MAIL)).rejects.toMatchObject({ code: 'EWEBHOOK_UNAVAILABLE' });
+  });
+
+  it('leaves a 400 answer as a failure about this mail', async () => {
+    axios.post.mockResolvedValue({ status: 400, data: streamOf('') });
+    const error = await transport.send(MAIL).catch((e) => e);
+    expect(error.code).toBeUndefined();
+  });
+});
