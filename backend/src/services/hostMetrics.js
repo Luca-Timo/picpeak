@@ -54,6 +54,9 @@ function memoryPercent() {
     const inactive = /^inactive_file (\d+)$/m.exec(readCgroup('memory.stat') || '');
     return (Math.max(0, current - Number(inactive?.[1] || 0)) / limit) * 100;
   }
+  // Linux counts reclaimable memory as free. macOS does not, so a healthy Mac
+  // reads as nearly full: there it stays unknown rather than raising an alarm.
+  if (process.platform !== 'linux') return null;
   return ((os.totalmem() - os.freemem()) / os.totalmem()) * 100;
 }
 

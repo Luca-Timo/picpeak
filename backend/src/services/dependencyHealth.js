@@ -246,6 +246,12 @@ class DependencyHealth {
     return Object.fromEntries([...this.dependencies].map(([name, entry]) => [name, entry.state]));
   }
 
+  /** In probe order: results arrive as probes finish, which would reshuffle the page. */
+  ordered() {
+    return Object.keys(this.probes).filter((name) => this.dependencies.has(name))
+      .map((name) => [name, this.dependencies.get(name)]);
+  }
+
   evaluate(name) {
     return evaluate(name, this.states(), this.forcedOff);
   }
@@ -255,7 +261,7 @@ class DependencyHealth {
       enforcement: this.enforcement,
       forcedOff: [...this.forcedOff],
       load: loadGovernor.status(),
-      dependencies: Object.fromEntries([...this.dependencies].map(([name, entry]) => [name, {
+      dependencies: Object.fromEntries(this.ordered().map(([name, entry]) => [name, {
         state: entry.state,
         since: entry.since,
         lastCheckedAt: entry.lastCheckedAt,
