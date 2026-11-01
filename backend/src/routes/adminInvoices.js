@@ -39,7 +39,7 @@ const expenseService = require('../services/expenseService');
 const { requireFeatureFlag, isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { db } = require('../database/db');
 const { canLinkCrmToEvent, ownsProject } = require('../middleware/ownership');
-const { ensureEventMatchesCustomer } = require('../services/invoice/helpers');
+const { ensureEventMatchesCustomer, EDITABLE_INSTALLMENT_STATUSES } = require('../services/invoice/helpers');
 const { hasColumnCached } = require('../utils/schemaCache');
 const { toDateOnly } = require('../utils/dateOnly');
 
@@ -743,11 +743,20 @@ router.put(
     // legal record under CH/LI/DE/AT tax rules ("Rechnung ist
     // ausgestellt"). Modifying it in place would break the audit
     // trail — the correct workflow is to cancel the original +
-    // issue a new one. Only `scheduled` (not yet sent) invoices
-    // remain editable.
-    if (existing.status !== 'scheduled') {
+    // issue a new one. Only invoices that have not left the system
+    // remain editable: `scheduled`, and `pending_delivery`, which has
+    // no PDF yet and waits for "Mark delivered & send".
+    if (!EDITABLE_INSTALLMENT_STATUSES.has(existing.status)) {
       return res.status(409).json({
         error: `Cannot edit invoice with status '${existing.status}'. Sent invoices are locked — cancel and reissue if changes are needed.`,
+        code: 'INVOICE_LOCKED',
+      });
+    }
+    // A delivery invoice can take a payment before it goes out; its amounts
+    // are then settled against, so correct it through Storno like a sent one.
+    if (existing.status === 'pending_delivery' && Number(existing.paid_amount_minor) > 0) {
+      return res.status(409).json({
+        error: 'This invoice already has a payment recorded. Cancel and reissue it if changes are needed.',
         code: 'INVOICE_LOCKED',
       });
     }
@@ -803,8 +812,8 @@ router.put(
       // Per-invoice Skonto opt-out (migration 126).
       skontoDisabled: 'skonto_disabled',
       // Inline event snapshot (migration 123) — editable as long as
-      // the invoice is still in 'scheduled' status (this route already
-      // gates on that above).
+      // the invoice has not been issued (this route already gates on
+      // that above).
       eventName: 'event_name',
       eventDate: 'event_date',
       eventTimeStart: 'event_time_start',
@@ -813,6 +822,8 @@ router.put(
     for (const [api, col] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(payload, api)) updates[col] = payload[api];
     }
+    // A delivery invoice is sent by "Mark delivered & send", never by date.
+    if (existing.status === 'pending_delivery') delete updates.scheduled_send_at;
     // Payment-term selection: re-snapshot the template when the admin
     // changes it. Mirrors createInvoice — once the column is set the
     // PDF renderer prefers it over the source-quote fallback.

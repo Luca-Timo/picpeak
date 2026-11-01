@@ -3,7 +3,7 @@
  * quote conversion; this is for one-off / ad-hoc invoicing. Smaller
  * surface than the quote form on purpose.
  *
- * One page per invoice: `BillForm` is the body of a scheduled invoice's own
+ * One page per invoice: `BillForm` is the body of an unissued invoice's own
  * page (BillDetailPage, which owns the header, the save bar and Send) and of
  * /bills/new (BillEditorPage below). Once an invoice is issued it is never
  * edited again (§ 14 UStG): its page is read-only, Storno and reissue.
@@ -625,6 +625,8 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
                 : t('bills.field.dueDateOverrideOff', 'Auto from send date + payment term — tick to set manually')}
             </label>
           </div>
+          {/* A delivery invoice goes out with "Mark delivered & send", not by date. */}
+          {existing?.invoice.status !== 'pending_delivery' && (
           <div>
             <label className="block text-sm font-medium mb-1">{t('bills.field.scheduledSendAt', 'Scheduled send (optional)')}</label>
             {/* Localized date + time (honours general_date_format +
@@ -650,6 +652,7 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
               />
             </div>
           </div>
+          )}
           <div>
             <label className="block text-sm font-medium mb-1">{t('bills.field.qrFormat', 'Payment QR format')}</label>
             <select

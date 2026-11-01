@@ -140,7 +140,7 @@ export const BillDetailPage: React.FC = () => {
   const noMail = !!inv.customer?.noAdminEmails;
   // Not issued yet: the server still takes edits. Issued invoices never
   // change again (§ 14 UStG) — Storno and reissue instead.
-  const editable = canManage && inv.kind !== 'storno' && inv.status === 'scheduled';
+  const editable = canManage && inv.kind !== 'storno' && (inv.status === 'scheduled' || (inv.status === 'pending_delivery' && !Number(inv.paidAmountMinor)));
   const dirty = editable && formState.dirty;
 
   const handlePreview = async () => {
@@ -292,6 +292,7 @@ export const BillDetailPage: React.FC = () => {
     if (!(await confirm(noMail
       ? { message: t('bills.confirmReleaseIssue', 'Mark the photos as delivered and issue this invoice now? This customer gets no email.'), confirmLabel: t('bills.releaseForDeliveryIssue', 'Mark delivered & issue') }
       : { message: t('bills.confirmRelease', 'Mark the photos as delivered and send this invoice to the customer now?'), confirmLabel: t('bills.releaseForDelivery', 'Mark delivered & send') }))) return;
+    if (dirty && !(await formRef.current?.save())) return;
     try {
       await billsService.releaseForDelivery(inv.id);
       toast.success(noMail
@@ -404,7 +405,7 @@ export const BillDetailPage: React.FC = () => {
               </Button>
             )}
             {primary === 'release' && (
-              <Button onClick={() => { void handleRelease(); }} leftIcon={<Truck className="w-4 h-4" />}>{noMail ? t('bills.releaseForDeliveryIssue', 'Mark delivered & issue') : t('bills.releaseForDelivery', 'Mark delivered & send')}</Button>
+              <Button onClick={() => { void handleRelease(); }} disabled={formState.busy || (dirty && !formState.valid)} leftIcon={<Truck className="w-4 h-4" />}>{noMail ? t('bills.releaseForDeliveryIssue', 'Mark delivered & issue') : t('bills.releaseForDelivery', 'Mark delivered & send')}</Button>
             )}
             {primary === 'pay' && (
               <Button onClick={openPay} leftIcon={<CheckCircle className="w-4 h-4" />}>{t('bills.markPaid', 'Mark paid')}</Button>
