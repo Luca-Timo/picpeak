@@ -133,12 +133,20 @@ router.put(
     body('enforcement').optional().isIn(['observe', 'enforce']),
     body('forcedOff').optional().isArray({ max: Object.keys(CAPABILITIES).length }),
     body('forcedOff.*').isString().custom(isCapability),
+    body('cpuThrottlePercent').optional().isInt({ min: 20, max: 95 }).toInt(),
+    body('cpuResumePercent').optional().isInt({ min: 5, max: 90 }).toInt(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const { enforcement, forcedOff } = req.body;
-    const snapshot = await dependencyHealth.updateSettings({ enforcement, forcedOff });
-    await logActivity('degradation_settings_updated', { enforcement, forcedOff }, null, {
+    const { enforcement, forcedOff, cpuThrottlePercent, cpuResumePercent } = req.body;
+    // Without a gap between the two, the workers would flip at every reading.
+    const current = dependencyHealth.snapshot().load;
+    if ((cpuResumePercent ?? current.resumePercent) >= (cpuThrottlePercent ?? current.throttlePercent)) {
+      return res.status(400).json({ error: 'The resume point must be below the throttle limit', code: 'INVALID_LOAD_THRESHOLDS' });
+    }
+    const changes = { enforcement, forcedOff, cpuThrottlePercent, cpuResumePercent };
+    const snapshot = await dependencyHealth.updateSettings(changes);
+    await logActivity('degradation_settings_updated', changes, null, {
       type: 'admin', id: req.admin.id, name: req.admin.username,
     });
     return successResponse(res, snapshot);

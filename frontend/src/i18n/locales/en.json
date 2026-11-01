@@ -711,6 +711,10 @@
       "enforce": "Pause features automatically",
       "enforceHint": "While off, PicPeak only logs what it would have paused. Security checks are never affected by this setting.",
       "forceOff": "Pause {{capability}}",
+      "cpuThrottle": "Slow background work above (% CPU)",
+      "cpuResume": "Speed up again below (% CPU)",
+      "throttled": "The server is busy, so background work such as preview generation is running slower to keep galleries fast.",
+      "wouldThrottle": "The server is busy. Background work would slow down if features were paused automatically.",
       "capabilitiesTitle": "Features",
       "capability": {
         "uploads.new": "New uploads",

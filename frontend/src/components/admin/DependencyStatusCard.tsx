@@ -98,6 +98,40 @@ const DegradationControls: React.FC<{ status: DegradationStatus }> = ({ status }
           </label>
         ))}
       </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm text-body">
+          {t('systemHealth.dependencies.cpuThrottle')}
+          <input
+            key={`throttle-${status.load.throttlePercent}`}
+            type="number"
+            min={20}
+            max={95}
+            defaultValue={status.load.throttlePercent}
+            disabled={save.isPending}
+            onBlur={(event) => {
+              const value = Number(event.target.value);
+              if (value !== status.load.throttlePercent) save.mutate({ cpuThrottlePercent: value });
+            }}
+            className="block w-24 mt-1 rounded border border-line bg-transparent px-2 py-1"
+          />
+        </label>
+        <label className="text-sm text-body">
+          {t('systemHealth.dependencies.cpuResume')}
+          <input
+            key={`resume-${status.load.resumePercent}`}
+            type="number"
+            min={5}
+            max={90}
+            defaultValue={status.load.resumePercent}
+            disabled={save.isPending}
+            onBlur={(event) => {
+              const value = Number(event.target.value);
+              if (value !== status.load.resumePercent) save.mutate({ cpuResumePercent: value });
+            }}
+            className="block w-24 mt-1 rounded border border-line bg-transparent px-2 py-1"
+          />
+        </label>
+      </div>
       <Button variant="secondary" size="sm" onClick={() => recheck.mutate()} disabled={recheck.isPending}>
         {t('systemHealth.dependencies.recheck')}
       </Button>
@@ -148,6 +182,12 @@ export const DependencyStatusCard: React.FC = () => {
           );
         })}
       </ul>
+
+      {(data?.load?.level ?? 0) > 0 && (
+        <p className="mt-3 text-sm text-warning-text">
+          {t(data?.load?.applied ? 'systemHealth.dependencies.throttled' : 'systemHealth.dependencies.wouldThrottle')}
+        </p>
+      )}
 
       <h3 className="text-sm font-semibold text-heading mt-4 mb-2">{t('systemHealth.dependencies.capabilitiesTitle')}</h3>
       <ul className="space-y-1">

@@ -11,6 +11,14 @@ const applicationWork = require('../services/activeApplicationWork');
 
 const { canonicalStorageKey, sameStorageKey } = require('../utils/storageKey');
 
+// Library-wide runs yield to guests on a busy server. Capped well below the bulk
+// queues' pauses: this deferred work has to drain inside the shutdown window.
+const MAX_REGENERATION_PAUSE_MS = 2000;
+function paceRegeneration() {
+  const pause = Math.min(require('../services/loadGovernor').bulkDelayMs(), MAX_REGENERATION_PAUSE_MS);
+  return pause ? new Promise((resolve) => setTimeout(resolve, pause)) : undefined;
+}
+
 // One regeneration of each kind at a time. Two overlapping library-wide runs
 // double the load and delete each other's freshly written renditions. Held per
 // process; another replica can still start its own.
@@ -211,6 +219,7 @@ router.post('/regenerate', adminAuth, requirePermission('photos.edit'), async (r
       let errorCount = 0;
       
       for (const photo of photos) {
+        await paceRegeneration();
         try {
           // A video is REPAIRED, not rebuilt. Its poster frame is rendered at
           // a fixed size by videoProcessor and does not depend on the settings
@@ -382,6 +391,7 @@ router.post('/regenerate-previews', adminAuth, requirePermission('photos.edit'),
       // Previews this run replaced, removed after the loop (see below).
       const superseded = [];
       for (const photo of photos) {
+        await paceRegeneration();
         try {
           if (onlyMissing) {
             // No preview to replace, so no tiers to drop and nothing

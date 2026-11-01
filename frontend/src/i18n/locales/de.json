@@ -711,6 +711,10 @@
       "enforce": "Funktionen automatisch pausieren",
       "enforceHint": "Solange dies aus ist, protokolliert PicPeak nur, was pausiert würde. Sicherheitsprüfungen sind von dieser Einstellung nie betroffen.",
       "forceOff": "{{capability}} pausieren",
+      "cpuThrottle": "Hintergrundarbeit verlangsamen ab (% CPU)",
+      "cpuResume": "Wieder beschleunigen unter (% CPU)",
+      "throttled": "Der Server ist ausgelastet. Hintergrundarbeit wie die Vorschauerstellung läuft langsamer, damit Galerien schnell bleiben.",
+      "wouldThrottle": "Der Server ist ausgelastet. Hintergrundarbeit würde verlangsamt, wenn Funktionen automatisch pausiert würden.",
       "capabilitiesTitle": "Funktionen",
       "capability": {
         "uploads.new": "Neue Uploads",

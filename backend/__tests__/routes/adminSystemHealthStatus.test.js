@@ -69,6 +69,22 @@ describe('PUT /api/admin/system-health/status/settings', () => {
     expect(logActivity).not.toHaveBeenCalled();
   });
 
+  it('saves thresholds with a gap between them', async () => {
+    const res = await put({ cpuThrottlePercent: 80, cpuResumePercent: 60 });
+    expect(res.status).toBe(200);
+    expect(dependencyHealth.updateSettings).toHaveBeenCalledWith(expect.objectContaining({ cpuThrottlePercent: 80 }));
+  });
+
+  it.each([
+    ['no gap', { cpuThrottlePercent: 60, cpuResumePercent: 60 }, 'INVALID_LOAD_THRESHOLDS'],
+    ['a limit that would throttle constantly', { cpuThrottlePercent: 5 }, undefined],
+  ])('rejects %s', async (_label, body, code) => {
+    const res = await put(body);
+    expect(res.status).toBe(400);
+    if (code) expect(res.body.code).toBe(code);
+    expect(dependencyHealth.updateSettings).not.toHaveBeenCalled();
+  });
+
   it('needs an authenticated admin', async () => {
     const res = await request(app).put('/api/admin/system-health/status/settings').send({ enforcement: 'observe' });
     expect(res.status).toBe(401);

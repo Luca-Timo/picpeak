@@ -9,6 +9,7 @@ const { livePhotos } = require('../utils/photoVisibility');
 const { toMillis } = require('../utils/queueTimestamps');
 const logger = require('../utils/logger');
 const hostMetrics = require('./hostMetrics');
+const loadGovernor = require('./loadGovernor');
 const { CAPABILITIES, evaluate, isCapability } = require('./capabilities');
 
 /**
@@ -40,6 +41,8 @@ const EVENT_LOOP_DEGRADED_MS = 500;
 
 const ENFORCEMENT_KEY = 'degradation_enforcement';
 const FORCED_OFF_KEY = 'degradation_forced_off';
+const CPU_THROTTLE_KEY = 'degradation_cpu_throttle_percent';
+const CPU_RESUME_KEY = 'degradation_cpu_resume_percent';
 
 function timed(state, startedAt, detail) {
   const slow = Date.now() - startedAt > SLOW_PROBE_MS;
@@ -111,6 +114,7 @@ const defaultProbes = {
 
   async load() {
     const sample = hostMetrics.sample();
+    loadGovernor.observe(sample);
     let state = 'healthy';
     if (sample.memoryPercent >= MEMORY_DOWN_PERCENT) state = 'down';
     else if (sample.memoryPercent >= MEMORY_DEGRADED_PERCENT
@@ -181,18 +185,29 @@ class DependencyHealth {
       const forcedOff = await getAppSetting(FORCED_OFF_KEY, []);
       this.enforcement = enforcement === 'enforce' ? 'enforce' : 'observe';
       this.forcedOff = Array.isArray(forcedOff) ? forcedOff.filter(isCapability) : [];
+      loadGovernor.configure({
+        enforcing: this.enforcement === 'enforce',
+        throttlePercent: Number(await getAppSetting(CPU_THROTTLE_KEY, loadGovernor.DEFAULT_THROTTLE_PERCENT)),
+        resumePercent: Number(await getAppSetting(CPU_RESUME_KEY, loadGovernor.DEFAULT_RESUME_PERCENT)),
+      });
     } catch (error) {
       logger.warn('Degradation settings not refreshed', { error: error.message });
     }
   }
 
   /** Validated by the route; `forcedOff` holds catalog names only either way. */
-  async updateSettings({ enforcement, forcedOff }) {
+  async updateSettings({ enforcement, forcedOff, cpuThrottlePercent, cpuResumePercent }) {
     if (enforcement !== undefined) {
       await upsertAppSetting(ENFORCEMENT_KEY, JSON.stringify(enforcement), 'system');
     }
     if (forcedOff !== undefined) {
       await upsertAppSetting(FORCED_OFF_KEY, JSON.stringify(forcedOff.filter(isCapability)), 'system');
+    }
+    if (cpuThrottlePercent !== undefined) {
+      await upsertAppSetting(CPU_THROTTLE_KEY, JSON.stringify(cpuThrottlePercent), 'system');
+    }
+    if (cpuResumePercent !== undefined) {
+      await upsertAppSetting(CPU_RESUME_KEY, JSON.stringify(cpuResumePercent), 'system');
     }
     await this.refreshSettings();
     return this.snapshot();
@@ -239,6 +254,7 @@ class DependencyHealth {
     return {
       enforcement: this.enforcement,
       forcedOff: [...this.forcedOff],
+      load: loadGovernor.status(),
       dependencies: Object.fromEntries([...this.dependencies].map(([name, entry]) => [name, {
         state: entry.state,
         since: entry.since,
