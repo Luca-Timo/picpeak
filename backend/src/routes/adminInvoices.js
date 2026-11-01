@@ -761,10 +761,12 @@ router.put(
     }
     const payload = mapPayloadToService(req.body);
     // A delivery invoice goes out with "Mark delivered & send", never by date.
+    // Sending sets the issue date, and the release compares the due date with it.
     if (existing.status === 'pending_delivery' && (payload.scheduledSendAt
-        || (payload.installmentTrigger && payload.installmentTrigger !== existing.installment_trigger))) {
+        || (payload.installmentTrigger && payload.installmentTrigger !== existing.installment_trigger)
+        || (payload.issueDate && toDateOnly(payload.issueDate) !== toDateOnly(existing.issue_date)))) {
       return res.status(409).json({
-        error: 'An invoice awaiting delivery is sent by marking it delivered. It cannot take a send date or another trigger.',
+        error: 'An invoice awaiting delivery is sent by marking it delivered. It cannot take a send date, an issue date or another trigger.',
         code: 'INVOICE_SENDS_ON_DELIVERY',
       });
     }

@@ -258,8 +258,9 @@ function computeMonthlyCadenceDate(year, month /* 0-based */, cycleDay) {
 // ----------------------------------------------------------------------
 
 // Statuses that are still pre-customer: not sent, not in the portal, not in
-// the books. These can be edited, reshaped and cancelled without a Storno;
-// anything else belongs to the audit trail and can't be silently mutated.
+// the books, unless an older row carries a payment (isInvoiceEditable). These
+// can be edited, reshaped and cancelled without a Storno; anything else
+// belongs to the audit trail and can't be silently mutated.
 const UNISSUED_INVOICE_STATUSES = new Set(['scheduled', 'pending_delivery']);
 
 // Rows from before recordPayment refused `pending_delivery` can carry a
@@ -267,6 +268,14 @@ const UNISSUED_INVOICE_STATUSES = new Set(['scheduled', 'pending_delivery']);
 function isInvoiceEditable(invoice) {
   return invoice.status === 'scheduled'
     || (invoice.status === 'pending_delivery' && !(Number(invoice.paid_amount_minor) > 0));
+}
+
+// The same rule for queries: such an older row is issued, so it stays in the
+// portal and the books. Pass a builder already holding the status filter.
+function orPaidAwaitingDelivery(query) {
+  return query.orWhere((paid) => paid
+    .where('invoices.status', 'pending_delivery')
+    .where('invoices.paid_amount_minor', '>', 0));
 }
 
 const VALID_INSTALLMENT_TRIGGERS = new Set([
@@ -325,6 +334,7 @@ module.exports = {
   computeMonthlyCadenceDate,
   UNISSUED_INVOICE_STATUSES,
   isInvoiceEditable,
+  orPaidAwaitingDelivery,
   VALID_INSTALLMENT_TRIGGERS,
   resolveIntlLocale,
   formatMajor,

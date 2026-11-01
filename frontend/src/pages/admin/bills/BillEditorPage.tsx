@@ -616,7 +616,7 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
               disabled={awaitingDelivery}
             />
             {awaitingDelivery && (
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+              <p className="text-xs text-muted mt-1">
                 {t('bills.field.issueDateOnDelivery', 'Set when you mark this invoice delivered. The due date then counts from it, unless you changed it.')}
               </p>
             )}

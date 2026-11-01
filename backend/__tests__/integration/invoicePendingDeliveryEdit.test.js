@@ -92,7 +92,6 @@ test('a pending_delivery invoice can still be edited and stays pending', async (
 
   const saved = await request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`).set(auth).send({
     eventDate: '2026-11-14',
-    issueDate: '2026-11-14',
   });
   expect(saved.status).toBe(200);
 
@@ -117,6 +116,25 @@ test('a delivery invoice refuses a send date instead of dropping it', async () =
   const after = await db('invoices').where({ id: invoiceId }).first();
   expect(after.status).toBe('pending_delivery');
   expect(after.scheduled_send_at).toBeFalsy();
+});
+
+test('a delivery invoice refuses another issue date, since sending sets it', async () => {
+  const invoiceId = await makeInvoice('pending_delivery');
+  const before = await db('invoices').where({ id: invoiceId }).first();
+
+  const moved = await request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`).set(auth).send({
+    issueDate: '2026-12-24',
+  });
+  expect(moved.status).toBe(409);
+  expect(moved.body.code).toBe('INVOICE_SENDS_ON_DELIVERY');
+
+  // The form always sends the stored date back.
+  const unchanged = await request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`).set(auth).send({
+    issueDate: toDateOnly(before.issue_date), eventDate: '2026-11-14',
+  });
+  expect(unchanged.status).toBe(200);
+  const after = await db('invoices').where({ id: invoiceId }).first();
+  expect(toDateOnly(after.issue_date)).toBe(toDateOnly(before.issue_date));
 });
 
 test('skonto can be disabled while awaiting delivery', async () => {
@@ -282,6 +300,13 @@ test('the customer sees a delivery invoice only once it is sent', async () => {
 
   await db('invoices').where({ id: invoiceId }).update({ status: 'sent' });
   expect(JSON.stringify(await listed())).toContain(`"id":${invoiceId},`);
+
+  // An older row with a payment was issued: it stays in the list.
+  const paidId = await makeInvoice('pending_delivery');
+  await db('invoices').where({ id: paidId }).update({ paid_amount_minor: 50000 });
+  expect(JSON.stringify(await listed())).toContain(`"id":${paidId},`);
+  const paidPdf = await asCustomer(request(customerApp).get(`/api/customer/invoices/${paidId}/pdf`));
+  expect(paidPdf.status).not.toBe(404);
 });
 
 test('the ledger books a delivery invoice only once it is sent', async () => {
@@ -297,6 +322,60 @@ test('the ledger books a delivery invoice only once it is sent', async () => {
   expect(await posted()).toBe(false);
   await db('invoices').where({ id: invoiceId }).update({ status: 'sent' });
   expect(await posted()).toBe(true);
+});
+
+test('an older delivery invoice with a payment stays in the ledger and the tax report', async () => {
+  const ledgerService = require('../../src/services/ledgerService');
+  const taxReportService = require('../../src/services/taxReportService');
+  const invoiceId = await makeInvoice('pending_delivery');
+  const row = await db('invoices').where({ id: invoiceId }).first();
+  const day = toDateOnly(row.issue_date);
+  const booked = async () => [
+    JSON.stringify(await ledgerService.buildPostings({ from: day, to: day, currency: 'CHF' })).includes(row.invoice_number),
+    JSON.stringify(await taxReportService.getTaxReport({ from: day, to: day, currency: 'CHF' })).includes(row.invoice_number),
+  ];
+
+  expect(await booked()).toEqual([false, false]);
+  await db('invoices').where({ id: invoiceId }).update({ paid_amount_minor: 50000 });
+  expect(await booked()).toEqual([true, true]);
+});
+
+test('the feed gives a number only to an admin who may view the invoice', async () => {
+  const { formatBoolean } = require('../../src/utils/dbCompat');
+  const invoiceId = await makeInvoice('sent');
+  const { invoice_number: invoiceNumber } = await db('invoices').where({ id: invoiceId }).first();
+  await db('activity_logs').insert({
+    activity_type: 'invoice_sent', actor_type: 'admin', actor_id: adminId, metadata: JSON.stringify({ invoiceId }),
+  });
+  const dashboardApp = buildRouteApp('/api/admin/dashboard', require('../../src/routes/adminDashboard'));
+  const makeAdmin = async (name, permissionNames) => {
+    const [role] = await db('roles').insert({ name, display_name: name }).returning('id');
+    const roleId = role.id ?? role;
+    const permissions = await db('permissions').whereIn('name', permissionNames);
+    expect(permissions).toHaveLength(permissionNames.length);
+    await db('role_permissions').insert(permissions.map((p) => ({ role_id: roleId, permission_id: p.id })));
+    const [admin] = await db('admin_users').insert({
+      username: name, email: `${name}@example.test`, password_hash: 'unused', role_id: roleId,
+      is_active: formatBoolean(true), must_change_password: formatBoolean(false),
+    }).returning('id');
+    require('../../src/middleware/permissions').clearPermissionCache();
+    return { id: admin.id ?? admin, token: mintAdminToken(admin.id ?? admin) };
+  };
+  const feedNumber = async ({ token: adminToken }) => {
+    const res = await request(dashboardApp).get('/api/admin/dashboard/activity?limit=50')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    // Creating the invoice logged its own entry, which already stores the number.
+    return res.body.find(({ type, metadata }) => type === 'invoice_sent' && metadata.invoiceId === invoiceId).metadata.invoiceNumber;
+  };
+
+  const withoutBills = await makeAdmin('feed_no_bills', ['analytics.view', 'events.view_all']);
+  await db('invoices').where({ id: invoiceId }).update({ created_by_admin_id: withoutBills.id });
+  expect(await feedNumber(withoutBills)).toBe(`#${invoiceId}`);
+
+  const withBills = await makeAdmin('feed_bills', ['analytics.view', 'events.view_all', 'bills.view']);
+  await db('invoices').where({ id: invoiceId }).update({ created_by_admin_id: withBills.id });
+  expect(await feedNumber(withBills)).toBe(invoiceNumber);
 });
 
 test('an issued invoice stays locked', async () => {
