@@ -169,7 +169,7 @@ export const adminNavigation: NavItem[] = [
     nameKey: 'navigation.clients', href: '/admin/clients', icon: Briefcase,
     // Any of these opens the section; each sub-page is gated on its own
     // permission once inside.
-    permissionAny: ['customers.view', 'newsletters.view'],
+    permissionAny: ['customers.view', 'newsletters.view', 'customers.gifts.view'],
     featureFlag: 'clients',
     // Hide the entry when the parent is on but no sub-feature is —
     // there's nothing inside ClientsLayout to link to. Mirror the same
@@ -187,6 +187,7 @@ export const adminNavigation: NavItem[] = [
       // #1264 — newsletters is a Clients child and must light up the entry,
       // or a newsletter-only install has no way into the section.
       'newsletters',
+      'customerGifts',
     ],
   },
   // Accounting section (migration 122) — inbound supplier invoices,
