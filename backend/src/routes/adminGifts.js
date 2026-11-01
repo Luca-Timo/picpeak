@@ -2,7 +2,9 @@
  * Admin → customer gifts and gift stock (migration 343).
  *
  * The whole mount sits behind the `customerGifts` flag. Reading needs
- * customers.gifts.view, every change needs customers.gifts.manage.
+ * customers.gifts.view, every change needs customers.gifts.manage. A route that
+ * returns customer data also needs customers.view, the right that covers it
+ * everywhere else.
  */
 
 const express = require('express');
@@ -20,16 +22,19 @@ router.use(adminAuth, requireFeatureFlag('customerGifts', 'CUSTOMER_GIFTS_DISABL
 
 const canView = requirePermission('customers.gifts.view');
 const canManage = requirePermission('customers.gifts.manage');
+const canSeeCustomers = requirePermission('customers.view');
 
 const idParam = (name = 'id') => param(name).isInt({ min: 1 }).toInt();
 const NOTE_MAX = 500;
 const noteField = (name) => body(name).optional({ nullable: true }).isString().trim().isLength({ max: NOTE_MAX });
-const dateField = (name) => body(name).optional({ nullable: true }).isISO8601({ strict: true }).isLength({ min: 10, max: 10 });
+// Calendar days only: ISO 8601 also allows week dates, which the rules can't read.
+const dateField = (name) => body(name).optional({ nullable: true, checkFalsy: true })
+  .matches(/^\d{4}-\d{2}-\d{2}$/).isISO8601({ strict: true });
 const yearsField = (chain) => chain.isInt({ min: 1, max: 100 }).toInt();
 
 // ---- lists and rules -----------------------------------------------------
 
-router.get('/suggestions', canView, handleAsync(async (req, res) => {
+router.get('/suggestions', canSeeCustomers, canView, handleAsync(async (req, res) => {
   return successResponse(res, await giftsService.listSuggestions());
 }));
 
@@ -130,7 +135,7 @@ router.post('/items/:id/corrections', [
 
 // ---- a customer's gifts --------------------------------------------------
 
-router.get('/customers/:id', [canView, idParam()], handleAsync(async (req, res) => {
+router.get('/customers/:id', [canSeeCustomers, canView, idParam()], handleAsync(async (req, res) => {
   validateRequest(req);
   return successResponse(res, await giftsService.getCustomerGifts(req.params.id));
 }));

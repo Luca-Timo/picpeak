@@ -17,6 +17,7 @@ let cleanup;
 let app;
 let superToken;
 let viewerToken;
+let adminToken;
 let invalidateFeatureFlagCache;
 let seq = 0;
 
@@ -100,6 +101,12 @@ beforeAll(async () => {
   const viewerId = viewer?.id ?? viewer;
   await assignAdminRole(db, viewerId, 'viewer').catch(() => {});
   viewerToken = mintAdminToken(viewerId);
+  const [plain] = await db('admin_users').insert({
+    username: 'gift-admin', email: 'gift-admin@example.com', password_hash: 'x',
+  }).returning('id');
+  const plainId = plain?.id ?? plain;
+  await assignAdminRole(db, plainId, 'admin');
+  adminToken = mintAdminToken(plainId);
   app = buildRouteApp('/api/admin/gifts', require('../../src/routes/adminGifts'));
   await setFlag('customerGifts', true);
 });
@@ -256,8 +263,60 @@ describe('suggestions', () => {
     const res = await request(app).put(api('/rules')).set(auth(superToken))
       .send({ activityPeriodYears: 3, milestoneYears: [10, 3, 3] });
     expect(bodyOf(res).rules).toMatchObject({ activityPeriodYears: 3, milestoneYears: [3, 10], minBookings: 3 });
-    expect(bodyOf(await get('/rules')).rules.activityPeriodYears).toBe(3);
+    const { rules } = bodyOf(await get('/rules'));
+    expect(rules).toMatchObject({ activityPeriodYears: 3, milestoneYears: [3, 10] });
+    const single = await request(app).put(api('/rules')).set(auth(superToken)).send({ milestoneYears: [3] });
+    expect(bodyOf(single).rules.milestoneYears).toEqual([3]);
+    expect((await get('/suggestions')).status).toBe(200);
+    expect(await db('app_settings').where({ setting_key: 'gift_grace_days' }).first()).toBeUndefined();
     await request(app).put(api('/rules')).set(auth(superToken)).send({ activityPeriodYears: 1, milestoneYears: [3, 5, 10] });
+  });
+});
+
+describe('more than one admin', () => {
+  it('shows every admin the same list, whoever created the invoices', async () => {
+    const customer = await dueCustomer();
+    const row = (list) => list.find((r) => r.customerId === customer);
+    const asSuper = bodyOf(await get('/suggestions'));
+    const asAdmin = bodyOf(await get('/suggestions', adminToken));
+    expect(row(asSuper.due)).toBeDefined();
+    expect(row(asAdmin.due)).toEqual(row(asSuper.due));
+  });
+});
+
+describe('edges', () => {
+  it('does not bring back an earlier milestone once a later one is closed', async () => {
+    const customer = await createCustomer();
+    await paidInvoice(customer, yearsAgo(5, 10));
+    await paidInvoice(customer, yearsAgo(4));
+    await paidInvoice(customer, yearsAgo(0, 30));
+    const find = async () => bodyOf(await get('/suggestions')).due.find((r) => r.customerId === customer);
+    expect((await find()).milestoneYears).toBe(5);
+    await post(`/customers/${customer}/declines`, { milestoneYears: 5 });
+    await request(app).put(api('/rules')).set(auth(superToken)).send({ milestoneYears: [3, 10] });
+    expect(await find()).toBeUndefined();
+    await request(app).put(api('/rules')).set(auth(superToken)).send({ milestoneYears: [3, 5, 10] });
+  });
+
+  it('refuses a week date, which the rules could not read', async () => {
+    const customer = await createCustomer();
+    const res = await request(app).patch(api(`/customers/${customer}`)).set(auth(superToken))
+      .send({ startDateOverride: '2026-W01-1' });
+    expect(res.status).toBe(400);
+  });
+
+  it('stamps no cost on a gift that predates stock', async () => {
+    const item = await createItem('Priced', 1);
+    const customer = await createCustomer();
+    const { gifts } = bodyOf(await post(`/customers/${customer}/gifts`, { giftItemId: item.id, reduceStock: false }));
+    expect(gifts[0].unitCostMinor).toBeNull();
+  });
+
+  it('refuses a duplicate invoice in the inbox', async () => {
+    const item = await createItem('Dupe');
+    await setFlag('incomingInvoices', true);
+    const [doc] = await db('inbound_documents').insert({ supplier_name: 'x', status: 'duplicate' }).returning('id');
+    expect((await post(`/items/${item.id}/stock`, { quantity: 1, inboundDocumentId: doc?.id ?? doc })).status).toBe(404);
   });
 });
 
@@ -273,5 +332,8 @@ describe('customer erasure', () => {
     const account = await db('customer_accounts').where({ id: customer }).first();
     expect(account.gift_start_date_override).toBeNull();
     expect((bodyOf(await get('/suggestions')).notQualified).find((r) => r.customerId === customer)).toBeUndefined();
+    const refused = await post(`/customers/${customer}/gifts`, { giftItemId: item.id, note: 'after erasure' });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('GIFT_CUSTOMER_ERASED');
   });
 });

@@ -11,6 +11,7 @@ import { Upload } from 'lucide-react';
 import { Button, Input, LocalizedDateInput, Modal, Notice, Switch } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { useMutationWithToast } from '../../hooks';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { usePermissions } from '../../contexts/PermissionsContext';
 import { accountingService, type InboundDocument } from '../../services/accounting.service';
@@ -189,10 +190,10 @@ export const DeclineGiftModal: React.FC<DeclineModalProps> = ({
   );
 };
 
-const invoiceLabel = (doc: InboundDocument, fallback: string) => [
+const invoiceLabel = (doc: InboundDocument, date: string, fallback: string) => [
   doc.supplierName,
   doc.invoiceNumber,
-  doc.invoiceDate,
+  date,
 ].filter(Boolean).join(' · ') || doc.originalFilename || fallback;
 
 interface StockModalProps {
@@ -204,6 +205,7 @@ export const AddStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
   const { t } = useTranslation();
   const { flags } = useFeatureFlags();
   const { hasPermission } = usePermissions();
+  const { format } = useLocalizedDate();
   const refresh = useRefreshGifts();
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -212,6 +214,8 @@ export const AddStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
   const [date, setDate] = useState(today());
   const [note, setNote] = useState('');
   const [invoiceId, setInvoiceId] = useState<number | ''>('');
+  // Typed by hand: the suggestion from an invoice no longer replaces it.
+  const [costEdited, setCostEdited] = useState(false);
 
   // A supplier invoice opens a document, so the field follows the document's gate.
   const canPickInvoice = !!flags.incomingInvoices && hasPermission('accounting.view');
@@ -232,13 +236,18 @@ export const AddStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
     setDate(today());
     setNote('');
     setInvoiceId('');
+    setCostEdited(false);
   }, [item]);
 
   // A suggestion: the invoice may cover other goods too, so it stays editable.
+  const suggestCost = (doc: InboundDocument | undefined, units: number) => {
+    if (costEdited) return;
+    setCost(doc?.netAmountMinor && units > 0 ? Math.round(doc.netAmountMinor / units) / 100 : 0);
+  };
+
   const applyInvoice = (doc: InboundDocument | undefined, units: number) => {
-    if (!doc) return;
-    if (doc.invoiceDate) setDate(doc.invoiceDate.slice(0, 10));
-    if (doc.netAmountMinor && units > 0) setCost(Math.round(doc.netAmountMinor / units) / 100);
+    setDate(doc?.invoiceDate ? doc.invoiceDate.slice(0, 10) : today());
+    suggestCost(doc, units);
   };
 
   const upload = useMutationWithToast({
@@ -288,12 +297,22 @@ export const AddStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
               type="number"
               min={1}
               value={quantity}
-              onChange={(e) => setQuantity(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+              onChange={(e) => {
+                const units = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                setQuantity(units);
+                suggestCost(picked, units);
+              }}
             />
           </div>
           <div>
             <label htmlFor="gift-cost" className={fieldLabel}>{t('gifts.stock.unitCost', 'Cost per unit (optional)')}</label>
-            <DecimalInput id="gift-cost" value={cost} onChange={setCost} fractionDigits={2} className="input w-full" />
+            <DecimalInput
+              id="gift-cost"
+              value={cost}
+              onChange={(next) => { setCostEdited(true); setCost(next); }}
+              fractionDigits={2}
+              className="input w-full"
+            />
           </div>
         </div>
         <LocalizedDateInput label={t('gifts.stock.date', 'Date')} value={date} onChange={setDate} />
@@ -314,7 +333,11 @@ export const AddStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
                 <option value="">{t('gifts.stock.noInvoice', 'No invoice')}</option>
                 {documents.map((doc) => (
                   <option key={doc.id} value={doc.id}>
-                    {invoiceLabel(doc, t('gifts.stock.unnamedInvoice', 'Invoice #{{id}}', { id: doc.id }))}
+                    {invoiceLabel(
+                      doc,
+                      doc.invoiceDate ? format(doc.invoiceDate) : '',
+                      t('gifts.stock.unnamedInvoice', 'Invoice #{{id}}', { id: doc.id }),
+                    )}
                   </option>
                 ))}
               </select>
@@ -363,17 +386,20 @@ export const AddStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
 export const CorrectStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
   const { t } = useTranslation();
   const refresh = useRefreshGifts();
-  const [delta, setDelta] = useState(0);
+  // Text, so a leading minus can be typed.
+  const [delta, setDelta] = useState('');
   const [reason, setReason] = useState('');
 
   useEffect(() => {
     if (!item) return;
-    setDelta(0);
+    setDelta('');
     setReason('');
   }, [item]);
 
+  const quantityDelta = /^[+-]?\d+$/.test(delta.trim()) ? Number(delta) : 0;
+
   const correct = useMutationWithToast({
-    mutationFn: () => giftsService.correctStock((item as GiftItem).id, { quantityDelta: delta, reason }),
+    mutationFn: () => giftsService.correctStock((item as GiftItem).id, { quantityDelta, reason }),
     successMessage: t('gifts.stock.corrected', 'Stock corrected'),
     onSuccess: () => { refresh(); onClose(); },
   });
@@ -388,7 +414,7 @@ export const CorrectStockModal: React.FC<StockModalProps> = ({ item, onClose }) 
       footer={(
         <>
           <Button variant="outline" onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
-          <Button onClick={() => correct.mutate()} disabled={!delta || !reason.trim() || correct.isPending}>
+          <Button onClick={() => correct.mutate()} disabled={!quantityDelta || !reason.trim() || correct.isPending}>
             {t('gifts.stock.correctSubmit', 'Save correction')}
           </Button>
         </>
@@ -397,7 +423,7 @@ export const CorrectStockModal: React.FC<StockModalProps> = ({ item, onClose }) 
       <div className="space-y-4">
         <div>
           <label htmlFor="gift-delta" className={fieldLabel}>{t('gifts.stock.delta', 'Change (for example -2)')}</label>
-          <Input id="gift-delta" type="number" value={delta} onChange={(e) => setDelta(Math.trunc(Number(e.target.value) || 0))} />
+          <Input id="gift-delta" inputMode="numeric" value={delta} onChange={(e) => setDelta(e.target.value)} />
         </div>
         <div>
           <label htmlFor="gift-reason" className={fieldLabel}>{t('gifts.stock.reason', 'Reason')}</label>

@@ -7,13 +7,16 @@
  *   - a gift and its stock movement are written in one transaction, and the
  *     count is checked inside it, so two gifts can't take the last unit;
  *   - stock is always the sum of the movements, never a stored total;
- *   - gift data is admin-only and never reaches the customer portal.
+ *   - gift data is admin-only and never reaches the customer portal;
+ *   - who qualifies is read across all invoices, not the viewing admin's own,
+ *     so every admin sees the same list. Only derived fields leave that read.
  *
  * Activity is logged after commit: a global-db write inside a transaction
  * deadlocks on the single SQLite connection.
  */
 
 const { db, logActivity } = require('../database/db');
+const { withTrustedCrmAccess } = require('../database/crmAccess');
 const { AppError, NotFoundError } = require('../utils/errors');
 const { isUniqueViolation } = require('../utils/dbErrors');
 const { formatBoolean } = require('../utils/dbCompat');
@@ -21,6 +24,8 @@ const { auditedUpdate } = require('./accountingHistory');
 const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const businessProfileService = require('./businessProfileService');
 const rules = require('./customerGiftRules');
+
+const ERASED_EMAIL_SUFFIX = '@deleted.invalid';
 
 const SETTING_KEYS = {
   milestoneYears: 'gift_milestone_years',
@@ -31,6 +36,9 @@ const SETTING_KEYS = {
   graceDays: 'gift_grace_days',
 };
 
+// Not a real purchase record: the inbox set these aside.
+const UNUSABLE_INVOICE_STATUSES = ['declined', 'duplicate'];
+
 const adminActor = (admin) => ({
   type: 'admin', id: admin.id, name: admin.username || `Admin #${admin.id}`,
 });
@@ -40,13 +48,11 @@ const insertedId = (inserted) => (typeof inserted === 'object' ? inserted.id : i
 /** Date and timestamp columns read back differently per engine; this is the one shape. */
 function toDateOnly(value) {
   if (!value) return null;
-  if (value instanceof Date) {
-    const month = String(value.getMonth() + 1).padStart(2, '0');
-    const day = String(value.getDate()).padStart(2, '0');
-    return `${value.getFullYear()}-${month}-${day}`;
-  }
-  if (typeof value === 'number') return new Date(value).toISOString().slice(0, 10);
-  return String(value).slice(0, 10);
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = value instanceof Date ? value : new Date(value);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 const today = () => toDateOnly(new Date());
@@ -61,36 +67,41 @@ async function getRules() {
   const out = { ...rules.DEFAULT_RULES };
   for (const [field, key] of Object.entries(SETTING_KEYS)) {
     if (!stored.has(key)) continue;
-    try {
-      out[field] = JSON.parse(stored.get(key));
-    } catch {
-      // A hand-edited value that isn't JSON keeps the default.
+    // A json column: PostgreSQL hands back the parsed value, SQLite the text.
+    let value = stored.get(key);
+    if (typeof value === 'string') {
+      try {
+        value = JSON.parse(value);
+      } catch {
+        continue; // A hand-edited value that isn't JSON keeps the default.
+      }
     }
+    out[field] = value;
   }
   return out;
 }
 
 async function updateRules(input, admin) {
-  const current = await getRules();
-  const next = { ...current, ...input };
-  if (next.milestoneYears) {
-    next.milestoneYears = [...new Set(next.milestoneYears.map(Number))].sort((a, b) => a - b);
+  const previous = await getRules();
+  const changes = { ...input };
+  if (changes.milestoneYears) {
+    changes.milestoneYears = [...new Set(changes.milestoneYears.map(Number))].sort((a, b) => a - b);
   }
+  // Only what was sent, so a default the admin never touched stays a default.
   await db.transaction(async (trx) => {
-    for (const [field, key] of Object.entries(SETTING_KEYS)) {
-      const value = JSON.stringify(next[field]);
-      const updated = await trx('app_settings').where({ setting_key: key }).update({ setting_value: value });
-      if (!updated) {
-        await trx('app_settings').insert({
-          setting_key: key,
-          setting_value: value,
-          setting_type: Array.isArray(next[field]) ? 'json' : 'number',
-        });
-      }
+    for (const [field, value] of Object.entries(changes)) {
+      await trx('app_settings')
+        .insert({
+          setting_key: SETTING_KEYS[field],
+          setting_value: JSON.stringify(value),
+          setting_type: Array.isArray(value) ? 'json' : 'number',
+        })
+        .onConflict('setting_key')
+        .merge(['setting_value']);
     }
   });
-  await logActivity('customer_gift_rules_updated', { rules: next }, null, adminActor(admin));
-  return next;
+  await logActivity('customer_gift_rules_updated', { previous, changes }, null, adminActor(admin));
+  return getRules();
 }
 
 // ---- items and stock -----------------------------------------------------
@@ -192,7 +203,8 @@ async function addStock(itemId, input, admin, { canReadInvoices }) {
     if (!canReadInvoices || !(await isFeatureEnabled('incomingInvoices'))) {
       throw new AppError('Linking a supplier invoice needs access to incoming invoices', 403, 'GIFT_INVOICE_FORBIDDEN');
     }
-    invoice = await db('inbound_documents').where({ id: inboundDocumentId }).first();
+    invoice = await db('inbound_documents').where({ id: inboundDocumentId })
+      .whereNotIn('status', UNUSABLE_INVOICE_STATUSES).first();
     if (!invoice) throw new NotFoundError('Supplier invoice', inboundDocumentId);
   }
   const fallbackCurrency = invoice?.currency || (await businessProfileService.getProfile())?.default_currency;
@@ -246,7 +258,7 @@ async function paymentsByCustomer(customerIds) {
     .whereNull('cancels_invoice_id')
     .select('id', 'customer_account_id', 'deal_uuid', 'paid_at', 'issue_date');
   if (customerIds) query.whereIn('customer_account_id', customerIds);
-  const rows = await query;
+  const rows = await withTrustedCrmAccess('customer gift milestones', () => query);
   const out = new Map();
   for (const row of rows) {
     const list = out.get(row.customer_account_id) || [];
@@ -262,7 +274,7 @@ async function paymentsByCustomer(customerIds) {
 function eligibleCustomers() {
   return db('customer_accounts')
     .where({ is_active: formatBoolean(true), no_gifts: formatBoolean(false) })
-    .whereNot('email', 'like', '%@deleted.invalid')
+    .whereNot('email', 'like', `%${ERASED_EMAIL_SUFFIX}`)
     .select('id', 'display_name', 'company_name', 'email', 'gift_start_date_override');
 }
 
@@ -287,7 +299,13 @@ async function listSuggestions() {
       .select('customer_account_id', 'milestone_years'),
     getRules(),
   ]);
-  const closedKeys = new Set(closed.map((row) => `${row.customer_account_id}:${row.milestone_years}`));
+  // Milestones only go up: changing the rules or the start date must not bring
+  // back an earlier one for a customer already past it.
+  const highestClosed = new Map();
+  for (const row of closed) {
+    const highest = highestClosed.get(row.customer_account_id) || 0;
+    highestClosed.set(row.customer_account_id, Math.max(highest, row.milestone_years));
+  }
   const due = [];
   const notQualified = [];
   const date = today();
@@ -299,7 +317,7 @@ async function listSuggestions() {
       rules: giftRules,
     });
     if (evaluation.state !== 'due' && evaluation.state !== 'not_qualified') continue;
-    if (closedKeys.has(`${customer.id}:${evaluation.milestoneYears}`)) continue;
+    if (evaluation.milestoneYears <= (highestClosed.get(customer.id) || 0)) continue;
     (evaluation.state === 'due' ? due : notQualified).push(suggestionToApi(customer, evaluation));
   }
   const byDate = (a, b) => a.milestoneDate.localeCompare(b.milestoneDate);
@@ -347,7 +365,7 @@ async function getCustomerGifts(customerId) {
 }
 
 async function updateCustomerPreferences(customerId, { noGifts, startDateOverride }, admin) {
-  await customerOrThrow(customerId);
+  await writableCustomerOrThrow(customerId);
   const updates = {};
   if (noGifts !== undefined) updates.no_gifts = formatBoolean(noGifts);
   if (startDateOverride !== undefined) updates.gift_start_date_override = startDateOverride || null;
@@ -358,6 +376,15 @@ async function updateCustomerPreferences(customerId, { noGifts, startDateOverrid
     await logActivity('customer_gift_preferences_updated', { customerId, noGifts, startDateOverride }, null, adminActor(admin));
   }
   return getCustomerGifts(customerId);
+}
+
+/** Erasure wiped this account's gift notes; nothing may write new ones. */
+async function writableCustomerOrThrow(customerId) {
+  const customer = await customerOrThrow(customerId);
+  if (String(customer.email).endsWith(ERASED_EMAIL_SUFFIX)) {
+    throw new AppError('This customer was erased', 409, 'GIFT_CUSTOMER_ERASED');
+  }
+  return customer;
 }
 
 const milestoneTaken = () => new AppError('This milestone is already closed', 409, 'GIFT_MILESTONE_CLOSED');
@@ -381,7 +408,7 @@ async function giveGift(customerId, input, admin) {
   const {
     giftItemId, giftDate, note, milestoneYears, isOverride = false, reduceStock = true,
   } = input;
-  await customerOrThrow(customerId);
+  await writableCustomerOrThrow(customerId);
   let id;
   try {
     id = await db.transaction(async (trx) => {
@@ -391,7 +418,10 @@ async function giveGift(customerId, input, admin) {
         throw new AppError('This gift item is out of stock', 409, 'GIFT_OUT_OF_STOCK');
       }
       const date = giftDate || today();
-      const cost = await latestPurchaseCost(trx, giftItemId);
+      // A gift from before stock was tracked didn't cost today's price.
+      const cost = reduceStock
+        ? await latestPurchaseCost(trx, giftItemId)
+        : { unit_cost_minor: null, currency: null };
       const [inserted] = await trx('customer_gifts').insert({
         customer_account_id: customerId,
         gift_item_id: giftItemId,
@@ -429,7 +459,7 @@ async function giveGift(customerId, input, admin) {
 
 /** Closes one milestone. The next one still comes up; `no_gifts` is the way to stop them all. */
 async function declineMilestone(customerId, { milestoneYears, note }, admin) {
-  await customerOrThrow(customerId);
+  await writableCustomerOrThrow(customerId);
   let id;
   try {
     const [inserted] = await db('customer_gifts').insert({

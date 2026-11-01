@@ -361,7 +361,9 @@ const router = createBrowserRouter(
             </Route>
             {/* Customer gifts (migration 343) — gated by `customerGifts`. */}
             <Route element={<RequireFeature flag="customerGifts" />}>
-              <Route path="gifts" element={<GiftsPage />} />
+              <Route element={<RequirePermission permission="customers.gifts.view" />}>
+                <Route path="gifts" element={<GiftsPage />} />
+              </Route>
             </Route>
             {/* Developer tools — gated by `crmDevelopment`. */}
             <Route element={<RequireFeature flag="crmDevelopment" />}>

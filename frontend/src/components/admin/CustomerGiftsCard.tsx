@@ -86,7 +86,7 @@ export const CustomerGiftsCard: React.FC<CustomerGiftsCardProps> = ({ customerId
                     ? t('gifts.customer.declined', 'Declined')
                     : gift.itemName}
                   {gift.milestoneYears && (
-                    <Badge>{t('gifts.milestoneBadge', '{{years}} years', { years: gift.milestoneYears })}</Badge>
+                    <Badge>{t('gifts.milestoneBadge', { count: gift.milestoneYears, defaultValue_one: '{{count}} year', defaultValue_other: '{{count}} years' })}</Badge>
                   )}
                   {gift.isOverride && <Badge tone="warning">{t('gifts.customer.override', 'Override')}</Badge>}
                   {gift.undone && <Badge>{t('gifts.customer.undoneBadge', 'Undone')}</Badge>}

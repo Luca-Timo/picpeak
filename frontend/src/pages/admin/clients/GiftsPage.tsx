@@ -59,7 +59,7 @@ const SuggestionList: React.FC<{
           <div className="min-w-0">
             <p className="text-sm font-medium text-heading flex flex-wrap items-center gap-2">
               <Link to={`/admin/clients/accounts/${row.customerId}`} className="hover:underline">{row.customerName}</Link>
-              <Badge>{t('gifts.milestoneBadge', '{{years}} years', { years: row.milestoneYears })}</Badge>
+              <Badge>{t('gifts.milestoneBadge', { count: row.milestoneYears, defaultValue_one: '{{count}} year', defaultValue_other: '{{count}} years' })}</Badge>
             </p>
             <p className="text-xs text-neutral-600 dark:text-neutral-400">
               {format(row.milestoneDate)}
@@ -67,7 +67,7 @@ const SuggestionList: React.FC<{
             </p>
           </div>
           {canManage && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => onDecline(row)}>{t('gifts.decline.submit', 'Decline')}</Button>
               <Button size="sm" onClick={() => onGive(row)}>{giveLabel}</Button>
             </div>
@@ -81,7 +81,7 @@ const SuggestionList: React.FC<{
 const ItemHistory: React.FC<{ item: GiftItem | null; onClose: () => void }> = ({ item, onClose }) => {
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
-  const { data: movements = [] } = useQuery({
+  const { data: movements = [], isError, isFetching, refetch } = useQuery({
     queryKey: ['admin-gift-movements', item?.id],
     queryFn: () => giftsService.listMovements((item as GiftItem).id),
     enabled: !!item,
@@ -94,6 +94,10 @@ const ItemHistory: React.FC<{ item: GiftItem | null; onClose: () => void }> = ({
   };
   return (
     <Modal open={!!item} onClose={onClose} title={t('gifts.stock.historyTitle', 'Stock history')} description={item?.name}>
+      {isError && <ErrorState size="inline" onRetry={() => refetch()} retrying={isFetching} />}
+      {!isError && !isFetching && movements.length === 0 && (
+        <EmptyState size="inline" title={t('gifts.stock.historyEmpty', 'No stock changes yet')} />
+      )}
       <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
         {movements.map((movement) => (
           <li key={movement.id} className="py-2 flex items-start justify-between gap-3 text-sm">
@@ -143,7 +147,7 @@ const RulesCard: React.FC<{ rules: GiftRules; canManage: boolean }> = ({ rules, 
 
   const labels: Record<(typeof RULE_FIELDS)[number]['key'], string> = {
     minBookings: t('gifts.rules.minBookings', 'Minimum paid bookings'),
-    activityMinInvoices: t('gifts.rules.activityMinInvoices', 'Active: minimum paid invoices'),
+    activityMinInvoices: t('gifts.rules.activityMinBookings', 'Active: minimum paid bookings'),
     activityPeriodYears: t('gifts.rules.activityPeriodYears', 'Active: within this many years'),
     rhythmMarginMonths: t('gifts.rules.rhythmMarginMonths', 'Booking rhythm margin (months)'),
     graceDays: t('gifts.rules.graceDays', 'Grace period (days)'),
@@ -241,7 +245,12 @@ export const GiftsPage: React.FC = () => {
 
       {shortBy > 0 && (
         <Notice tone="warning">
-          {t('gifts.lowStock', '{{due}} gifts due, {{stock}} in stock.', { due: due.length, stock: inStock })}
+          {t('gifts.lowStock', {
+            count: due.length,
+            stock: inStock,
+            defaultValue_one: '{{count}} gift due, {{stock}} in stock.',
+            defaultValue_other: '{{count}} gifts due, {{stock}} in stock.',
+          })}
         </Notice>
       )}
 

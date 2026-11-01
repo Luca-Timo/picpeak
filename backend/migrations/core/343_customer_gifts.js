@@ -83,8 +83,7 @@ exports.up = async function (knex) {
     });
   }
 
-  // One live decision per customer and milestone. Knex can't declare a partial
-  // index on both engines; the 291 pattern.
+  // One live decision per customer and milestone; the 291 pattern.
   await knex.raw(
     `CREATE UNIQUE INDEX IF NOT EXISTS ${MILESTONE_INDEX} `
     + 'ON customer_gifts (customer_account_id, milestone_years) '
@@ -187,6 +186,9 @@ exports.down = async function (knex) {
   }
   if (await knex.schema.hasTable('feature_flags')) {
     await knex('feature_flags').where({ key: 'customerGifts' }).del();
+  }
+  if (await knex.schema.hasTable('app_settings')) {
+    await knex('app_settings').where('setting_key', 'like', 'gift\\_%').del();
   }
   if (await knex.schema.hasTable('permissions')) {
     const ids = (await knex('permissions')
