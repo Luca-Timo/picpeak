@@ -441,7 +441,7 @@ async function issuePaymentCheckEmail(invoiceId, { skipThrottle = false, actor =
         // Keep the body language consistent with the locale the amounts are
         // formatted in, instead of event-first resolution (admin-facing gate).
         __language: locale,
-        due_date: formatShortDate(invoice.due_date),
+        due_date: toDateOnly(invoice.due_date),
         total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, locale),
         paid_amount: formatMajor(paidMinor, invoice.currency, locale),
         outstanding_amount: formatMajor(outstandingMinor, invoice.currency, locale),

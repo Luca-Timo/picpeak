@@ -11,6 +11,7 @@
  */
 
 const request = require('supertest');
+const { toDateOnly } = require('../../src/utils/dateOnly');
 const {
   bootCrmDb, seedMinimal, assignAdminRole, mintAdminToken, buildRouteApp,
 } = require('./helpers/crmDb');
@@ -96,7 +97,7 @@ test('a pending_delivery invoice can still be edited and stays pending', async (
 
   const after = await db('invoices').where({ id: invoiceId }).first();
   // The date landed...
-  expect(String(after.event_date).slice(0, 10)).toBe('2026-11-14');
+  expect(toDateOnly(after.event_date)).toBe('2026-11-14');
   // ...and the edit did not release the invoice: it is still waiting on the
   // admin, with no send date for the scheduler to act on.
   expect(after.status).toBe('pending_delivery');
@@ -135,6 +136,35 @@ test('a delivery invoice with a payment on it stays locked', async () => {
   expect(saved.body.code).toBe('INVOICE_LOCKED');
 });
 
+test('marking delivered re-anchors a machine-set due date and mails it unformatted', async () => {
+  const invoiceId = await makeInvoice('pending_delivery');
+  const issueDate = '2030-01-15';
+  await db('invoices').where({ id: invoiceId }).update({ issue_date: issueDate, due_date: '2030-02-14' });
+
+  const released = await request(invoiceApp).post(`/api/admin/invoices/${invoiceId}/release-for-delivery`).set(auth).send({});
+  expect(released.status).toBe(200);
+
+  const after = await db('invoices').where({ id: invoiceId }).first();
+  const days = Math.round((Date.parse(toDateOnly(after.due_date)) - Date.parse(toDateOnly(after.issue_date))) / 86400000);
+  expect(days).toBe(30);
+  expect(toDateOnly(after.due_date)).not.toBe('2030-02-14');
+
+  const mail = await db('email_queue').where({ email_type: 'invoice_sent' }).orderBy('id', 'desc').first();
+  const data = typeof mail.email_data === 'string' ? JSON.parse(mail.email_data) : mail.email_data;
+  expect(data.due_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+});
+
+test('marking delivered keeps a due date an admin set by hand', async () => {
+  const invoiceId = await makeInvoice('pending_delivery');
+  await db('invoices').where({ id: invoiceId }).update({ issue_date: '2030-01-15', due_date: '2030-06-30' });
+
+  const released = await request(invoiceApp).post(`/api/admin/invoices/${invoiceId}/release-for-delivery`).set(auth).send({});
+  expect(released.status).toBe(200);
+
+  const after = await db('invoices').where({ id: invoiceId }).first();
+  expect(toDateOnly(after.due_date)).toBe('2030-06-30');
+});
+
 test('an issued invoice stays locked', async () => {
   const invoiceId = await makeInvoice('sent');
 
@@ -145,5 +175,5 @@ test('an issued invoice stays locked', async () => {
   expect(saved.body.code).toBe('INVOICE_LOCKED');
 
   const after = await db('invoices').where({ id: invoiceId }).first();
-  expect(String(after.event_date).slice(0, 10)).toBe('2026-10-03');
+  expect(toDateOnly(after.event_date)).toBe('2026-10-03');
 });

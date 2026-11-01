@@ -7,6 +7,7 @@ const { adminActivityActor } = require('../../utils/activityActor');
 const logger = require('../../utils/logger');
 const { AppError } = require('../../utils/errors');
 const { formatShortDate } = require('../../utils/dateFormatter');
+const { toDateOnly } = require('../../utils/dateOnly');
 const { resolveBillingRecipients } = require('../_billingRecipients');
 const pdfService = require('../pdfService');
 const emailProcessor = require('../emailProcessor');
@@ -209,7 +210,7 @@ async function sendInvoiceOnce(id, adminId, options = {}) {
     customer_name: customer.display_name || customer.first_name || customer.email.split('@')[0],
     event_name: invoice.event_name || '',
     total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, ctx.locale),
-    due_date: formatShortDate(invoice.due_date),
+    due_date: toDateOnly(invoice.due_date),
     installment_label: invoice.installment_label || '',
     installment_index: invoice.installment_index + 1,
     installment_total: invoice.installment_total,
@@ -704,11 +705,18 @@ async function releaseForDelivery(id, adminId) {
     );
   }
   const now = new Date();
-  await auditedUpdate(db, 'invoices', { id }, {
-    status: 'scheduled',
-    scheduled_send_at: now,
-    updated_at: now,
-  }, { actor: adminId, source: 'invoice.releaseForDelivery' });
+  // ISO text: on SQLite a Date comes back as a number sendInvoice cannot parse.
+  const updates = { status: 'scheduled', scheduled_send_at: now.toISOString(), updated_at: now };
+  // Until now the dates assume delivery on event day + 14. Payment runs from
+  // the real delivery, unless an admin set the due date by hand. This has to
+  // happen here: sendInvoice compares against scheduled_send_at, which from
+  // this update on is today and would read the old date as a manual override.
+  const netDays = await resolveNetDaysForRow(invoice);
+  const assumedDue = computeDueDate(new Date(toDateOnly(invoice.issue_date)), netDays).toISOString().slice(0, 10);
+  if (toDateOnly(invoice.due_date) === assumedDue) {
+    updates.due_date = computeDueDate(now, netDays).toISOString().slice(0, 10);
+  }
+  await auditedUpdate(db, 'invoices', { id }, updates, { actor: adminId, source: 'invoice.releaseForDelivery' });
   try {
     await logActivity('invoice_released_for_delivery', { invoiceId: id }, invoice.event_id || null, adminActivityActor(adminId));
   } catch (_) { /* non-fatal */ }

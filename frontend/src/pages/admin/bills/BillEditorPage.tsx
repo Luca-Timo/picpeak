@@ -90,7 +90,9 @@ export const BillForm = forwardRef<BillFormHandle, BillFormProps>(({ invoiceId, 
   // on the day the invoice actually goes out. Flipping this lets the
   // admin type a different date by hand; we keep it pinned so the auto
   // effect below stops clobbering their value.
-  const [dueDateOverridden, setDueDateOverridden] = useState(false);
+  // A saved invoice keeps its due date. hydrate() sets this too, but with
+  // cached data the auto-track effect runs right after it, on the old value.
+  const [dueDateOverridden, setDueDateOverridden] = useState(isEdit);
   const [scheduledSendAt, setScheduledSendAt] = useState('');
   // null = inherit profile default at render time. 'none' / 'swiss' /
   // 'epc' = explicit per-invoice override. (Existing invoices that
