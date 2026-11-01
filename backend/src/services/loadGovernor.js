@@ -71,6 +71,8 @@ class LoadGovernor {
     }
 
     if (this.level !== previous) {
+      // The next step needs fresh readings, taken after this one took effect.
+      this.readings = [];
       logger.info(`Load level ${previous} -> ${this.level}${this.enforcing ? '' : ' (observe mode)'}`);
     }
     return this.level;

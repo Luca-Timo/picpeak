@@ -10,7 +10,8 @@ const { toMillis } = require('../utils/queueTimestamps');
 const logger = require('../utils/logger');
 const hostMetrics = require('./hostMetrics');
 const loadGovernor = require('./loadGovernor');
-const { CAPABILITIES, evaluate, isCapability } = require('./capabilities');
+const { CAPABILITIES, evaluate, isCapability, severity } = require('./capabilities');
+const { isStorageUnavailableError } = require('./storage/storageErrors');
 
 /**
  * One view of what PicPeak depends on, with a breaker per dependency.
@@ -20,15 +21,17 @@ const { CAPABILITIES, evaluate, isCapability } = require('./capabilities');
  * Each process keeps its own view; replicas probe the same things and agree
  * within a few intervals.
  *
- * A single bad probe changes nothing. TRIP_AFTER bad probes in a row mean
- * degraded, DOWN_AFTER mean down, and RECOVER_AFTER good ones in a row are
+ * A single bad probe changes nothing. TRIP_AFTER failures in a row mean
+ * degraded, DOWN_AFTER mean down, and RECOVER_AFTER better readings in a row are
  * needed to come back, so a flapping share does not reopen uploads on every
- * success. /health is deliberately not fed from here: Docker restarting the
+ * success. Merely slow probes need DOWN_AFTER readings to degrade: the timing is
+ * wall-clock, so a burst of uploads or a stalled event loop can slow one on a
+ * healthy disk, and that must not pause the uploads causing it. /health is deliberately not fed from here: Docker restarting the
  * app cannot repair a share or a mail server.
  */
 const PROBE_INTERVAL_MS = 15_000;
 const PROBE_TIMEOUT_MS = 5_000;
-const SLOW_PROBE_MS = 2_000;
+const SLOW_PROBE_MS = 3_000;
 const TRIP_AFTER = 2;
 const DOWN_AFTER = 4;
 const RECOVER_AFTER = 8;
@@ -46,7 +49,7 @@ const CPU_RESUME_KEY = 'degradation_cpu_resume_percent';
 
 function timed(state, startedAt, detail) {
   const slow = Date.now() - startedAt > SLOW_PROBE_MS;
-  return { state: slow && state === 'healthy' ? 'degraded' : state, detail: slow ? 'slow' : detail };
+  return slow && state === 'healthy' ? { state: 'degraded', detail: 'slow', slow: true } : { state, detail };
 }
 
 /**
@@ -73,7 +76,13 @@ const defaultProbes = {
     }
     // stat() resolves null for a missing key and throws when the backend
     // cannot answer, so an object that never exists tests the connection.
-    await require('./storage').getStorage().stat('.picpeak-health-probe');
+    try {
+      await require('./storage').getStorage().stat('.picpeak-health-probe');
+    } catch (error) {
+      // An answer, even a refusal, means the backend is there. S3 says 403 for
+      // a missing key when the policy lacks ListBucket.
+      if (isStorageUnavailableError(error)) throw error;
+    }
     return timed('healthy', startedAt);
   },
 
@@ -89,7 +98,8 @@ const defaultProbes = {
     const status = getQueueProcessorStatus();
     if (!status.started) return { state: 'degraded', detail: 'processor not running' };
     // Mail is queued, so a failing server is never worse than degraded.
-    return status.lastError ? { state: 'degraded', detail: status.lastError } : { state: 'healthy' };
+    const problem = status.outage?.error || status.lastError;
+    return problem ? { state: 'degraded', detail: problem } : { state: 'healthy' };
   },
 
   async faceSidecar() {
@@ -139,28 +149,23 @@ class DependencyHealth {
     this.forcedOff = [];
     this.timer = null;
     this.running = null;
-    this.warned = new Set();
+    this.inFlight = new Set();
   }
 
   applyProbe(name, outcome, { reset = false } = {}) {
     const entry = this.dependencies.get(name) || {
-      state: 'healthy', since: new Date().toISOString(), bad: 0, good: 0,
+      state: 'healthy', since: new Date().toISOString(), bad: 0, better: 0,
     };
     const raw = outcome.state;
-    if (raw === 'healthy') {
-      entry.bad = 0;
-      entry.good += 1;
-    } else {
-      entry.good = 0;
-      entry.bad += 1;
-    }
+    entry.bad = raw === 'healthy' ? 0 : entry.bad + 1;
+    entry.better = severity(raw) < severity(entry.state) ? entry.better + 1 : 0;
 
     let next = entry.state;
-    if (raw === 'healthy') {
-      if (reset || entry.good >= RECOVER_AFTER) next = 'healthy';
+    if (entry.better && (reset || entry.better >= RECOVER_AFTER)) {
+      next = raw;
     } else if (raw === 'down' && entry.bad >= DOWN_AFTER) {
       next = 'down';
-    } else if (entry.bad >= TRIP_AFTER) {
+    } else if (entry.state === 'healthy' && entry.bad >= (outcome.slow ? DOWN_AFTER : TRIP_AFTER)) {
       next = 'degraded';
     }
 
@@ -169,6 +174,7 @@ class DependencyHealth {
         detail: outcome.detail,
       });
       entry.state = next;
+      entry.better = 0;
       entry.since = new Date().toISOString();
     }
     entry.lastCheckedAt = new Date().toISOString();
@@ -215,16 +221,28 @@ class DependencyHealth {
 
   async runProbes(options) {
     await Promise.all(Object.entries(this.probes).map(async ([name, probe]) => {
+      // A timeout abandons a probe but cannot cancel it. On a hung mount each new
+      // one would pin another libuv thread, so it waits for the last to return.
+      if (this.inFlight.has(name)) {
+        this.applyProbe(name, { state: 'down', detail: 'previous check has not returned' }, options);
+        return;
+      }
+      this.inFlight.add(name);
+      const run = new Promise((resolve) => { resolve(probe()); }).finally(() => this.inFlight.delete(name));
       let outcome;
       try {
-        outcome = await withTimeout(probe());
+        outcome = await withTimeout(run);
       } catch (error) {
+        run.catch(() => {});
         outcome = { state: 'down', detail: error.message };
       }
       if (outcome) this.applyProbe(name, outcome, options);
       else this.dependencies.delete(name);
     }));
-    await this.refreshSettings();
+    // Bounded: a hung database must not freeze every other dependency's state.
+    await withTimeout(this.refreshSettings()).catch((error) => {
+      logger.warn('Degradation settings not refreshed', { error: error.message });
+    });
   }
 
   /** One pass at a time: a slow probe must not pile up on the next tick. */
@@ -252,8 +270,10 @@ class DependencyHealth {
       .map((name) => [name, this.dependencies.get(name)]);
   }
 
+  /** `available` is what the dependencies allow, `paused` what is actually refused. */
   evaluate(name) {
-    return evaluate(name, this.states(), this.forcedOff);
+    const decision = evaluate(name, this.states(), this.forcedOff);
+    return { ...decision, paused: !decision.available && (decision.forced || this.enforcement === 'enforce') };
   }
 
   snapshot() {
@@ -281,10 +301,10 @@ class DependencyHealth {
     this.timer.unref();
   }
 
-  async stop() {
+  stop() {
     clearInterval(this.timer);
     this.timer = null;
-    await this.running?.catch(() => {});
+    // Not awaited: probes only read, and a hung one must not eat the shutdown window.
     hostMetrics.stop();
   }
 }

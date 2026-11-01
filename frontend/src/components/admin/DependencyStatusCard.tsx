@@ -26,7 +26,7 @@ const STATE_ICONS: Record<DependencyState, React.ReactNode> = {
  * actually reported: a value it could not read stays out rather than showing 0.
  */
 function useMetricLabels() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (metrics: DependencyStatus['metrics']): string[] => {
     if (!metrics) return [];
     const labels: string[] = [];
@@ -36,11 +36,52 @@ function useMetricLabels() {
     add(metrics.cpuPercent, 'cpu');
     add(metrics.memoryPercent, 'memory');
     add(metrics.eventLoopDelayMs, 'eventLoop');
-    add(metrics.freeBytes, 'free', (bytes) => (bytes / GB).toFixed(1));
-    add(metrics.pendingPhotos, 'pending');
+    add(metrics.freeBytes, 'free', (bytes) => (bytes / GB).toLocaleString(i18n.language, { maximumFractionDigits: 1 }));
+    if (typeof metrics.pendingPhotos === 'number') {
+      labels.push(t('systemHealth.dependencies.metrics.pending', { count: metrics.pendingPhotos }));
+    }
     return labels;
   };
 }
+
+interface ThresholdInputProps {
+  label: string;
+  saved: number;
+  min: number;
+  max: number;
+  disabled: boolean;
+  onSave: (value: number, onError: () => void) => void;
+}
+
+/** Saves on blur. A value that is out of range or refused goes back to the saved one. */
+const ThresholdInput: React.FC<ThresholdInputProps> = ({ label, saved, min, max, disabled, onSave }) => {
+  const [value, setValue] = React.useState(String(saved));
+  React.useEffect(() => setValue(String(saved)), [saved]);
+
+  return (
+    <label className="text-sm text-body">
+      {label}
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => {
+          const next = Number(value);
+          if (next === saved) return;
+          if (!Number.isInteger(next) || next < min || next > max) {
+            setValue(String(saved));
+            return;
+          }
+          onSave(next, () => setValue(String(saved)));
+        }}
+        className="block w-24 mt-1 rounded border border-line bg-transparent px-2 py-1"
+      />
+    </label>
+  );
+};
 
 /**
  * Mounted only with status data, so the page's other panels do not depend on
@@ -56,13 +97,17 @@ const DegradationControls: React.FC<{ status: DegradationStatus }> = ({ status }
     mutationFn: () => systemHealthService.recheckStatus(),
     invalidateKeys,
     successMessage: t('systemHealth.dependencies.recheckedToast'),
-    errorMessage: () => t('toast.saveError'),
+    errorMessage: () => t('systemHealth.dependencies.recheckFailed'),
   });
   const save = useMutationWithToast({
     mutationFn: systemHealthService.updateDegradationSettings,
     invalidateKeys,
-    successMessage: t('toast.settingsSaved', 'Settings saved'),
-    errorMessage: () => t('toast.saveError'),
+    successMessage: t('toast.settingsSaved'),
+    errorMessage: (error: unknown) => (
+      (error as { response?: { data?: { code?: string } } })?.response?.data?.code === 'INVALID_LOAD_THRESHOLDS'
+        ? t('systemHealth.dependencies.thresholdsInvalid')
+        : t('toast.saveError')
+    ),
   });
 
   if (!canManage) return null;
@@ -99,38 +144,22 @@ const DegradationControls: React.FC<{ status: DegradationStatus }> = ({ status }
         ))}
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm text-body">
-          {t('systemHealth.dependencies.cpuThrottle')}
-          <input
-            key={`throttle-${status.load.throttlePercent}`}
-            type="number"
-            min={20}
-            max={95}
-            defaultValue={status.load.throttlePercent}
-            disabled={save.isPending}
-            onBlur={(event) => {
-              const value = Number(event.target.value);
-              if (value !== status.load.throttlePercent) save.mutate({ cpuThrottlePercent: value });
-            }}
-            className="block w-24 mt-1 rounded border border-line bg-transparent px-2 py-1"
-          />
-        </label>
-        <label className="text-sm text-body">
-          {t('systemHealth.dependencies.cpuResume')}
-          <input
-            key={`resume-${status.load.resumePercent}`}
-            type="number"
-            min={5}
-            max={90}
-            defaultValue={status.load.resumePercent}
-            disabled={save.isPending}
-            onBlur={(event) => {
-              const value = Number(event.target.value);
-              if (value !== status.load.resumePercent) save.mutate({ cpuResumePercent: value });
-            }}
-            className="block w-24 mt-1 rounded border border-line bg-transparent px-2 py-1"
-          />
-        </label>
+        <ThresholdInput
+          label={t('systemHealth.dependencies.cpuThrottle')}
+          saved={status.load.throttlePercent}
+          min={20}
+          max={95}
+          disabled={save.isPending}
+          onSave={(value, onError) => save.mutate({ cpuThrottlePercent: value }, { onError })}
+        />
+        <ThresholdInput
+          label={t('systemHealth.dependencies.cpuResume')}
+          saved={status.load.resumePercent}
+          min={5}
+          max={90}
+          disabled={save.isPending}
+          onSave={(value, onError) => save.mutate({ cpuResumePercent: value }, { onError })}
+        />
       </div>
       <Button variant="secondary" size="sm" onClick={() => recheck.mutate()} disabled={recheck.isPending}>
         {t('systemHealth.dependencies.recheck')}
@@ -166,7 +195,7 @@ export const DependencyStatusCard: React.FC = () => {
           const metrics = metricLabels(dependency.metrics);
           return (
             <li key={name} className="py-2">
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex flex-wrap items-center gap-x-2 text-sm">
                 {STATE_ICONS[dependency.state]}
                 <span className="font-medium text-heading">{t(`systemHealth.dependencies.name.${name}`, name)}</span>
                 <span className="text-muted">{t(`systemHealth.dependencies.state.${dependency.state}`)}</span>
@@ -192,15 +221,29 @@ export const DependencyStatusCard: React.FC = () => {
       <h3 className="text-sm font-semibold text-heading mt-4 mb-2">{t('systemHealth.dependencies.capabilitiesTitle')}</h3>
       <ul className="space-y-1">
         {(data?.capabilities ?? []).map((capability) => (
-          <li key={capability.name} className="flex items-center gap-2 text-sm">
-            {capability.available ? STATE_ICONS.healthy : STATE_ICONS.degraded}
+          <li key={capability.name} className="flex flex-wrap items-center gap-x-2 text-sm">
+            {capability.available && !capability.paused ? STATE_ICONS.healthy : STATE_ICONS.degraded}
             <span className="text-body">{t(`systemHealth.dependencies.capability.${capability.name}`, capability.name)}</span>
             <span className="text-muted">
-              {capability.available ? t('systemHealth.dependencies.available') : t('systemHealth.dependencies.unavailable')}
+              {capability.forced
+                ? t('systemHealth.dependencies.pausedByAdmin')
+                : capability.paused
+                  ? t('systemHealth.dependencies.unavailable')
+                  : capability.available
+                    ? t('systemHealth.dependencies.available')
+                    : t('systemHealth.dependencies.wouldPause')}
             </span>
           </li>
         ))}
       </ul>
+
+      {data?.load && (
+        <p className="mt-3 text-xs text-muted">
+          {t(data.enforcement === 'enforce' ? 'systemHealth.dependencies.modeEnforce' : 'systemHealth.dependencies.modeObserve')}
+          {' · '}
+          {t('systemHealth.dependencies.thresholds', { throttle: data.load.throttlePercent, resume: data.load.resumePercent })}
+        </p>
+      )}
 
       {data && <DegradationControls status={data} />}
     </Card>

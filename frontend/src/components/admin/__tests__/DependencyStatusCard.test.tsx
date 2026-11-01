@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const query = vi.hoisted(() => vi.fn());
 vi.mock('@tanstack/react-query', () => ({ useQuery: query }));
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string, options?: unknown) => (typeof options === 'string' ? options : key) }),
+  useTranslation: () => ({
+    t: (key: string, options?: unknown) => (typeof options === 'string' ? options : key),
+    i18n: { language: 'en' },
+  }),
 }));
 vi.mock('../../common', () => ({
   Card: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
@@ -37,7 +40,7 @@ describe('DependencyStatusCard', () => {
         storage: { state: 'down', since: '2026-11-01T10:00:00Z', detail: 'EIO', metrics: null },
         disk: { state: 'healthy', since: '2026-11-01T10:00:00Z', detail: null, metrics: { freeBytes: 2 * 1024 ** 3 } },
       },
-      capabilities: [{ name: 'uploads.new', available: false, forced: false, blockedBy: ['storage'] }],
+      capabilities: [{ name: 'uploads.new', available: false, paused: true, forced: false, blockedBy: ['storage'] }],
     } });
     render(<DependencyStatusCard />);
     expect(screen.getByText('EIO')).toBeTruthy();
@@ -52,10 +55,12 @@ describe('DependencyStatusCard', () => {
       forcedOff: [],
       load: { level: 1, applied: false, throttlePercent: 70, resumePercent: 50 },
       dependencies: { disk: { state: 'healthy', since: '', detail: null, metrics: null } },
-      capabilities: [{ name: 'uploads.new', available: true, forced: false, blockedBy: [] }],
+      capabilities: [{ name: 'uploads.new', available: false, paused: false, forced: false, blockedBy: ['storage'] }],
     } });
     const { unmount } = render(<DependencyStatusCard />);
     expect(screen.queryByText('systemHealth.dependencies.recheck')).toBeNull();
+    expect(screen.getByText('systemHealth.dependencies.wouldPause')).toBeTruthy();
+    expect(screen.queryByText('systemHealth.dependencies.unavailable')).toBeNull();
     unmount();
     canManage.mockReturnValue(true);
     render(<DependencyStatusCard />);

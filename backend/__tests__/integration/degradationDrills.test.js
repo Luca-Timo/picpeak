@@ -63,6 +63,7 @@ describe('outage drills', () => {
     app.use(cookieParser());
     app.use('/api/admin/events', require('../../src/routes/adminPhotos'));
     app.use('/api/admin/system-health', require('../../src/routes/adminSystemHealth'));
+    app.use('/api/admin/settings', require('../../src/routes/adminSettings'));
     app.use('/api/gallery', require('../../src/routes/gallery'));
     // eslint-disable-next-line no-unused-vars
     app.use((err, req, res, next) => res.status(err.statusCode || err.status || 500).json({ error: err.message, code: err.code }));
@@ -216,6 +217,16 @@ describe('outage drills', () => {
         expect(res.body.code).not.toBe('CAPABILITY_UNAVAILABLE');
         expect(res.body.dependencies).toBeUndefined();
       }
+    });
+
+    it('does not let settings.edit write around system.manage', async () => {
+      const res = await request(app).put('/api/admin/settings/general').set('Authorization', `Bearer ${token}`)
+        .send({ degradation_enforcement: 'observe', degradation_forced_off: ['uploads.new'], degradation_cpu_throttle_percent: 5 });
+      expect(res.status).toBeLessThan(500);
+      const rows = await db('app_settings').whereIn('setting_key', ['degradation_forced_off', 'degradation_cpu_throttle_percent']);
+      expect(rows.filter((row) => row.setting_value.includes('uploads.new') || row.setting_key.endsWith('throttle_percent'))).toEqual([]);
+      const stored = await db('app_settings').where({ setting_key: 'degradation_enforcement' }).first();
+      expect(JSON.parse(stored.setting_value)).toBe('enforce');
     });
 
     it('gives no way to force a paused capability on', async () => {

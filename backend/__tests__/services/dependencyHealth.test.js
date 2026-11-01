@@ -36,10 +36,69 @@ describe('breaker transitions', () => {
     expect(health.snapshot().dependencies.storage.detail).toBe('EIO');
   });
 
-  it('never calls a merely slow dependency down', async () => {
-    const health = build({ storage: jest.fn().mockResolvedValue({ state: 'degraded', detail: 'slow' }) });
+  it('gives a merely slow dependency longer, and never calls it down', async () => {
+    const health = build({ storage: jest.fn().mockResolvedValue({ state: 'degraded', detail: 'slow', slow: true }) });
+    await ticks(health, DOWN_AFTER - 1);
+    expect(health.states().storage).toBe('healthy');
+    await ticks(health, 1);
+    expect(health.states().storage).toBe('degraded');
     await ticks(health, DOWN_AFTER * 2);
     expect(health.states().storage).toBe('degraded');
+  });
+
+  it('does not let a bad reading improve the state', async () => {
+    const probe = jest.fn().mockRejectedValue(new Error('EIO'));
+    const health = build({ storage: probe });
+    await ticks(health, DOWN_AFTER);
+    probe.mockResolvedValueOnce({ state: 'healthy' });
+    await ticks(health, 3);
+    expect(health.states().storage).toBe('down');
+    probe.mockResolvedValueOnce({ state: 'degraded', detail: 'slow', slow: true });
+    await ticks(health, 1);
+    expect(health.states().storage).toBe('down');
+  });
+
+  it('steps down to degraded only after a stable run of better readings', async () => {
+    const probe = jest.fn().mockRejectedValue(new Error('disk full'));
+    const health = build({ disk: probe });
+    await ticks(health, DOWN_AFTER);
+    probe.mockReset();
+    probe.mockResolvedValue({ state: 'degraded' });
+    await ticks(health, RECOVER_AFTER - 1);
+    expect(health.states().disk).toBe('down');
+    await ticks(health, 1);
+    expect(health.states().disk).toBe('degraded');
+  });
+
+  it('does not stack a new probe on one that has not returned', async () => {
+    const probe = jest.fn(() => new Promise(() => {}));
+    const health = build({ storage: probe });
+    jest.useFakeTimers();
+    try {
+      for (let i = 0; i < 3; i += 1) {
+        const pass = health.tick();
+        await jest.advanceTimersByTimeAsync(6000);
+        await pass;
+      }
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(health.snapshot().dependencies.storage.detail).toBe('previous check has not returned');
+  });
+
+  it('keeps checking when the settings read hangs', async () => {
+    getAppSetting.mockImplementation(() => new Promise(() => {}));
+    const health = build({ storage: jest.fn().mockResolvedValue({ state: 'healthy' }) });
+    jest.useFakeTimers();
+    try {
+      const pass = health.tick();
+      await jest.advanceTimersByTimeAsync(6000);
+      await pass;
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(health.running).toBeNull();
   });
 
   it('needs a stable run to recover, and a blip restarts it', async () => {
@@ -96,8 +155,18 @@ describe('capabilities', () => {
   it('feeds breaker state into the decision', async () => {
     const health = build({ storage: jest.fn().mockRejectedValue(new Error('EIO')) });
     await ticks(health, TRIP_AFTER);
-    expect(health.evaluate('uploads.new')).toMatchObject({ available: false, blockedBy: ['storage'] });
+    expect(health.evaluate('uploads.new')).toMatchObject({ available: false, paused: false, blockedBy: ['storage'] });
     expect(health.evaluate('downloads.archive').available).toBe(true);
+  });
+
+  it('pauses for real only when enforcing or forced', async () => {
+    const health = build({ storage: jest.fn().mockRejectedValue(new Error('EIO')) });
+    await ticks(health, TRIP_AFTER);
+    health.enforcement = 'enforce';
+    expect(health.evaluate('uploads.new').paused).toBe(true);
+    health.enforcement = 'observe';
+    health.forcedOff = ['downloads.archive'];
+    expect(health.evaluate('downloads.archive').paused).toBe(true);
   });
 
   it('drops unknown names from a stored override', async () => {

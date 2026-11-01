@@ -11,9 +11,11 @@ const lastObserved = new Map();
 /**
  * Refuses a request while a capability is unavailable.
  *
- * Mount it AFTER the route's auth and access checks: this only ever adds a
- * refusal, and an anonymous caller must not learn the state of the server from
- * it. The answer names the capability and no dependency, for the same reason.
+ * Mount it AFTER the route's auth and access checks, including any that run
+ * inside the handler (there, call refuseCapability instead): this only ever
+ * adds a refusal, and someone without access must not learn the state of the
+ * server from it. The answer names the capability and no dependency, for the
+ * same reason.
  *
  * In observe mode an automatic pause is logged, not applied. An admin's own
  * force-off always applies: they asked for it.
@@ -22,7 +24,7 @@ function requireCapability(name) {
   if (!isCapability(name)) throw new Error(`Unknown capability: ${name}`);
 
   return function capabilityGuard(req, res, next) {
-    if (!refuseCapability(res, name)) next();
+    if (!refuseCapability(req, res, name)) next();
   };
 }
 
@@ -30,11 +32,11 @@ function requireCapability(name) {
  * The same decision for a route that can only tell partway through whether it
  * needs the capability. Answers the request and returns true when it refuses.
  */
-function refuseCapability(res, name) {
+function refuseCapability(req, res, name) {
   const decision = dependencyHealth.evaluate(name);
   if (decision.available) return false;
 
-  if (dependencyHealth.enforcement !== 'enforce' && !decision.forced) {
+  if (!decision.paused) {
     const now = Date.now();
     if (now - (lastObserved.get(name) || 0) >= OBSERVE_LOG_INTERVAL_MS) {
       lastObserved.set(name, now);
@@ -43,6 +45,9 @@ function refuseCapability(res, name) {
     return false;
   }
 
+  // A refused upload's body is still arriving: without this the client sends
+  // all of it before seeing the answer, as the sibling refusals note.
+  if (req.method !== 'GET' && !req.readableEnded) res.set('Connection', 'close');
   res.set({ 'Retry-After': String(RETRY_AFTER_SECONDS), 'Cache-Control': 'no-store' });
   res.status(503).json({
     error: 'This feature is temporarily unavailable',

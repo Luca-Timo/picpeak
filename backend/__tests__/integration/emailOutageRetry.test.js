@@ -98,9 +98,57 @@ describe('mail server outage', () => {
     expect(await row(id)).toMatchObject({ retry_count: 1, scheduled_at: before.scheduled_at });
   });
 
-  it('falls back to the attempt cap for a very old mail', async () => {
-    const id = await queueMail(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000));
-    send.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+  const status = () => require('../../src/services/emailProcessor').getQueueProcessorStatus();
+  const refused = () => Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+
+  async function endOutage() {
+    send.mockResolvedValue({ html: '<p>ok</p>' });
+    await queueMail();
+    await run();
+    await db('email_queue').del();
+  }
+
+  it('reports the outage until a mail gets through', async () => {
+    await endOutage();
+    expect(status().outage).toBeNull();
+    await queueMail();
+    send.mockRejectedValue(refused());
+    await run();
+    expect(status().outage).toMatchObject({ error: 'connect ECONNREFUSED' });
+    await endOutage();
+    expect(status().outage).toBeNull();
+  });
+
+  it('protects a mail queued long before the outage began', async () => {
+    await endOutage();
+    const id = await queueMail(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    send.mockRejectedValue(refused());
+    await run();
+    expect((await row(id)).retry_count).toBe(0);
+  });
+
+  it('goes back to the attempt cap once an outage has lasted three days', async () => {
+    await endOutage();
+    await queueMail();
+    send.mockRejectedValue(refused());
+    await run();
+    await db('email_queue').del();
+
+    const id = await queueMail();
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 4 * 24 * 60 * 60 * 1000);
+    await run();
+    clock.mockRestore();
+    expect((await row(id)).retry_count).toBe(1);
+  });
+
+  it.each([
+    ['one recipient greylisted', { code: 'EENVELOPE', responseCode: 450 }],
+    ['a failure after DATA', { code: 'ETIMEDOUT', command: 'DATA' }],
+  ])('spends an attempt on %s', async (_label, shape) => {
+    await endOutage();
+    const id = await queueMail();
+    send.mockRejectedValue(Object.assign(new Error('try later'), shape));
     await run();
     expect((await row(id)).retry_count).toBe(1);
   });

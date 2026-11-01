@@ -3,24 +3,22 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 
 /**
- * Tells the visitor a feature is paused for a moment, when the server refuses
- * one (config/api.ts raises the event). Calm and specific: the rest of the app
- * keeps working. The toast id stops repeated refusals from stacking.
+ * Tells the visitor a ZIP download is paused for a moment, when the server
+ * refuses one (config/api.ts raises the event). Upload screens show their own
+ * message for the same refusal, so a toast here would say it twice. The toast
+ * id stops repeated refusals from stacking.
  */
 export const CapabilityNotice: React.FC = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const show = (event: Event) => {
-      const capability = (event as CustomEvent<unknown>).detail;
-      if (typeof capability !== 'string') return;
-      const key = `capabilityNotice.${capability}`;
-      if (!i18n.exists(key, { keySeparator: false })) return;
-      toast.info(t(key, { keySeparator: false }), { toastId: key });
+      if ((event as CustomEvent<unknown>).detail !== 'downloads.archive') return;
+      toast.info(t('capabilityNotice.archive'), { toastId: 'capability-archive' });
     };
     window.addEventListener('picpeak:capability-unavailable', show);
     return () => window.removeEventListener('picpeak:capability-unavailable', show);
-  }, [t, i18n]);
+  }, [t]);
 
   return null;
 };

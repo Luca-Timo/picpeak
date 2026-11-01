@@ -26,23 +26,25 @@ describe('load governor', () => {
     expect(governor.level).toBe(1);
     expect(governor.workerLimit(4)).toBe(2);
     feed(governor, 90, 1);
+    expect(governor.level).toBe(1);
+    feed(governor, 90, 1);
     expect(governor.level).toBe(2);
     expect(governor.workerLimit(4)).toBe(1);
   });
 
   it('holds between the limit and the resume point', () => {
     const governor = build();
-    feed(governor, 90, 3);
+    feed(governor, 90, 4);
     feed(governor, 60, 10);
     expect(governor.level).toBe(2);
   });
 
   it('recovers a step at a time', () => {
     const governor = build();
-    feed(governor, 90, 3);
+    feed(governor, 90, 4);
     feed(governor, 20, 2);
     expect(governor.level).toBe(1);
-    feed(governor, 20, 1);
+    feed(governor, 20, 2);
     expect(governor.level).toBe(0);
   });
 
@@ -72,7 +74,7 @@ describe('load governor', () => {
     expect(governor.bulkDelayMs()).toBe(0);
     feed(governor, 90, 2);
     const reduced = governor.bulkDelayMs();
-    feed(governor, 90, 1);
+    feed(governor, 90, 2);
     expect(governor.bulkDelayMs()).toBeGreaterThan(reduced);
   });
 
@@ -92,7 +94,7 @@ describe('load governor', () => {
 
   it('only reports in observe mode', () => {
     const governor = new LoadGovernor();
-    feed(governor, 100, 3);
+    feed(governor, 100, 4);
     expect(governor.level).toBe(2);
     expect(governor.workerLimit(4)).toBe(4);
     expect(governor.bulkDelayMs()).toBe(0);

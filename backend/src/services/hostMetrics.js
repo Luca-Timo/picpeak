@@ -51,8 +51,10 @@ function memoryPercent() {
   const limit = Number(readCgroup('memory.max'));
   if (current > 0 && limit > 0) {
     // Page cache is reclaimable. Counting it would call every file server full.
-    const inactive = /^inactive_file (\d+)$/m.exec(readCgroup('memory.stat') || '');
-    return (Math.max(0, current - Number(inactive?.[1] || 0)) / limit) * 100;
+    const stat = readCgroup('memory.stat') || '';
+    const cache = ['active_file', 'inactive_file']
+      .reduce((sum, field) => sum + Number(new RegExp(`^${field} (\\d+)$`, 'm').exec(stat)?.[1] || 0), 0);
+    return (Math.max(0, current - cache) / limit) * 100;
   }
   // Linux counts reclaimable memory as free. macOS does not, so a healthy Mac
   // reads as nearly full: there it stays unknown rather than raising an alarm.

@@ -42,6 +42,17 @@ describe('GET /api/admin/system-health/status', () => {
   });
 });
 
+describe('POST /api/admin/system-health/status/recheck', () => {
+  it('audits who lifted a pause early', async () => {
+    logActivity.mockClear();
+    jest.spyOn(dependencyHealth, 'recheck').mockResolvedValue({ enforcement: 'observe' });
+    const res = await request(app).post('/api/admin/system-health/status/recheck').set('Authorization', 'Bearer x');
+    expect(res.status).toBe(200);
+    expect(logActivity).toHaveBeenCalledWith('degradation_rechecked', {}, null, expect.objectContaining({ id: 7 }));
+    jest.restoreAllMocks();
+  });
+});
+
 describe('PUT /api/admin/system-health/status/settings', () => {
   const put = (body) => request(app).put('/api/admin/system-health/status/settings')
     .set('Authorization', 'Bearer x').send(body);

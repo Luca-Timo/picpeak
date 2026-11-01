@@ -237,6 +237,7 @@ router.get('/', requirePermission('events.view'), handleAsync(async (req, res) =
 // the recipients the download link.
 router.post('/',
   requirePermission('events.edit'),
+  requireCapability('uploads.new'),
   handleAsync(withUploadAdmission(async (req, res) => {
     const up = await runAdminUpload(req, res, CREATE_FIELD_LIMITS);
     if (!up.ok) return; // 4xx already sent
@@ -603,6 +604,7 @@ router.post('/:id/resend',
 router.get('/:id/download',
   requirePermission('photos.download'),
   [param('id').isInt({ min: 1 })],
+  requireCapability('downloads.archive'),
   handleAsync(async (req, res) => {
     validateRequest(req);
     const transfer = await transferService.getTransfer(parseInt(req.params.id, 10));
@@ -623,6 +625,7 @@ router.get('/:id/download',
 router.get('/:id/uploads/download',
   requirePermission('photos.download'),
   [param('id').isInt({ min: 1 })],
+  requireCapability('downloads.archive'),
   handleAsync(async (req, res) => {
     validateRequest(req);
     const transfer = await transferService.getTransfer(parseInt(req.params.id, 10));

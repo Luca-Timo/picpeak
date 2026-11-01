@@ -457,6 +457,7 @@ router.post(
   requireApiScope('write'),
   requirePermission('photos.upload'),
   requireEventOwnership,
+  requireCapability('uploads.new'),
   async (req, res) => {
     const eventId = Number(req.params.id);
     if (!/^\d+$/.test(req.params.id) || !Number.isSafeInteger(eventId) || eventId < 1) {

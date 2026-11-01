@@ -681,8 +681,7 @@
     "creditNameHelp": "Wird bei Uploads dieses Kontos als Fotograf angegeben, wenn die Datei keinen Fotografennamen in den Metadaten enthält."
   },
   "capabilityNotice": {
-    "uploads.new": "Uploads sind kurz pausiert. Bitte versuchen Sie es gleich noch einmal.",
-    "downloads.archive": "ZIP-Downloads sind kurz pausiert. Einzelne Fotos können Sie weiterhin ansehen und herunterladen."
+    "archive": "ZIP-Downloads sind kurz pausiert. Einzelne Fotos können Sie weiterhin ansehen und herunterladen."
   },
   "systemHealth": {
     "dependencies": {
@@ -704,7 +703,8 @@
         "memory": "Arbeitsspeicher {{value}} %",
         "eventLoop": "Event-Loop-Verzögerung {{value}} ms",
         "free": "{{value}} GB frei",
-        "pending": "{{value}} Fotos warten"
+        "pending_one": "{{count}} Foto wartet",
+        "pending_other": "{{count}} Fotos warten"
       },
       "recheck": "Jetzt erneut prüfen",
       "recheckedToast": "Abhängigkeiten geprüft.",
@@ -715,6 +715,13 @@
       "cpuResume": "Wieder beschleunigen unter (% CPU)",
       "throttled": "Der Server ist ausgelastet. Hintergrundarbeit wie die Vorschauerstellung läuft langsamer, damit Galerien schnell bleiben.",
       "wouldThrottle": "Der Server ist ausgelastet. Hintergrundarbeit würde verlangsamt, wenn Funktionen automatisch pausiert würden.",
+      "recheckFailed": "Die Prüfung konnte nicht ausgeführt werden.",
+      "thresholdsInvalid": "Der Wiederaufnahmewert muss unter dem Grenzwert liegen.",
+      "wouldPause": "Würde pausieren",
+      "pausedByAdmin": "Von einem Admin pausiert",
+      "modeEnforce": "Funktionen pausieren automatisch",
+      "modeObserve": "Beobachtung: Nichts pausiert automatisch",
+      "thresholds": "Hintergrundarbeit wird über {{throttle}} % CPU langsamer und unter {{resume}} % wieder schneller",
       "capabilitiesTitle": "Funktionen",
       "capability": {
         "uploads.new": "Neue Uploads",
@@ -907,6 +914,7 @@
       "uploadAllAnyway": "Alle trotzdem hochladen"
     },
     "capacity": {
+      "paused": "Uploads sind kurz pausiert. Bitte versuchen Sie es gleich noch einmal.",
       "decoded": "Dieses Bild überschreitet die Bildverarbeitungsgrenzen des Servers.",
       "imagePixels": "Dieses Bild ist größer als die {{max}} Megapixel, die dieser Server verarbeitet.",
       "imageDimension": "Dieses Bild ist länger als die {{max}} px je Seite, die dieser Server verarbeitet.",

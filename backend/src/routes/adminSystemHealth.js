@@ -98,8 +98,8 @@ async function evidenceKeyUsage(currentKeyId) {
  * GET /api/admin/system-health/status
  *
  * What the app depends on and which capabilities that leaves available, from
- * the last probes. Answers from memory, so it still works with the database
- * down. Probe details can name hosts and paths: this stays behind admin auth.
+ * the last probes. Runs no query of its own, though admin auth does. Probe
+ * details can name hosts and paths: this stays behind admin auth.
  */
 router.get(
   '/status',
@@ -116,7 +116,11 @@ router.get(
 router.post(
   '/status/recheck',
   requirePermission('system.manage'),
-  handleAsync(async (req, res) => successResponse(res, await dependencyHealth.recheck())),
+  handleAsync(async (req, res) => {
+    const snapshot = await dependencyHealth.recheck();
+    await logActivity('degradation_rechecked', {}, null, { type: 'admin', id: req.admin.id, name: req.admin.username });
+    return successResponse(res, snapshot);
+  }),
 );
 
 /**

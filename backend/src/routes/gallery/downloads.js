@@ -27,7 +27,7 @@ const statsWriteFailed = (what) => (err) => {
 const { once } = require('events');
 const { pipeStreamToResponse, answerVanished } = require('../../utils/streamResponse');
 const { isStorageNotFoundError } = require('../../services/storage/storageErrors');
-const { requireCapability, refuseCapability } = require('../../middleware/requireCapability');
+const { refuseCapability } = require('../../middleware/requireCapability');
 const { resolvePhotoFilePath, resolvePhotoStorageKey } = require('../../services/photoResolver');
 const { errorResponse } = require('../../utils/routeHelpers');
 const { blockHiddenGallery } = require('../../utils/revealMode');
@@ -794,7 +794,7 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
     }
 
     // A finished archive above needs no build, so only this path is paused.
-    if (refuseCapability(res, 'downloads.archive')) return;
+    if (refuseCapability(req, res, 'downloads.archive')) return;
 
     // Fallback: on-the-fly streaming (existing behavior). Only pre-build the
     // guest cache when it will actually be served next time — a guest
@@ -1053,7 +1053,7 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
 });
 
 // Download selected photos as ZIP
-router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken, blockHiddenGallery, requireCapability('downloads.archive'), async (req, res) => {
+router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken, blockHiddenGallery, async (req, res) => {
   // Hoisted so the catch can reclaim reads opened before the failure.
   let selectedGuard = null;
   let selectedCancelled = false;
@@ -1062,6 +1062,7 @@ router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken,
     // Check if downloads are allowed for this event
     const denial = await originalAssetDenial(req);
     if (denial) return res.status(403).json(denial);
+    if (refuseCapability(req, res, 'downloads.archive')) return;
 
     const ids = Array.isArray(req.body?.photo_ids) ? req.body.photo_ids : [];
     if (!ids.length) {
@@ -1289,7 +1290,7 @@ router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken,
 // ──────────────────────────────────────────────────────────────────────────
 
 // Kick off (or join) a build. Returns the polling token.
-router.post('/:slug/download-jobs', verifyGalleryAccess, denySlideshowToken, blockHiddenGallery, requireCapability('downloads.archive'), async (req, res) => {
+router.post('/:slug/download-jobs', verifyGalleryAccess, denySlideshowToken, blockHiddenGallery, async (req, res) => {
   try {
     const denial = await originalAssetDenial(req);
     if (denial) return res.status(403).json(denial);
@@ -1335,8 +1336,11 @@ router.post('/:slug/download-jobs', verifyGalleryAccess, denySlideshowToken, blo
         photoIds,
         accessLevel: req.accessLevel,
         previewOnly,
+        // A finished or running archive stays available: only a new build pauses.
+        mayBuild: () => !refuseCapability(req, res, 'downloads.archive'),
       });
     } catch (err) {
+      if (err.code === 'BUILD_REFUSED') return undefined;
       if (err.code === 'NO_PHOTOS') {
         return res.status(404).json({ error: 'No photos available for this selection' });
       }

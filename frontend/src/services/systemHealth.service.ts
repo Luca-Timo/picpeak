@@ -102,6 +102,7 @@ export interface DependencyStatus {
 export interface CapabilityStatus {
   name: string;
   available: boolean;
+  paused: boolean;
   forced: boolean;
   blockedBy: string[];
 }

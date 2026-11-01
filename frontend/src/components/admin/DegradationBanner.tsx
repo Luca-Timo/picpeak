@@ -18,7 +18,11 @@ export const DegradationBanner: React.FC = () => {
     refetchInterval: 30000,
   });
 
-  const limited = (data?.capabilities ?? []).some((capability) => !capability.available);
+  const limited = (data?.capabilities ?? []).some((capability) => capability.paused);
+  // Dismissing covers this incident, not the next one.
+  React.useEffect(() => {
+    if (!limited) setDismissed(false);
+  }, [limited]);
   if (!limited || dismissed) return null;
 
   return (

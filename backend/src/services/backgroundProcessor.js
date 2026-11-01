@@ -33,10 +33,10 @@ const { createInterruptibleSleep } = require('../utils/interruptibleSleep');
 const { processPhoto } = require('./photoProcessor');
 const { isTransient } = require('./imageResourcePolicy');
 const mediaAttempts = require('./mediaAttemptService');
+const loadGovernor = require('./loadGovernor');
 // A photo is claimed at most this many times before it is recorded as failed:
 // claims that ended in a transient image-worker refusal (busy, unavailable,
 // deadline) and claims the janitor recovered from a process that died.
-const loadGovernor = require('./loadGovernor');
 const { MAX_ATTEMPTS } = mediaAttempts;
 const RETRY_BACKOFF_MS = 15000;
 

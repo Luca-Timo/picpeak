@@ -1,5 +1,5 @@
 const { secretValues, redactEmailData, redactRenderedHtml, replaceMaskedSecrets, isSecretKey, redactRecoveryLinks, redactRecoveryLinksInData, hasMaskedRecoveryLink } = require('../utils/emailSecretRedaction');
-const { queueTimestamp, toMillis } = require('../utils/queueTimestamps');
+const { queueTimestamp } = require('../utils/queueTimestamps');
 const nodemailer = require('nodemailer');
 const { smtpConnectionOptions } = require('../utils/mailConnection');
 const { db } = require('../database/db');
@@ -1437,11 +1437,17 @@ const MAIL_OUTAGE_CODES = new Set([
 ]);
 const MAIL_OUTAGE_RESPONSE_CODES = new Set([421, 450, 451]);
 const MAIL_OUTAGE_RETRY_MS = 5 * 60 * 1000;
-// After this long a mail goes back to the cap, so a server that never returns
-// surfaces on System health rather than waiting silently for ever.
-const MAIL_OUTAGE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+// After this long mail goes back to the cap, so a server that never returns
+// ends in failed mail an admin can see, not in retries for ever.
+const MAIL_OUTAGE_MAX_MS = 3 * 24 * 60 * 60 * 1000;
+// Counted from the first failure, not per mail: a mail queued weeks ahead is
+// just as new to the outage. In memory, so a restart starts the count again.
+let mailOutage = null;
 
+// EENVELOPE is one recipient's answer (greylisting, a full mailbox), and after
+// DATA the server may already hold the mail, so a retry could deliver it twice.
 function isMailOutage(error) {
+  if (error?.code === 'EENVELOPE' || error?.command === 'DATA') return false;
   return MAIL_OUTAGE_CODES.has(error?.code) || MAIL_OUTAGE_RESPONSE_CODES.has(error?.responseCode);
 }
 
@@ -1452,6 +1458,7 @@ function getQueueProcessorStatus() {
     lastResult: processorStatus.lastResult,
     lastError: processorStatus.lastError,
     lastErrorCode: processorStatus.lastErrorCode,
+    outage: mailOutage,
   };
 }
 
@@ -1691,6 +1698,7 @@ async function processEmailQueueInternal({ ignoreSchedule = false, limit = 10, o
           }
         }
 
+        mailOutage = null;
         result.sent += 1;
         logger.info(`Email ${email.id} sent successfully`);
       } catch (error) {
@@ -1710,7 +1718,8 @@ async function processEmailQueueInternal({ ignoreSchedule = false, limit = 10, o
         // mail and must not spend one of its three attempts: at one pass a
         // minute, a short outage would strand everything queued. It waits and
         // the pass ends, since the next row would only hit the same server.
-        if (isMailOutage(error) && Date.now() - toMillis(email.created_at) < MAIL_OUTAGE_MAX_AGE_MS) {
+        if (isMailOutage(error)) mailOutage = { since: mailOutage?.since ?? Date.now(), error: error.message };
+        if (isMailOutage(error) && Date.now() - mailOutage.since < MAIL_OUTAGE_MAX_MS) {
           logger.warn(`Mail server unavailable, email ${email.id} deferred: ${error.message}`);
           try {
             await db('email_queue').where({ id: email.id, status: email.status }).update({

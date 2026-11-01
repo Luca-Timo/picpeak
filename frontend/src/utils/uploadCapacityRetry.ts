@@ -5,6 +5,7 @@
  * later, so the admin uploader waits and retries instead of failing them.
  */
 const TRANSIENT_CODES = new Set([
+  'CAPABILITY_UNAVAILABLE',
   'UPLOAD_PENDING_LIMIT', 'UPLOAD_CONCURRENCY_LIMIT', 'UPLOAD_TIMEOUT', 'UPLOAD_REQUEST_TIMEOUT',
 ]);
 

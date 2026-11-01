@@ -1,12 +1,12 @@
 jest.mock('../../src/database/db', () => ({ db: jest.fn() }));
-jest.mock('../../src/services/dependencyHealth', () => ({ evaluate: jest.fn(), enforcement: 'observe' }));
+jest.mock('../../src/services/dependencyHealth', () => ({ evaluate: jest.fn() }));
 
 const express = require('express');
 const request = require('supertest');
 const dependencyHealth = require('../../src/services/dependencyHealth');
 const { requireCapability } = require('../../src/middleware/requireCapability');
 
-const blocked = { name: 'uploads.new', available: false, forced: false, blockedBy: ['storage'] };
+const blocked = { name: 'uploads.new', available: false, paused: true, forced: false, blockedBy: ['storage'] };
 
 function buildApp() {
   const app = express();
@@ -16,7 +16,6 @@ function buildApp() {
 }
 
 beforeEach(() => {
-  dependencyHealth.enforcement = 'enforce';
   dependencyHealth.evaluate.mockReturnValue(blocked);
 });
 
@@ -36,6 +35,7 @@ describe('requireCapability', () => {
     expect(res.status).toBe(503);
     expect(res.headers['retry-after']).toBe('60');
     expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers.connection).toBe('close');
     expect(res.body).toEqual({
       error: 'This feature is temporarily unavailable',
       code: 'CAPABILITY_UNAVAILABLE',
@@ -44,16 +44,9 @@ describe('requireCapability', () => {
   });
 
   it('only logs an automatic pause in observe mode', async () => {
-    dependencyHealth.enforcement = 'observe';
+    dependencyHealth.evaluate.mockReturnValue({ ...blocked, paused: false });
     const res = await request(buildApp()).post('/upload').set('Authorization', 'Bearer x');
     expect(res.status).toBe(200);
-  });
-
-  it('applies an admin force-off even in observe mode', async () => {
-    dependencyHealth.enforcement = 'observe';
-    dependencyHealth.evaluate.mockReturnValue({ ...blocked, forced: true, blockedBy: [] });
-    const res = await request(buildApp()).post('/upload').set('Authorization', 'Bearer x');
-    expect(res.status).toBe(503);
   });
 
   it('never lets an anonymous caller past or tells them the state', async () => {

@@ -9,14 +9,15 @@ const path = require('path');
  */
 const ROUTES = 'src/routes';
 const GUARDED = [
-  ['gallery/uploads.js', "router.post('/:eventId/upload'", 'verifyGalleryAccess'],
-  ['gallery/uploads.js', "router.post('/:eventId/chunked-upload/init'", 'guestChunkChain'],
   ['adminPhotos.js', "router.post('/:eventId/upload'", 'requireEventOwnership'],
   ['adminPhotos.js', "router.post('/:eventId/chunked-upload/init'", 'requireEventOwnership'],
   ['publicTransferUpload.js', "router.post('/:token'", 'preUploadGuard'],
+  ['adminTransfers.js', "router.post('/',", "requirePermission('events.edit')"],
   ['adminTransfers.js', "router.post('/:id/upload-files'", "requirePermission('events.edit')"],
-  ['gallery/downloads.js', "router.post('/:slug/download-selected'", 'blockHiddenGallery'],
-  ['gallery/downloads.js', "router.post('/:slug/download-jobs'", 'blockHiddenGallery'],
+  ['adminTransfers.js', "router.get('/:id/download'", "requirePermission('photos.download')"],
+  ['adminTransfers.js', "router.get('/:id/uploads/download'", "requirePermission('photos.download')"],
+  ['adminExternalMedia.js', "router.post('/events/:id/import-external'", 'requireEventOwnership'],
+  ['v1/events.js', "'/events/:id/photos',", 'requireEventOwnership'],
   ['v1/events.js', "'/events/:id/photos/download',", 'requireEventOwnership'],
 ];
 
@@ -45,10 +46,24 @@ describe('capability guard placement', () => {
     expect(text.indexOf(authCheck)).toBeLessThan(guard);
   });
 
+  it.each([
+    ['gallery/uploads.js', "router.post('/:eventId/upload'", 'guestUploadGate(req)'],
+    ['gallery/uploads.js', "router.post('/:eventId/chunked-upload/init'", 'guestUploadGate(req)'],
+    ['gallery/downloads.js', "router.post('/:slug/download-selected'", 'originalAssetDenial(req)'],
+    ['publicTransfer.js', "router.get('/:token/download'", 'assertDownloadable(transfer)'],
+  ])('%s %s refuses only after %s', (file, route, accessCheck) => {
+    const source = fs.readFileSync(path.join(__dirname, '../..', ROUTES, file), 'utf8');
+    const text = source.slice(source.indexOf(route));
+    const check = text.indexOf('refuseCapability(req, res');
+    expect(text.indexOf(accessCheck)).toBeGreaterThan(-1);
+    expect(text.indexOf(accessCheck)).toBeLessThan(check);
+    expect(text.slice(0, check)).not.toContain('claimDownload(');
+  });
+
   it('serves a finished archive and pauses only the on-the-fly stream', () => {
     const source = fs.readFileSync(path.join(__dirname, '../..', ROUTES, 'gallery/downloads.js'), 'utf8');
     const route = source.slice(source.indexOf("router.get('/:slug/download-all'"), source.indexOf("router.post('/:slug/download-selected'"));
-    const check = route.indexOf("refuseCapability(res, 'downloads.archive')");
+    const check = route.indexOf("refuseCapability(req, res, 'downloads.archive')");
     expect(route.indexOf('verifyGalleryAccess')).toBeLessThan(check);
     expect(route.indexOf('openCachedZip')).toBeLessThan(check);
     expect(check).toBeLessThan(route.indexOf('Fallback: on-the-fly streaming'));
