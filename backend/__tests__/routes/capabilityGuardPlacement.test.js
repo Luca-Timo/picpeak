@@ -1,0 +1,60 @@
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * Security contract: a capability guard only adds a refusal, so it has to sit
+ * after a route's auth and access checks. In front of them an anonymous caller
+ * could read the server's state from a 503. This also pins which routes are
+ * guarded, so a new upload path does not quietly stay open during an outage.
+ */
+const ROUTES = 'src/routes';
+const GUARDED = [
+  ['gallery/uploads.js', "router.post('/:eventId/upload'", 'verifyGalleryAccess'],
+  ['gallery/uploads.js', "router.post('/:eventId/chunked-upload/init'", 'guestChunkChain'],
+  ['adminPhotos.js', "router.post('/:eventId/upload'", 'requireEventOwnership'],
+  ['adminPhotos.js', "router.post('/:eventId/chunked-upload/init'", 'requireEventOwnership'],
+  ['publicTransferUpload.js', "router.post('/:token'", 'preUploadGuard'],
+  ['adminTransfers.js', "router.post('/:id/upload-files'", "requirePermission('events.edit')"],
+  ['gallery/downloads.js', "router.post('/:slug/download-selected'", 'blockHiddenGallery'],
+  ['gallery/downloads.js', "router.post('/:slug/download-jobs'", 'blockHiddenGallery'],
+  ['v1/events.js', "'/events/:id/photos/download',", 'requireEventOwnership'],
+];
+
+// A resumed chunked upload must be able to finish, so these stay unguarded.
+const NEVER_GUARDED = [
+  ['gallery/uploads.js', "router.post('/:eventId/chunked-upload/:uploadId/chunk/:chunkIndex'"],
+  ['gallery/uploads.js', "router.post('/:eventId/chunked-upload/:uploadId/complete'"],
+  ['adminPhotos.js', "router.post('/:eventId/chunked-upload/:uploadId/chunk/:chunkIndex'"],
+];
+
+function declaration(file, route) {
+  const source = fs.readFileSync(path.join(__dirname, '../..', ROUTES, file), 'utf8');
+  const start = source.indexOf(route);
+  expect(start).toBeGreaterThan(-1);
+  const end = source.indexOf('async (req, res', start);
+  const handle = source.indexOf('handleAsync(', start);
+  return source.slice(start, Math.min(...[end, handle].filter((index) => index > -1)));
+}
+
+describe('capability guard placement', () => {
+  it.each(GUARDED)('%s %s runs its guard after %s', (file, route, authCheck) => {
+    const text = declaration(file, route);
+    const guard = text.indexOf('requireCapability(');
+    expect(guard).toBeGreaterThan(-1);
+    expect(text.indexOf(authCheck)).toBeGreaterThan(-1);
+    expect(text.indexOf(authCheck)).toBeLessThan(guard);
+  });
+
+  it('serves a finished archive and pauses only the on-the-fly stream', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../..', ROUTES, 'gallery/downloads.js'), 'utf8');
+    const route = source.slice(source.indexOf("router.get('/:slug/download-all'"), source.indexOf("router.post('/:slug/download-selected'"));
+    const check = route.indexOf("refuseCapability(res, 'downloads.archive')");
+    expect(route.indexOf('verifyGalleryAccess')).toBeLessThan(check);
+    expect(route.indexOf('openCachedZip')).toBeLessThan(check);
+    expect(check).toBeLessThan(route.indexOf('Fallback: on-the-fly streaming'));
+  });
+
+  it.each(NEVER_GUARDED)('%s %s lets a running upload finish', (file, route) => {
+    expect(declaration(file, route)).not.toContain('requireCapability(');
+  });
+});

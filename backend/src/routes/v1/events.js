@@ -73,6 +73,7 @@ const archiver = require('archiver');
 const { Readable } = require('stream');
 const { getStorage } = require('../../services/storage');
 const { isStorageNotFoundError } = require('../../services/storage/storageErrors');
+const { requireCapability } = require('../../middleware/requireCapability');
 const { resolvePhotoStorageKey, resolvePhotoFilePath } = require('../../services/photoResolver');
 const { pickRawDownloadName } = require('../../services/downloadFilenameService');
 const { buildContentDisposition, sanitizeForZipEntry } = require('../../utils/filenameSanitizer');
@@ -1548,6 +1549,7 @@ router.get(
   requirePermission(['photos.view', 'photos.download'], { requireAll: true }),
   requireNumericEventId,
   requireEventOwnership,
+  requireCapability('downloads.archive'),
   [
     query('ids').optional().isString(),
     resolutionValidator,

@@ -1,4 +1,5 @@
 const { secretValues, redactEmailData, redactRenderedHtml, replaceMaskedSecrets, isSecretKey, redactRecoveryLinks, redactRecoveryLinksInData, hasMaskedRecoveryLink } = require('../utils/emailSecretRedaction');
+const { queueTimestamp, toMillis } = require('../utils/queueTimestamps');
 const nodemailer = require('nodemailer');
 const { smtpConnectionOptions } = require('../utils/mailConnection');
 const { db } = require('../database/db');
@@ -1428,6 +1429,22 @@ const processorStatus = {
 // refusal reaches System Health instead of a generic "check the settings".
 let transporterError = null;
 
+// nodemailer's connection-level codes and the SMTP "try again later" answers.
+// A 5xx, a refused address or a broken template is about the mail itself and
+// keeps going through the retry cap.
+const MAIL_OUTAGE_CODES = new Set([
+  'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'EAI_AGAIN',
+]);
+const MAIL_OUTAGE_RESPONSE_CODES = new Set([421, 450, 451]);
+const MAIL_OUTAGE_RETRY_MS = 5 * 60 * 1000;
+// After this long a mail goes back to the cap, so a server that never returns
+// surfaces on System health rather than waiting silently for ever.
+const MAIL_OUTAGE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
+function isMailOutage(error) {
+  return MAIL_OUTAGE_CODES.has(error?.code) || MAIL_OUTAGE_RESPONSE_CODES.has(error?.responseCode);
+}
+
 function getQueueProcessorStatus() {
   return {
     started: processorStatus.started,
@@ -1689,6 +1706,23 @@ async function processEmailQueueInternal({ ignoreSchedule = false, limit = 10, o
           logger.error(`Email ${email.id} not sent: ${error.message}`);
           continue;
         }
+        // The server could not be reached, so this says nothing about the
+        // mail and must not spend one of its three attempts: at one pass a
+        // minute, a short outage would strand everything queued. It waits and
+        // the pass ends, since the next row would only hit the same server.
+        if (isMailOutage(error) && Date.now() - toMillis(email.created_at) < MAIL_OUTAGE_MAX_AGE_MS) {
+          logger.warn(`Mail server unavailable, email ${email.id} deferred: ${error.message}`);
+          try {
+            await db('email_queue').where({ id: email.id, status: email.status }).update({
+              error_message: error.message,
+              scheduled_at: queueTimestamp(Date.now() + MAIL_OUTAGE_RETRY_MS),
+            });
+          } catch (updateError) {
+            logger.error(`Failed to defer email ${email.id}:`, updateError);
+          }
+          break;
+        }
+
         // Increment retry count without rewriting email_data. Protected
         // account-recovery rows therefore remain encrypted, and so do the
         // password fields of ordinary rows; those keep their variables

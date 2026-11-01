@@ -680,6 +680,10 @@
     },
     "creditNameHelp": "Credited on photos this account uploads when the file has no photographer name in its metadata."
   },
+  "capabilityNotice": {
+    "uploads.new": "Uploads are paused for a moment. Please try again shortly.",
+    "downloads.archive": "ZIP downloads are paused for a moment. You can still view and download single photos."
+  },
   "systemHealth": {
     "dependencies": {
       "title": "Dependencies",

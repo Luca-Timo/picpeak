@@ -680,6 +680,10 @@
     },
     "creditNameHelp": "Wird bei Uploads dieses Kontos als Fotograf angegeben, wenn die Datei keinen Fotografennamen in den Metadaten enthält."
   },
+  "capabilityNotice": {
+    "uploads.new": "Uploads sind kurz pausiert. Bitte versuchen Sie es gleich noch einmal.",
+    "downloads.archive": "ZIP-Downloads sind kurz pausiert. Einzelne Fotos können Sie weiterhin ansehen und herunterladen."
+  },
   "systemHealth": {
     "dependencies": {
       "title": "Abhängigkeiten",

@@ -18,6 +18,7 @@ const { rateLimitKey } = require('../../utils/rateLimitKey');
 const { refundRateLimit } = require('../../services/rateLimitService');
 const chunkedUpload = require('../../services/chunkedUploadService');
 const { createUploadFileGuard } = require('../../utils/uploadAdmissionType');
+const { requireCapability } = require('../../middleware/requireCapability');
 const logger = require('../../utils/logger');
 
 /**
@@ -106,7 +107,7 @@ function guestUploadOwner(req) {
   };
 }
 
-router.post('/:eventId/upload', selectEventGalleryCookie, verifyGalleryAccess, denySlideshowToken, resolveGuest, async (req, res) => {
+router.post('/:eventId/upload', selectEventGalleryCookie, verifyGalleryAccess, denySlideshowToken, resolveGuest, requireCapability('uploads.new'), async (req, res) => {
   try {
     const gate = await guestUploadGate(req);
     if (gate.refusal) return res.status(gate.refusal.status).json(gate.refusal.body);
@@ -372,7 +373,7 @@ const chunkError = (req, res, error, fallback) => {
   return res.status(500).json({ error: fallback });
 };
 
-router.post('/:eventId/chunked-upload/init', ...guestChunkChain, async (req, res) => {
+router.post('/:eventId/chunked-upload/init', ...guestChunkChain, requireCapability('uploads.new'), async (req, res) => {
   try {
     const gate = await guestUploadGate(req);
     if (gate.refusal) return res.status(gate.refusal.status).json(gate.refusal.body);

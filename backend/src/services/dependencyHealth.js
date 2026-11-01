@@ -5,6 +5,7 @@ const { constants: fsConstants } = require('fs');
 const { db } = require('../database/db');
 const { getStoragePath } = require('../config/storage');
 const { getAppSetting, upsertAppSetting } = require('../utils/appSettings');
+const { livePhotos } = require('../utils/photoVisibility');
 const { toMillis } = require('../utils/queueTimestamps');
 const logger = require('../utils/logger');
 const hostMetrics = require('./hostMetrics');
@@ -97,7 +98,7 @@ const defaultProbes = {
   },
 
   async queues() {
-    const [row] = await db('photos').where({ processing_status: 'pending' })
+    const [row] = await livePhotos(db).where({ processing_status: 'pending' })
       .count('* as pending').min('uploaded_at as oldest');
     const pending = Number(row?.pending || 0);
     const oldest = row?.oldest ? toMillis(row.oldest) : null;

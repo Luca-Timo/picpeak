@@ -27,6 +27,7 @@ const statsWriteFailed = (what) => (err) => {
 const { once } = require('events');
 const { pipeStreamToResponse, answerVanished } = require('../../utils/streamResponse');
 const { isStorageNotFoundError } = require('../../services/storage/storageErrors');
+const { requireCapability, refuseCapability } = require('../../middleware/requireCapability');
 const { resolvePhotoFilePath, resolvePhotoStorageKey } = require('../../services/photoResolver');
 const { errorResponse } = require('../../utils/routeHelpers');
 const { blockHiddenGallery } = require('../../utils/revealMode');
@@ -792,6 +793,9 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
       return;
     }
 
+    // A finished archive above needs no build, so only this path is paused.
+    if (refuseCapability(res, 'downloads.archive')) return;
+
     // Fallback: on-the-fly streaming (existing behavior). Only pre-build the
     // guest cache when it will actually be served next time — a guest
     // download of an event with no hidden photos. Client bypasses and
@@ -1049,7 +1053,7 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
 });
 
 // Download selected photos as ZIP
-router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken, blockHiddenGallery, async (req, res) => {
+router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken, blockHiddenGallery, requireCapability('downloads.archive'), async (req, res) => {
   // Hoisted so the catch can reclaim reads opened before the failure.
   let selectedGuard = null;
   let selectedCancelled = false;
@@ -1285,7 +1289,7 @@ router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken,
 // ──────────────────────────────────────────────────────────────────────────
 
 // Kick off (or join) a build. Returns the polling token.
-router.post('/:slug/download-jobs', verifyGalleryAccess, denySlideshowToken, blockHiddenGallery, async (req, res) => {
+router.post('/:slug/download-jobs', verifyGalleryAccess, denySlideshowToken, blockHiddenGallery, requireCapability('downloads.archive'), async (req, res) => {
   try {
     const denial = await originalAssetDenial(req);
     if (denial) return res.status(403).json(denial);

@@ -14,6 +14,7 @@
  */
 
 const express = require('express');
+const { requireCapability } = require('../middleware/requireCapability');
 const { body, param } = require('express-validator');
 const multer = require('multer');
 const path = require('path');
@@ -458,6 +459,7 @@ router.delete('/:id/files/:fileId',
 // Upload deliverable files into an existing transfer (multipart `files`).
 router.post('/:id/upload-files',
   requirePermission('events.edit'),
+  requireCapability('uploads.new'),
   handleAsync(withUploadAdmission(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' });
