@@ -25,6 +25,7 @@ const { handleAsync, validateRequest, successResponse } = require('../utils/rout
 const { verifyDocumentArtefacts } = require('../services/backupIntegrityService');
 const { getCoverageReport } = require('../services/backupCoverageService');
 const { getQueueProcessorStatus } = require('../services/emailProcessor');
+const dependencyHealth = require('../services/dependencyHealth');
 const { toMillis } = require('../utils/queueTimestamps');
 const {
   isEncryptedEmailData, isProtectedEmailType, PROTECTED_PENDING_STATUS,
@@ -91,6 +92,19 @@ async function evidenceKeyUsage(currentKeyId) {
     scanTruncated: rows.length === EVIDENCE_SCAN_LIMIT,
   };
 }
+
+/**
+ * GET /api/admin/system-health/status
+ *
+ * What the app depends on and which capabilities that leaves available, from
+ * the last probes. Answers from memory, so it still works with the database
+ * down. Probe details can name hosts and paths: this stays behind admin auth.
+ */
+router.get(
+  '/status',
+  requirePermission(['settings.view', 'system.view']),
+  handleAsync(async (req, res) => successResponse(res, dependencyHealth.snapshot())),
+);
 
 router.get(
   '/backup-integrity',

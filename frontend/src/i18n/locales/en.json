@@ -681,6 +681,37 @@
     "creditNameHelp": "Credited on photos this account uploads when the file has no photographer name in its metadata."
   },
   "systemHealth": {
+    "dependencies": {
+      "title": "Dependencies",
+      "description": "Live checks of what PicPeak relies on. A dependency has to fail repeatedly before it counts as degraded, and stay good for about two minutes before it counts as healthy again.",
+      "state": { "healthy": "Healthy", "degraded": "Degraded", "down": "Down" },
+      "since": "since {{time}}",
+      "name": {
+        "database": "Database",
+        "storage": "Storage",
+        "disk": "Disk space",
+        "mail": "Email sending",
+        "faceSidecar": "Face recognition service",
+        "queues": "Photo processing queue",
+        "load": "Server load"
+      },
+      "metrics": {
+        "cpu": "CPU {{value}}%",
+        "memory": "Memory {{value}}%",
+        "eventLoop": "Event loop delay {{value}} ms",
+        "free": "{{value}} GB free",
+        "pending": "{{value}} photos waiting"
+      },
+      "capabilitiesTitle": "Features",
+      "capability": {
+        "uploads.new": "New uploads",
+        "downloads.archive": "ZIP downloads"
+      },
+      "available": "Available",
+      "unavailable": "Paused",
+      "banner": "Some features are limited because a dependency has a problem.",
+      "bannerLink": "View status"
+    },
     "backupAuthentication": {
       "title": "Backup authenticity",
       "keyReady": "The external backup signing key is available.",

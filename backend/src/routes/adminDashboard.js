@@ -307,8 +307,11 @@ router.get('/health', adminAuth, requirePermission('settings.view'), async (req,
 
     const emailStatus = failedEmails.count > 10 ? 'warning' : 'healthy';
 
-    // Check disk space (simplified)
-    const storageStatus = 'healthy'; // In production, check actual disk usage
+    // The worse of the storage backend and the disk under it, as the dependency
+    // probes last saw them. No state yet means no probe has reported.
+    const { storage: storageState, disk: diskState } = require('../services/dependencyHealth').states();
+    const storageStatus = [storageState, diskState].includes('down') ? 'error'
+      : [storageState, diskState].includes('degraded') ? 'warning' : 'healthy';
 
     // Memory usage
     const memoryUsage = {

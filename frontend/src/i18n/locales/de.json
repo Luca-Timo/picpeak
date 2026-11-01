@@ -681,6 +681,37 @@
     "creditNameHelp": "Wird bei Uploads dieses Kontos als Fotograf angegeben, wenn die Datei keinen Fotografennamen in den Metadaten enthält."
   },
   "systemHealth": {
+    "dependencies": {
+      "title": "Abhängigkeiten",
+      "description": "Laufende Prüfungen dessen, worauf PicPeak angewiesen ist. Eine Abhängigkeit muss wiederholt ausfallen, bevor sie als beeinträchtigt gilt, und rund zwei Minuten stabil bleiben, bevor sie wieder als fehlerfrei gilt.",
+      "state": { "healthy": "Fehlerfrei", "degraded": "Beeinträchtigt", "down": "Ausgefallen" },
+      "since": "seit {{time}}",
+      "name": {
+        "database": "Datenbank",
+        "storage": "Speicher",
+        "disk": "Speicherplatz",
+        "mail": "E-Mail-Versand",
+        "faceSidecar": "Gesichtserkennungsdienst",
+        "queues": "Warteschlange der Fotoverarbeitung",
+        "load": "Serverlast"
+      },
+      "metrics": {
+        "cpu": "CPU {{value}} %",
+        "memory": "Arbeitsspeicher {{value}} %",
+        "eventLoop": "Event-Loop-Verzögerung {{value}} ms",
+        "free": "{{value}} GB frei",
+        "pending": "{{value}} Fotos warten"
+      },
+      "capabilitiesTitle": "Funktionen",
+      "capability": {
+        "uploads.new": "Neue Uploads",
+        "downloads.archive": "ZIP-Downloads"
+      },
+      "available": "Verfügbar",
+      "unavailable": "Pausiert",
+      "banner": "Einige Funktionen sind eingeschränkt, weil eine Abhängigkeit ein Problem hat.",
+      "bannerLink": "Status ansehen"
+    },
     "backupAuthentication": {
       "title": "Authentizität der Sicherung",
       "keyReady": "Der externe Signaturschlüssel für Sicherungen ist verfügbar.",

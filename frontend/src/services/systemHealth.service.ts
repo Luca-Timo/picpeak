@@ -89,7 +89,36 @@ export interface SystemHealthFailures {
   } | null;
 }
 
+export type DependencyState = 'healthy' | 'degraded' | 'down';
+
+export interface DependencyStatus {
+  state: DependencyState;
+  since: string;
+  lastCheckedAt?: string;
+  detail: string | null;
+  metrics: Record<string, number | null> | null;
+}
+
+export interface CapabilityStatus {
+  name: string;
+  available: boolean;
+  forced: boolean;
+  blockedBy: string[];
+}
+
+export interface DegradationStatus {
+  enforcement: 'observe' | 'enforce';
+  forcedOff: string[];
+  dependencies: Record<string, DependencyStatus>;
+  capabilities: CapabilityStatus[];
+}
+
 export const systemHealthService = {
+  async getStatus(): Promise<DegradationStatus> {
+    const { data } = await api.get('/admin/system-health/status');
+    return data;
+  },
+
   async getFailures(): Promise<SystemHealthFailures> {
     const { data } = await api.get('/admin/system-health/failures');
     return data.data || data;
