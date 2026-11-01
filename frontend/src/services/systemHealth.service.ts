@@ -124,6 +124,18 @@ export const systemHealthService = {
     return data.data || data;
   },
 
+  async recheckStatus(): Promise<DegradationStatus> {
+    const { data } = await api.post('/admin/system-health/status/recheck');
+    return data;
+  },
+
+  async updateDegradationSettings(
+    settings: Partial<Pick<DegradationStatus, 'enforcement' | 'forcedOff'>>,
+  ): Promise<DegradationStatus> {
+    const { data } = await api.put('/admin/system-health/status/settings', settings);
+    return data;
+  },
+
   async retryEmail(id: number): Promise<void> {
     await api.post(`/admin/system-health/failures/email/${id}/retry`);
   },

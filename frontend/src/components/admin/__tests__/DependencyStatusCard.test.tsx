@@ -9,7 +9,11 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('../../common', () => ({
   Card: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
+  Button: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
 }));
+const canManage = vi.hoisted(() => vi.fn(() => false));
+vi.mock('../../../hooks', () => ({ useMutationWithToast: () => ({ mutate: vi.fn(), isPending: false }) }));
+vi.mock('../../../hooks/usePermission', () => ({ usePermission: canManage }));
 vi.mock('../../../hooks/useLocalizedDate', () => ({ useLocalizedDate: () => ({ formatDateTime: String }) }));
 vi.mock('../../../services/systemHealth.service', () => ({ systemHealthService: {} }));
 
@@ -39,5 +43,21 @@ describe('DependencyStatusCard', () => {
     expect(screen.getByText('systemHealth.dependencies.state.down')).toBeTruthy();
     expect(screen.getByText('systemHealth.dependencies.unavailable')).toBeTruthy();
     expect(screen.getByText('systemHealth.dependencies.metrics.free')).toBeTruthy();
+  });
+
+  it('offers the controls only with system.manage', () => {
+    query.mockReturnValue({ data: {
+      enforcement: 'observe',
+      forcedOff: [],
+      dependencies: { disk: { state: 'healthy', since: '', detail: null, metrics: null } },
+      capabilities: [{ name: 'uploads.new', available: true, forced: false, blockedBy: [] }],
+    } });
+    const { unmount } = render(<DependencyStatusCard />);
+    expect(screen.queryByText('systemHealth.dependencies.recheck')).toBeNull();
+    unmount();
+    canManage.mockReturnValue(true);
+    render(<DependencyStatusCard />);
+    expect(screen.getByText('systemHealth.dependencies.recheck')).toBeTruthy();
+    expect(screen.getByText('systemHealth.dependencies.enforce')).toBeTruthy();
   });
 });

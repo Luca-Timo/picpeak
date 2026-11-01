@@ -1,7 +1,7 @@
 jest.mock('../../src/database/db', () => ({ db: jest.fn() }));
 jest.mock('../../src/utils/appSettings', () => ({ getAppSetting: jest.fn(), upsertAppSetting: jest.fn() }));
 
-const { getAppSetting } = require('../../src/utils/appSettings');
+const { getAppSetting, upsertAppSetting } = require('../../src/utils/appSettings');
 const dependencyHealth = require('../../src/services/dependencyHealth');
 
 const { DependencyHealth, diskState, TRIP_AFTER, DOWN_AFTER, RECOVER_AFTER } = dependencyHealth;
@@ -118,6 +118,14 @@ describe('capabilities', () => {
     getAppSetting.mockRejectedValue(new Error('db down'));
     await ticks(health, 1);
     expect(health.enforcement).toBe('enforce');
+  });
+});
+
+describe('updateSettings', () => {
+  it('never stores a name outside the catalog', async () => {
+    const health = build({});
+    await health.updateSettings({ forcedOff: ['uploads.new', 'auth.bypass'] });
+    expect(upsertAppSetting).toHaveBeenCalledWith(dependencyHealth.FORCED_OFF_KEY, JSON.stringify(['uploads.new']), 'system');
   });
 });
 

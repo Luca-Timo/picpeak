@@ -4,7 +4,7 @@ const fsp = require('fs/promises');
 const { constants: fsConstants } = require('fs');
 const { db } = require('../database/db');
 const { getStoragePath } = require('../config/storage');
-const { getAppSetting } = require('../utils/appSettings');
+const { getAppSetting, upsertAppSetting } = require('../utils/appSettings');
 const { toMillis } = require('../utils/queueTimestamps');
 const logger = require('../utils/logger');
 const hostMetrics = require('./hostMetrics');
@@ -183,6 +183,18 @@ class DependencyHealth {
     } catch (error) {
       logger.warn('Degradation settings not refreshed', { error: error.message });
     }
+  }
+
+  /** Validated by the route; `forcedOff` holds catalog names only either way. */
+  async updateSettings({ enforcement, forcedOff }) {
+    if (enforcement !== undefined) {
+      await upsertAppSetting(ENFORCEMENT_KEY, JSON.stringify(enforcement), 'system');
+    }
+    if (forcedOff !== undefined) {
+      await upsertAppSetting(FORCED_OFF_KEY, JSON.stringify(forcedOff.filter(isCapability)), 'system');
+    }
+    await this.refreshSettings();
+    return this.snapshot();
   }
 
   async runProbes(options) {

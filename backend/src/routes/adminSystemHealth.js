@@ -17,7 +17,7 @@
  */
 
 const express = require('express');
-const { query } = require('express-validator');
+const { body, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
@@ -26,12 +26,13 @@ const { verifyDocumentArtefacts } = require('../services/backupIntegrityService'
 const { getCoverageReport } = require('../services/backupCoverageService');
 const { getQueueProcessorStatus } = require('../services/emailProcessor');
 const dependencyHealth = require('../services/dependencyHealth');
+const { CAPABILITIES, isCapability } = require('../services/capabilities');
 const { toMillis } = require('../utils/queueTimestamps');
 const {
   isEncryptedEmailData, isProtectedEmailType, PROTECTED_PENDING_STATUS,
 } = require('../utils/emailQueueEncryption');
 const { parseEmailData } = require('../utils/emailSecretRedaction');
-const { db } = require('../database/db');
+const { db, logActivity } = require('../database/db');
 
 const router = express.Router();
 const PENDING_EMAIL_STATUSES = ['pending', PROTECTED_PENDING_STATUS];
@@ -104,6 +105,44 @@ router.get(
   '/status',
   requirePermission(['settings.view', 'system.view']),
   handleAsync(async (req, res) => successResponse(res, dependencyHealth.snapshot())),
+);
+
+/**
+ * POST /api/admin/system-health/status/recheck
+ *
+ * Probes now. A dependency that answers well recovers at once instead of
+ * waiting out its stable run, for the admin who just fixed the share.
+ */
+router.post(
+  '/status/recheck',
+  requirePermission('system.manage'),
+  handleAsync(async (req, res) => successResponse(res, await dependencyHealth.recheck())),
+);
+
+/**
+ * PUT /api/admin/system-health/status/settings
+ *
+ * Observe or enforce, and which capabilities an admin forced off. Only catalog
+ * names are accepted, so this cannot reach a security check. There is no
+ * force-on: a broken dependency cannot be overruled from here.
+ */
+router.put(
+  '/status/settings',
+  requirePermission('system.manage'),
+  [
+    body('enforcement').optional().isIn(['observe', 'enforce']),
+    body('forcedOff').optional().isArray({ max: Object.keys(CAPABILITIES).length }),
+    body('forcedOff.*').isString().custom(isCapability),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const { enforcement, forcedOff } = req.body;
+    const snapshot = await dependencyHealth.updateSettings({ enforcement, forcedOff });
+    await logActivity('degradation_settings_updated', { enforcement, forcedOff }, null, {
+      type: 'admin', id: req.admin.id, name: req.admin.username,
+    });
+    return successResponse(res, snapshot);
+  }),
 );
 
 router.get(

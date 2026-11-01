@@ -2,11 +2,14 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import { Card } from '../common';
+import { Button, Card } from '../common';
+import { useMutationWithToast } from '../../hooks';
+import { usePermission } from '../../hooks/usePermission';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import {
   systemHealthService,
   type DependencyState,
+  type DegradationStatus,
   type DependencyStatus,
 } from '../../services/systemHealth.service';
 
@@ -38,6 +41,69 @@ function useMetricLabels() {
     return labels;
   };
 }
+
+/**
+ * Mounted only with status data, so the page's other panels do not depend on
+ * the permission context. Forcing a feature off is all an admin can do here:
+ * nothing on this panel can turn on what a failed dependency switched off.
+ */
+const DegradationControls: React.FC<{ status: DegradationStatus }> = ({ status }) => {
+  const { t } = useTranslation();
+  const canManage = usePermission('system.manage');
+  const invalidateKeys = [['system-health-status']];
+
+  const recheck = useMutationWithToast({
+    mutationFn: () => systemHealthService.recheckStatus(),
+    invalidateKeys,
+    successMessage: t('systemHealth.dependencies.recheckedToast'),
+    errorMessage: () => t('toast.saveError'),
+  });
+  const save = useMutationWithToast({
+    mutationFn: systemHealthService.updateDegradationSettings,
+    invalidateKeys,
+    successMessage: t('toast.settingsSaved', 'Settings saved'),
+    errorMessage: () => t('toast.saveError'),
+  });
+
+  if (!canManage) return null;
+  const enforcing = status.enforcement === 'enforce';
+
+  return (
+    <div className="mt-4 pt-4 border-t border-line space-y-3">
+      <label className="flex items-start gap-2 text-sm text-body">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={enforcing}
+          disabled={save.isPending}
+          onChange={() => save.mutate({ enforcement: enforcing ? 'observe' : 'enforce' })}
+        />
+        <span>
+          {t('systemHealth.dependencies.enforce')}
+          <span className="block text-xs text-muted">{t('systemHealth.dependencies.enforceHint')}</span>
+        </span>
+      </label>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        {status.capabilities.map(({ name, forced }) => (
+          <label key={name} className="flex items-center gap-2 text-sm text-body">
+            <input
+              type="checkbox"
+              checked={forced}
+              disabled={save.isPending}
+              onChange={() => save.mutate({
+                forcedOff: forced ? status.forcedOff.filter((other) => other !== name) : [...status.forcedOff, name],
+              })}
+            />
+            {t('systemHealth.dependencies.forceOff', { capability: t(`systemHealth.dependencies.capability.${name}`, name) })}
+          </label>
+        ))}
+      </div>
+      <Button variant="secondary" size="sm" onClick={() => recheck.mutate()} disabled={recheck.isPending}>
+        {t('systemHealth.dependencies.recheck')}
+      </Button>
+    </div>
+  );
+};
 
 export const DependencyStatusCard: React.FC = () => {
   const { t } = useTranslation();
@@ -95,6 +161,8 @@ export const DependencyStatusCard: React.FC = () => {
           </li>
         ))}
       </ul>
+
+      {data && <DegradationControls status={data} />}
     </Card>
   );
 };

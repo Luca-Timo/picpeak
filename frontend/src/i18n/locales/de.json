@@ -702,6 +702,11 @@
         "free": "{{value}} GB frei",
         "pending": "{{value}} Fotos warten"
       },
+      "recheck": "Jetzt erneut prüfen",
+      "recheckedToast": "Abhängigkeiten geprüft.",
+      "enforce": "Funktionen automatisch pausieren",
+      "enforceHint": "Solange dies aus ist, protokolliert PicPeak nur, was pausiert würde. Sicherheitsprüfungen sind von dieser Einstellung nie betroffen.",
+      "forceOff": "{{capability}} pausieren",
       "capabilitiesTitle": "Funktionen",
       "capability": {
         "uploads.new": "Neue Uploads",
