@@ -27,7 +27,7 @@ export interface CustomerProfile {
   contactId?: number | null;
   rights?: CustomerRights;
   /** Every company this login can work in; the session is in one of them. */
-  companies?: { id: number; name: string }[];
+  companies?: { id: number; name: string | null }[];
   email: string;
   displayName: string | null;
   firstName: string | null;

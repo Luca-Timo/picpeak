@@ -5781,6 +5781,10 @@
       "newsletter_completed": "Newsletter abgeschlossen — {{sent}} gesendet, {{failed}} fehlgeschlagen",
       "newsletter_deleted": "Newsletter-Kampagne gelöscht",
       "customer_marketing_opt_out": "Newsletter-Einwilligung des Kunden geändert",
+      "customer_contact_created": "Kundenkontakt hinzugefügt",
+      "customer_contact_updated": "Kundenkontakt geändert",
+      "customer_contact_deleted": "Kundenkontakt entfernt",
+      "customer_company_switch": "Kundenlogin hat die Firma gewechselt",
       "css_template_remote_urls_removed": "Externe URLs aus {{count}} CSS-Vorlage(n) entfernt — siehe Release Notes",
       "customer_document_uploaded": "Kundendokument hochgeladen",
       "customer_document_shared": "Dokument für einen Kunden freigegeben",
@@ -7442,6 +7446,7 @@
       "documents": "Dokumente",
       "overview": "Übersicht",
       "company": "Firma",
+        "companyById": "Firma {{id}}",
       "switchFailed": "Die Firma konnte nicht gewechselt werden. Bitte versuchen Sie es erneut."
     },
     "comingSoon": {

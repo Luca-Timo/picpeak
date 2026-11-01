@@ -65,6 +65,20 @@ function customerMayAct(req, res, area) {
   return false;
 }
 
+// A contact's view of a document or request: the gallery and contract it hangs
+// on are those areas', so the documents right alone does not show them.
+function linksForSession(req, dto) {
+  const { rights } = req.customer;
+  const out = { ...dto };
+  if (!customerContactsService.hasRight(rights, 'galleries')) {
+    out.eventId = null;
+    if ('eventName' in out) out.eventName = null;
+    if ('eventSlug' in out) out.eventSlug = null;
+  }
+  if ('contractId' in out && !customerContactsService.hasRight(rights, 'contracts')) out.contractId = null;
+  return out;
+}
+
 // These two routes are the older signing flow, which takes any typed name and
 // has no signer row to match a contact against.
 function holderSigns(req, res) {
@@ -1278,7 +1292,7 @@ router.get('/events/:slug/overview', [
     if (!customerMaySeeGalleries(req, res)) return undefined;
     const overview = await customerPortalService.getEventOverview(req.customer.id, req.params.slug, req.customer);
     if (!overview) return res.status(404).json({ error: 'Event not found' });
-    res.json(overview);
+    res.json({ ...overview, documents: overview.documents.map((doc) => linksForSession(req, doc)) });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to load event');
   }
@@ -1328,7 +1342,7 @@ router.get('/documents', customerAuth, requireDocumentsFeature, async (req, res)
   try {
     const mayAct = customerContactsService.hasRight(req.customer.rights, 'documents', 'act');
     const documents = (await customerDocumentsService.listForCustomer(req.customer.id))
-      .map((doc) => (mayAct ? doc : { ...doc, canDelete: false }));
+      .map((doc) => linksForSession(req, mayAct ? doc : { ...doc, canDelete: false }));
     const limits = await customerDocumentsService.getLimits();
     const usedBytes = await customerDocumentsService.getUsageBytes(req.customer.id);
     // Drives the upload control's accept list and copy, so it can't drift
@@ -1362,6 +1376,12 @@ router.post('/documents', customerAuth, requireDocumentsFeature, documentUploadL
       allowedFormats: await documentFormats.getAllowedFormats(),
     });
     if (!file) return res.status(400).json({ error: 'No file was uploaded.', code: 'NO_FILE' });
+    // Attaching reaches into that area, and a contract's file cannot be deleted
+    // afterwards. Refused rather than dropped, so nobody thinks it is attached.
+    if ((req.body.eventId && !customerContactsService.hasRight(req.customer.rights, 'galleries'))
+      || (req.body.contractId && !customerContactsService.hasRight(req.customer.rights, 'contracts'))) {
+      return res.status(403).json({ error: 'Your login may not do this', code: 'CUSTOMER_RIGHT_MISSING' });
+    }
     // The quota is counted again where the row is written, in the same
     // transaction: the check above runs before the body arrives, so uploads
     // landing together would otherwise all measure the same "before".
@@ -1388,7 +1408,7 @@ router.post('/documents', customerAuth, requireDocumentsFeature, documentUploadL
     // After the row is written; neither can fail the upload.
     await customerDocumentNotifications.notifyUploaded(row);
     await customerDocumentNotifications.emitDocumentWorkflow('document.uploaded', row);
-    res.status(201).json({ document: customerDocumentsService.toCustomerDto(row) });
+    res.status(201).json({ document: linksForSession(req, customerDocumentsService.toCustomerDto(row)) });
   } catch (error) {
     if (error && error.code === 'QUOTA_EXCEEDED') await customerDocumentAbuse.record(req.customer.id, 'quota_exceeded');
     sendDocumentError(res, error, 'Failed to upload document');
@@ -1435,7 +1455,8 @@ async function loadCustomerDocument(req, res) {
  */
 router.get('/document-requests', customerAuth, requireDocumentsFeature, async (req, res) => {
   try {
-    res.json({ requests: await customerDocumentRequestsService.listOpenForCustomer(req.customer.id) });
+    const requests = await customerDocumentRequestsService.listOpenForCustomer(req.customer.id);
+    res.json({ requests: requests.map((request) => linksForSession(req, request)) });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to load document requests');
   }
@@ -1451,7 +1472,7 @@ router.get('/documents/:id', customerAuth, requireDocumentsFeature, async (req, 
   try {
     const row = await loadCustomerDocument(req, res);
     if (!row) return undefined;
-    const document = customerDocumentsService.toCustomerDto(row);
+    const document = linksForSession(req, customerDocumentsService.toCustomerDto(row));
     const mayAct = customerContactsService.hasRight(req.customer.rights, 'documents', 'act');
     return res.json({ document: mayAct ? document : { ...document, canDelete: false } });
   } catch (error) {

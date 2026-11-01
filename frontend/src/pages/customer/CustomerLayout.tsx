@@ -268,7 +268,9 @@ export const CustomerLayout: React.FC = () => {
                     onChange={(e) => switchCompany(Number(e.target.value))}
                   >
                     {companies.map((company) => (
-                      <option key={company.id} value={company.id}>{company.name}</option>
+                      <option key={company.id} value={company.id}>
+                        {company.name || t('customer.nav.companyById', { id: company.id, defaultValue: 'Company {{id}}' })}
+                      </option>
                     ))}
                   </select>
                 </label>

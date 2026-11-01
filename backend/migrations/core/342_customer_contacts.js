@@ -34,6 +34,10 @@
 const isPg = (knex) => knex.client.config.client === 'pg';
 
 exports.up = async function (knex) {
+  // A contact's password is looked up by address on every session check, and
+  // the plain index on customer_accounts.email does not serve LOWER(email).
+  await knex.raw('CREATE INDEX IF NOT EXISTS customer_accounts_lower_email_index ON customer_accounts (LOWER(email))');
+
   if (!(await knex.schema.hasTable('customer_contacts'))) {
     const hasAdmins = await knex.schema.hasTable('admin_users');
     await knex.schema.createTable('customer_contacts', (t) => {
@@ -116,4 +120,5 @@ exports.down = async function (knex) {
   }
   await knex.schema.dropTableIfExists('customer_logins');
   await knex.schema.dropTableIfExists('customer_contacts');
+  await knex.raw('DROP INDEX IF EXISTS customer_accounts_lower_email_index');
 };

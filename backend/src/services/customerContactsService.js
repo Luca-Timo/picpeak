@@ -33,6 +33,7 @@ const { PROTECTED_PENDING_STATUS } = require('../utils/emailQueueEncryption');
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const GALLERY_NOTICES = ['gallery_completed', 'customer_gallery_assigned'];
 
 // Area -> the levels it offers, lowest first. `act` is what changes something:
 // choosing an album, accepting a quote, signing a contract, uploading a
@@ -67,10 +68,13 @@ function rightsOf(contact) {
   }));
 }
 
-function hasRight(rights, area, level = 'view') {
+/** Without a level: any access at all. A level the area does not offer is not held. */
+function hasRight(rights, area, level) {
   const levels = RIGHTS[area];
   if (!levels || !rights) return false;
-  return levels.indexOf(rights[area]) >= Math.max(levels.indexOf(level), 1);
+  const wanted = level === undefined ? levels[1] : level;
+  if (!levels.includes(wanted)) return false;
+  return levels.indexOf(rights[area]) >= Math.max(levels.indexOf(wanted), 1);
 }
 
 /** A customer's effective features, narrowed to what this login may see. */
@@ -136,11 +140,18 @@ async function isContactEmail(email, trx = db) {
   return !!(await trx('customer_contacts').whereRaw('LOWER(email) = ?', [normaliseEmail(email)]).first('id'));
 }
 
-/** The password of this address: a holder's own, otherwise its login row. */
+/**
+ * The password of this address: a holder's own, otherwise its login row.
+ * customer_accounts.email is unique by exact case, so older rows can differ in
+ * case only. The address as written picks among them, then the oldest row, and
+ * membershipsFor opens that same row.
+ */
 async function credentialFor(email, trx = db) {
   const address = normaliseEmail(email);
-  const holder = await trx('customer_accounts').whereRaw('LOWER(email) = ?', [address])
-    .whereNotNull('password_hash').first('id', 'password_hash', 'password_changed_at');
+  const holders = await trx('customer_accounts').whereRaw('LOWER(email) = ?', [address])
+    .whereNotNull('password_hash').orderBy('id', 'asc')
+    .select('id', 'email', 'password_hash', 'password_changed_at');
+  const holder = holders.find((row) => row.email === String(email || '').trim()) || holders[0];
   if (holder) return { kind: 'holder', ...holder };
   const login = await trx('customer_logins').where('email', address)
     .first('id', 'password_hash', 'password_changed_at');
@@ -174,7 +185,9 @@ async function addressesWithLogin(emails) {
 async function membershipsFor(email) {
   const address = normaliseEmail(email);
   const out = [];
-  const holder = await liveCustomer(db('customer_accounts').whereRaw('LOWER(email) = ?', [address])).first();
+  const credential = await credentialFor(email);
+  const holder = credential?.kind === 'holder'
+    && await liveCustomer(db('customer_accounts').where('id', credential.id)).first();
   if (holder) out.push({ customer: holder, contact: null });
   const contacts = await db('customer_contacts')
     .whereRaw('LOWER(email) = ?', [address])
@@ -187,14 +200,21 @@ async function membershipsFor(email) {
   return out;
 }
 
-function companyLabel(customer) {
+// Without a company name the label is the holder's own name or address, which
+// a contact without the company right does not get to see.
+function companyLabel(customer, contact) {
+  if (customer.company_name) return customer.company_name;
+  if (contact && !hasRight(rightsOf(contact), 'company')) return null;
   const name = [customer.first_name, customer.last_name].filter(Boolean).join(' ');
-  return customer.company_name || customer.display_name || name || customer.email;
+  return customer.display_name || name || customer.email;
 }
 
-/** For the portal's company switcher. */
+/** For the portal's company switcher; a null name is shown by id. */
 async function companiesFor(email) {
-  return (await membershipsFor(email)).map(({ customer }) => ({ id: customer.id, name: companyLabel(customer) }));
+  return (await membershipsFor(email)).map(({ customer, contact }) => ({
+    id: customer.id,
+    name: companyLabel(customer, contact),
+  }));
 }
 
 function shape(contact, openInvitation, hasLogin) {
@@ -251,7 +271,11 @@ async function listContacts(customerId) {
 
 async function shapeOne(customerId, contactId) {
   const contact = await loadContact(customerId, contactId);
-  return shape(contact, false, !!(await credentialFor(contact.email)));
+  const open = await db('customer_invitations')
+    .where('contact_id', contactId).whereNull('accepted_at')
+    .where('expires_at', '>', new Date())
+    .first('id');
+  return shape(contact, open, !!(await credentialFor(contact.email)));
 }
 
 /**
@@ -296,6 +320,7 @@ async function updateContact(customerId, contactId, input, adminId) {
   if (input.receivesMail !== undefined) updates.receives_mail = formatBoolean(!!input.receivesMail);
   const email = input.email === undefined ? undefined : normaliseEmail(input.email);
   if (email === '') throw new ValidationError('Email is required');
+  let changes = {};
 
   await db.transaction(async (trx) => {
     const contact = await lockContact(trx, customerId, contactId);
@@ -328,15 +353,53 @@ async function updateContact(customerId, contactId, input, adminId) {
       updates.is_active = formatBoolean(!!input.isActive);
       if (!input.isActive) updates.password_changed_at = new Date();
     }
-    if (moves || deactivates) await cancelQueuedMail(trx, oldAddress, customerId, { lastUse });
+    if (moves || deactivates) {
+      await cancelQueuedMail(trx, oldAddress, customerId, { lastUse });
+    } else {
+      await withdrawNotices(trx, contact, updates);
+    }
+    changes = accessChanges(contact, updates);
     updates.updated_at = new Date();
     await trx('customer_contacts').where('id', contactId).update(updates).catch(conflictOnDuplicate);
   });
 
   await logActivity('customer_contact_updated',
-    { customerId, contactId, fields: Object.keys(updates).filter((k) => k !== 'updated_at') },
+    { customerId, contactId, fields: Object.keys(updates).filter((k) => k !== 'updated_at'), changes },
     null, { type: 'admin', id: adminId });
   return shapeOne(customerId, contactId);
+}
+
+// What an admin granted or took away, for the activity log.
+function accessChanges(contact, updates) {
+  const out = {};
+  for (const column of [...AREAS.map((area) => `right_${area}`), 'receives_mail', 'is_active']) {
+    if (updates[column] === undefined) continue;
+    const flag = !column.startsWith('right_');
+    const from = flag ? asFlag(contact[column]) : contact[column];
+    const to = flag ? asFlag(updates[column]) : updates[column];
+    if (from !== to) out[column] = { from, to };
+  }
+  return out;
+}
+
+// Mail that waits for business hours must not outlast the right it was queued
+// under. download_ready needs nothing here: stillHolds checks it at sending.
+async function withdrawNotices(trx, contact, updates) {
+  const before = rightsOf(contact);
+  const after = rightsOf({ ...contact, ...updates });
+  const noMail = asFlag(contact.receives_mail) && updates.receives_mail !== undefined
+    && !asFlag(updates.receives_mail);
+  const address = contact.email.toLowerCase();
+  if (noMail || (hasRight(before, 'galleries') && !hasRight(after, 'galleries'))) {
+    const rows = await mailAbout(trx, address, contact.customer_account_id, ['pending']);
+    const notices = rows.filter((row) => GALLERY_NOTICES.includes(row.email_type)).map((row) => row.id);
+    if (notices.length > 0) {
+      await trx('email_queue').whereIn('id', notices).where('status', 'pending').update({ status: 'cancelled' });
+    }
+  }
+  if (noMail || (hasRight(before, 'bills') && !hasRight(after, 'bills'))) {
+    await dropCopies(trx, address, contact.customer_account_id);
+  }
 }
 
 // Removals of one address at two customers wait for each other here, so the
@@ -371,7 +434,11 @@ async function cancelQueuedMail(trx, email, customerId, { lastUse }) {
       .whereIn('status', ['pending', PROTECTED_PENDING_STATUS])
       .update({ status: 'cancelled' });
   }
-  // Invoice mail reaches a contact as a CC on the customer's own row.
+  await dropCopies(trx, email, customerId);
+}
+
+// Invoice mail reaches a contact as a CC on the customer's own row.
+async function dropCopies(trx, email, customerId) {
   const copied = await trx('email_queue')
     .where('status', 'pending')
     .whereRaw('LOWER(CAST(email_data AS TEXT)) LIKE ?', [`%${email}%`])
@@ -396,7 +463,7 @@ async function mailAbout(trx, email, customerId, statuses) {
   const rows = await trx('email_queue')
     .whereRaw('LOWER(recipient_email) = ?', [email])
     .whereIn('status', statuses)
-    .select('id', 'status', 'email_data');
+    .select('id', 'status', 'email_type', 'email_data');
   return rows.filter((row) => {
     try {
       const data = typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data;

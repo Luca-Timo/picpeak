@@ -1146,6 +1146,190 @@ describe('customer contacts', () => {
       expect(JSON.stringify(row.email_data)).not.toContain('Secret');
     });
 
+    describe('when a right is lowered', () => {
+      const gallery = (to, about = customerId) => queueMail({
+        recipient_email: to, email_type: 'gallery_completed',
+        email_data: JSON.stringify({ name: 'x', __customerAccountId: about }),
+      });
+      const invoice = (cc) => queueMail({
+        recipient_email: HOLDER_EMAIL, email_type: 'invoice_reminder_first',
+        email_data: JSON.stringify({ cc, __customerAccountId: customerId }),
+      });
+      const status = async (id) => (await db('email_queue').where({ id }).first()).status;
+      const copies = async (id) => {
+        const { email_data: data } = await db('email_queue').where({ id }).first();
+        return (typeof data === 'string' ? JSON.parse(data) : data).cc;
+      };
+
+      it('takes the contact off queued invoice mail when bills go', async () => {
+        const contact = await makeContact('low@example.test', { bills: 'view', galleries: 'view' });
+        const mail = await invoice(['low@example.test', 'keep@example.test']);
+        const notice = await gallery('low@example.test');
+        await contacts.updateContact(customerId, contact.id, { rights: { bills: 'none' } }, adminId);
+        expect(await copies(mail)).toEqual(['keep@example.test']);
+        expect(await status(mail)).toBe('pending');
+        expect(await status(notice)).toBe('pending');
+      });
+
+      it('cancels queued gallery notices when galleries go, and leaves the rest', async () => {
+        const contact = await makeContact('lowg@example.test', { bills: 'view', galleries: 'view' });
+        const notice = await gallery('lowg@example.test');
+        const elsewhere = await gallery('lowg@example.test', otherId);
+        const signing = await queueMail({
+          recipient_email: 'lowg@example.test', email_type: 'contract_signature_received',
+          email_data: JSON.stringify({ __customerAccountId: customerId }),
+        });
+        const mail = await invoice(['lowg@example.test']);
+        await contacts.updateContact(customerId, contact.id, { rights: { galleries: 'none' } }, adminId);
+        expect(await status(notice)).toBe('cancelled');
+        expect(await status(elsewhere)).toBe('pending');
+        expect(await status(signing)).toBe('pending');
+        expect(await copies(mail)).toEqual(['lowg@example.test']);
+      });
+
+      it('withdraws both when mail is switched off', async () => {
+        const contact = await makeContact('quiet@example.test', { bills: 'view', galleries: 'view' });
+        const notice = await gallery('quiet@example.test');
+        const mail = await invoice(['quiet@example.test']);
+        await contacts.updateContact(customerId, contact.id, { receivesMail: false }, adminId);
+        expect(await status(notice)).toBe('cancelled');
+        expect(await copies(mail)).toEqual([]);
+      });
+
+      it('leaves queued mail alone when a right goes from act to view', async () => {
+        const contact = await makeContact('act@example.test', { galleries: 'act' });
+        const notice = await gallery('act@example.test');
+        await contacts.updateContact(customerId, contact.id, { rights: { galleries: 'view' } }, adminId);
+        expect(await status(notice)).toBe('pending');
+      });
+
+      it('logs what was granted and taken, in the customer timeline', async () => {
+        const contact = await makeContact('log@example.test', { bills: 'view' });
+        await contacts.updateContact(customerId, contact.id, {
+          rights: { bills: 'none', quotes: 'view' }, receivesMail: false,
+        }, adminId);
+        const { CUSTOMER_TYPES } = require('../../src/services/customerActivityService');
+        expect(CUSTOMER_TYPES).toEqual(expect.arrayContaining([
+          'customer_contact_created', 'customer_contact_updated', 'customer_contact_deleted', 'customer_company_switch',
+        ]));
+        const row = await db('activity_logs').where({ activity_type: 'customer_contact_updated' })
+          .orderBy('id', 'desc').first();
+        const metadata = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+        expect(metadata.changes).toEqual({
+          right_bills: { from: 'view', to: 'none' },
+          right_quotes: { from: 'none', to: 'view' },
+          receives_mail: { from: true, to: false },
+        });
+      });
+    });
+
+    describe('links of a document', () => {
+      const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n');
+      const upload = (agent, field, value) => agent.post('/api/customer/documents')
+        .field(field, String(value)).attach('file', pdf, { filename: 'a.pdf', contentType: 'application/pdf' });
+
+      beforeAll(async () => {
+        await db('customer_accounts').where({ id: customerId }).update({ feature_documents: true });
+      });
+      afterEach(async () => { await db('customer_documents').del(); });
+
+      it('refuses attaching to a contract or gallery without that right', async () => {
+        await makeContact('attach@example.test', { documents: 'act' });
+        const { agent } = await login('attach@example.test');
+        for (const field of ['contractId', 'eventId']) {
+          const res = await upload(agent, field, 1);
+          expect(res.status).toBe(403);
+          expect(res.body.code).toBe('CUSTOMER_RIGHT_MISSING');
+        }
+        expect(await db('customer_documents').where({ customer_account_id: customerId })).toHaveLength(0);
+      });
+
+      it('does not refuse the same upload for a contact who holds the right', async () => {
+        await makeContact('attach2@example.test', { documents: 'act', contracts: 'view' });
+        const { agent } = await login('attach2@example.test');
+        // No such contract, so past the right and on to the usual link check.
+        expect((await upload(agent, 'contractId', 999999)).status).toBe(400);
+      });
+
+      it('shows the links only with the matching right', async () => {
+        const eventId = await db('events').first('id').then((row) => row?.id);
+        expect(eventId).toBeTruthy();
+        const contractId = await insertId('contracts', {
+          customer_account_id: customerId, contract_number: 'C-LINKED-1', status: 'sent', signing_version: 2,
+          language: 'de', issue_date: '2026-01-01', created_at: new Date(),
+        });
+        await db('customer_documents').insert({
+          customer_account_id: customerId, uploader_type: 'admin', original_name: 'x.pdf', storage_key: 'k1',
+          size_bytes: 1, sha256: 'x', status: 'clean', shared_at: new Date(), event_id: eventId, contract_id: contractId,
+        });
+        await makeContact('doc@example.test', { documents: 'view' });
+        await makeContact('doc2@example.test', { documents: 'view', galleries: 'view', contracts: 'view' });
+        const blind = (await (await login('doc@example.test')).agent.get('/api/customer/documents')).body.documents[0];
+        const seeing = (await (await login('doc2@example.test')).agent.get('/api/customer/documents')).body.documents[0];
+        expect(blind).toMatchObject({ eventId: null, eventName: null, eventSlug: null, contractId: null });
+        expect(seeing).toMatchObject({ eventId, contractId });
+
+        const event = await db('events').where({ id: eventId }).first('slug');
+        await db('event_customer_assignments').insert({ customer_account_id: customerId, event_id: eventId })
+          .onConflict(['event_id', 'customer_account_id']).ignore();
+        await makeContact('doc3@example.test', { documents: 'view', galleries: 'view' });
+        const { agent } = await login('doc3@example.test');
+        const overview = await agent.get(`/api/customer/events/${event.slug}/overview`);
+        expect(overview.status).toBe(200);
+        expect(overview.body.documents[0]).toMatchObject({ eventId, contractId: null });
+      });
+    });
+
+    describe('addresses that differ only in case', () => {
+      const legacy = async (email, password, extra = {}) => insertId('customer_accounts', {
+        email, password_hash: await bcrypt.hash(password, 4), is_active: true,
+        created_at: new Date(), updated_at: new Date(), ...extra,
+      });
+
+      it('opens the row whose password was checked', async () => {
+        const upper = await legacy('Twin@example.test', 'upper-password');
+        const lower = await legacy('twin@example.test', 'lower-password');
+        for (const [email, id] of [['Twin@example.test', upper], ['twin@example.test', lower]]) {
+          expect((await contacts.credentialFor(email)).id).toBe(id);
+          expect((await contacts.membershipsFor(email))[0].customer.id).toBe(id);
+        }
+        expect((await contacts.credentialFor('TWIN@example.test')).id).toBe(upper);
+        expect((await contacts.membershipsFor('TWIN@example.test'))[0].customer.id).toBe(upper);
+      });
+
+      it('does not open a live twin on the password of an inactive row', async () => {
+        await legacy('Lone@example.test', 'old-password', { is_active: false });
+        await legacy('lone@example.test', 'new-password');
+        expect((await contacts.credentialFor('Lone@example.test')).password_hash).toBeTruthy();
+        expect(await contacts.membershipsFor('Lone@example.test')).toEqual([]);
+      });
+    });
+
+    it('says an invitation is open right after inviting', async () => {
+      const created = await contacts.createContact(customerId, { email: 'open@example.test', invite: true }, adminId);
+      expect(created.invitationPending).toBe(true);
+    });
+
+    it('holds no right at a level the area does not offer', () => {
+      expect(contacts.hasRight({ bills: 'view' }, 'bills', 'act')).toBe(false);
+      expect(contacts.hasRight({ bills: 'view' }, 'bills', 'view')).toBe(true);
+      expect(contacts.hasRight({ documents: 'act' }, 'documents', 'view')).toBe(true);
+      expect(contacts.hasRight({ company: 'act' }, 'company')).toBe(true);
+      expect(contacts.hasRight({ company: 'none' }, 'company')).toBe(false);
+    });
+
+    it('labels a company without a name by id for a contact without the company right', async () => {
+      const named = await newCustomer({ first_name: 'Private', last_name: 'Person' });
+      await contacts.createContact(named, { email: 'label@example.test', rights: {} }, adminId);
+      const other = await newCustomer({ first_name: 'Other', last_name: 'Person' });
+      await contacts.createContact(other, { email: 'label@example.test', rights: { company: 'act' } }, adminId);
+      await db('customer_logins').insert({ email: 'label@example.test', password_hash: await bcrypt.hash(PASSWORD, 4) });
+      expect(await contacts.companiesFor('label@example.test')).toEqual([
+        { id: named, name: null },
+        { id: other, name: 'Other Person' },
+      ]);
+    });
+
     it('gives no reset link to a contact of a passive customer', async () => {
       const passive = await newCustomer({ password_hash: null });
       const contact = await contacts.createContact(passive, { email: 'in@example.test' }, adminId);

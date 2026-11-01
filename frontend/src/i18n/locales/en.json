@@ -5263,6 +5263,10 @@
       "newsletter_completed": "Newsletter finished — {{sent}} sent, {{failed}} failed",
       "newsletter_deleted": "Newsletter campaign deleted",
       "customer_marketing_opt_out": "Customer newsletter consent changed",
+      "customer_contact_created": "Customer contact added",
+      "customer_contact_updated": "Customer contact updated",
+      "customer_contact_deleted": "Customer contact removed",
+      "customer_company_switch": "Customer login switched company",
       "css_template_remote_urls_removed": "Remote URLs removed from {{count}} CSS template(s) — see the release notes",
       "customer_document_uploaded": "Customer document uploaded",
       "customer_document_shared": "Document shared with a customer",
@@ -7477,6 +7481,7 @@
       "documents": "Documents",
       "overview": "Overview",
       "company": "Company",
+        "companyById": "Company {{id}}",
       "switchFailed": "Could not switch company. Please try again."
     },
     "comingSoon": {

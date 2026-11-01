@@ -69,6 +69,17 @@ describe('company switcher', () => {
     expect(screen.queryByLabelText('Company')).toBeNull();
   });
 
+  it('names a company the login may not see the name of by its id', () => {
+    auth.customer = {
+      id: 1,
+      email: 'kim@example.com',
+      companies: [{ id: 1, name: 'Firma XYZ' }, { id: 2, name: null }],
+    };
+    renderLayout();
+    // The mocked t answers with the key when it gets options.
+    expect(screen.getByRole('option', { name: 'customer.nav.companyById' })).toBeTruthy();
+  });
+
   it('replaces the session and returns to the dashboard', async () => {
     auth.customer = {
       id: 1,
