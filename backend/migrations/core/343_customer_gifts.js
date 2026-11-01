@@ -42,6 +42,11 @@ const NEW_PERMISSIONS = [
 
 const MILESTONE_INDEX = 'customer_gifts_active_milestone_uq';
 
+const SETTING_KEYS = [
+  'gift_milestone_years', 'gift_min_bookings', 'gift_activity_min_invoices',
+  'gift_activity_period_years', 'gift_rhythm_margin_months', 'gift_grace_days',
+];
+
 exports.up = async function (knex) {
   if (!(await knex.schema.hasTable('gift_items'))) {
     await knex.schema.createTable('gift_items', (t) => {
@@ -188,7 +193,7 @@ exports.down = async function (knex) {
     await knex('feature_flags').where({ key: 'customerGifts' }).del();
   }
   if (await knex.schema.hasTable('app_settings')) {
-    await knex('app_settings').where('setting_key', 'like', 'gift\\_%').del();
+    await knex('app_settings').whereIn('setting_key', SETTING_KEYS).del();
   }
   if (await knex.schema.hasTable('permissions')) {
     const ids = (await knex('permissions')

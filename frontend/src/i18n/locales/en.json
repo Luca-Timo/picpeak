@@ -11585,7 +11585,8 @@
     "notQualified": {
       "title": "Didn't qualify",
       "hint": "Past the grace period. You can still give a gift, and it is marked as an override.",
-      "override": "Gift anyway"
+      "override": "Gift anyway",
+      "showMore": "Show more ({{count}} left)"
     },
     "reason": {
       "bookings": "{{have}} of {{need}} bookings",

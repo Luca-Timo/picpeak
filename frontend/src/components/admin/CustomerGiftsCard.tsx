@@ -71,13 +71,13 @@ export const CustomerGiftsCard: React.FC<CustomerGiftsCardProps> = ({ customerId
       {isError && <ErrorState size="inline" onRetry={() => refetch()} />}
 
       {data && data.gifts.length === 0 && (
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        <p className="text-sm text-soft">
           {t('gifts.customer.empty', 'No gifts yet.')}
         </p>
       )}
 
       {data && data.gifts.length > 0 && (
-        <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
+        <ul className="divide-y divide-line">
           {data.gifts.map((gift) => (
             <li key={gift.id} className="py-2 flex items-start justify-between gap-3">
               <div className={gift.undone ? 'opacity-60 min-w-0' : 'min-w-0'}>
@@ -91,7 +91,7 @@ export const CustomerGiftsCard: React.FC<CustomerGiftsCardProps> = ({ customerId
                   {gift.isOverride && <Badge tone="warning">{t('gifts.customer.override', 'Override')}</Badge>}
                   {gift.undone && <Badge>{t('gifts.customer.undoneBadge', 'Undone')}</Badge>}
                 </p>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                <p className="text-xs text-soft">
                   {format(gift.giftDate)}{gift.note ? ` · ${gift.note}` : ''}
                 </p>
               </div>
@@ -106,7 +106,7 @@ export const CustomerGiftsCard: React.FC<CustomerGiftsCardProps> = ({ customerId
       )}
 
       {data && canManage && (
-        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mt-4 pt-4 border-t border-line grid grid-cols-1 md:grid-cols-2 gap-4">
           <Switch
             checked={data.noGifts}
             onChange={(noGifts) => preferences.mutate({ noGifts })}

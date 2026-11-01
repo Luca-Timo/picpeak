@@ -4,7 +4,8 @@
  * The whole mount sits behind the `customerGifts` flag. Reading needs
  * customers.gifts.view, every change needs customers.gifts.manage. A route that
  * returns customer data also needs customers.view, the right that covers it
- * everywhere else.
+ * everywhere else, and customers.gifts.view, because a change answers with the
+ * customer's gift history.
  */
 
 const express = require('express');
@@ -23,6 +24,7 @@ router.use(adminAuth, requireFeatureFlag('customerGifts', 'CUSTOMER_GIFTS_DISABL
 const canView = requirePermission('customers.gifts.view');
 const canManage = requirePermission('customers.gifts.manage');
 const canSeeCustomers = requirePermission('customers.view');
+const canChangeCustomerGifts = [canSeeCustomers, canView, canManage];
 
 const idParam = (name = 'id') => param(name).isInt({ min: 1 }).toInt();
 const NOTE_MAX = 500;
@@ -95,7 +97,8 @@ router.patch('/items/:id', [
 
 router.get('/items/:id/movements', [canView, idParam()], handleAsync(async (req, res) => {
   validateRequest(req);
-  return successResponse(res, { movements: await giftsService.listMovements(req.params.id) });
+  const showCosts = await userHasAnyPermission(req.admin.id, ['accounting.view']);
+  return successResponse(res, { movements: await giftsService.listMovements(req.params.id, { showCosts }) });
 }));
 
 router.post('/items/:id/stock', [
@@ -103,7 +106,7 @@ router.post('/items/:id/stock', [
   idParam(),
   body('quantity').isInt({ min: 1, max: 100000 }).toInt(),
   body('unitCostMinor').optional({ nullable: true }).isInt({ min: 0, max: 1000000000 }).toInt(),
-  body('currency').optional({ nullable: true }).isString().isLength({ min: 3, max: 3 }),
+  body('currency').optional({ nullable: true }).isString().isLength({ min: 3, max: 3 }).isAlpha(),
   dateField('occurredOn'),
   body('inboundDocumentId').optional({ nullable: true }).isInt({ min: 1 }).toInt(),
   noteField('note'),
@@ -141,7 +144,7 @@ router.get('/customers/:id', [canSeeCustomers, canView, idParam()], handleAsync(
 }));
 
 router.patch('/customers/:id', [
-  canManage,
+  ...canChangeCustomerGifts,
   idParam(),
   body('noGifts').optional().isBoolean().toBoolean(),
   dateField('startDateOverride'),
@@ -154,7 +157,7 @@ router.patch('/customers/:id', [
 }));
 
 router.post('/customers/:id/gifts', [
-  canManage,
+  ...canChangeCustomerGifts,
   idParam(),
   body('giftItemId').isInt({ min: 1 }).toInt(),
   dateField('giftDate'),
@@ -173,7 +176,7 @@ router.post('/customers/:id/gifts', [
 }));
 
 router.post('/customers/:id/declines', [
-  canManage,
+  ...canChangeCustomerGifts,
   idParam(),
   yearsField(body('milestoneYears')),
   noteField('note'),
@@ -183,7 +186,7 @@ router.post('/customers/:id/declines', [
   return successResponse(res, await giftsService.declineMilestone(req.params.id, { milestoneYears, note }, req.admin), 201);
 }));
 
-router.post('/:id/undo', [canManage, idParam()], handleAsync(async (req, res) => {
+router.post('/:id/undo', [...canChangeCustomerGifts, idParam()], handleAsync(async (req, res) => {
   validateRequest(req);
   return successResponse(res, await giftsService.undo(req.params.id, req.admin));
 }));

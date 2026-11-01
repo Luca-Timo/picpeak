@@ -39,7 +39,8 @@ export interface GiftSuggestion {
   customerName: string;
   milestoneYears: number;
   milestoneDate: string;
-  bookingCount: number;
+  /** Null, with lastPaidOn and reason, without bills.view. */
+  bookingCount: number | null;
   lastPaidOn: string | null;
   reason: 'too_few_bookings' | 'inactive' | null;
 }
@@ -91,7 +92,7 @@ export const giftsService = {
     const { data } = await api.get('/admin/gifts/rules');
     return data.rules;
   },
-  async updateRules(rules: GiftRules): Promise<GiftRules> {
+  async updateRules(rules: Partial<GiftRules>): Promise<GiftRules> {
     const { data } = await api.put('/admin/gifts/rules', rules);
     return data.rules;
   },

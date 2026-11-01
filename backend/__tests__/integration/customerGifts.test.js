@@ -6,6 +6,7 @@
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'crm-route-test-secret';
 
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const {
   bootCrmDb, seedMinimal, assignAdminRole, mintAdminToken, buildRouteApp,
 } = require('./helpers/crmDb');
@@ -126,6 +127,69 @@ describe('access', () => {
     expect((await request(app).get(api('/suggestions'))).status).toBe(401);
     expect((await get('/suggestions', viewerToken)).status).toBe(403);
     expect((await post('/items', { name: 'x' }, viewerToken)).status).toBe(403);
+  });
+});
+
+describe('access to customer data', () => {
+  async function tokenWith(name, permissions) {
+    const [role] = await db('roles').insert({ name, display_name: name }).returning('id');
+    const roleId = role?.id ?? role;
+    const rows = await db('permissions').whereIn('name', permissions).select('id');
+    await db('role_permissions').insert(rows.map(({ id }) => ({ role_id: roleId, permission_id: id })));
+    require('../../src/middleware/permissions').clearPermissionCache();
+    const [admin] = await db('admin_users').insert({
+      username: name, email: `${name}@example.com`, password_hash: 'x', role_id: roleId,
+    }).returning('id');
+    return mintAdminToken(admin?.id ?? admin);
+  }
+
+  it('gives a manage-only role no gift history through a change', async () => {
+    const token = await tokenWith('gift-manage-only', ['customers.gifts.manage']);
+    const customer = await dueCustomer();
+    const item = await createItem('Manage only', 2);
+    const { gifts } = bodyOf(await post(`/customers/${customer}/gifts`, { giftItemId: item.id, note: 'Secret note' }));
+    expect((await post('/items', { name: 'Allowed' }, token)).status).toBe(201);
+    const patched = await request(app).patch(api(`/customers/${customer}`)).set(auth(token)).send({});
+    expect(patched.status).toBe(403);
+    expect((await post(`/customers/${customer}/gifts`, { giftItemId: item.id }, token)).status).toBe(403);
+    expect((await post(`/customers/${customer}/declines`, { milestoneYears: 3 }, token)).status).toBe(403);
+    expect((await post(`/${gifts[0].id}/undo`, {}, token)).status).toBe(403);
+  });
+
+  it('keeps invoice figures from a role without bills.view', async () => {
+    const token = await tokenWith('gift-no-bills', ['customers.view', 'customers.gifts.view']);
+    const customer = await dueCustomer();
+    const row = bodyOf(await get('/suggestions', token)).due.find((r) => r.customerId === customer);
+    expect(row).toMatchObject({ milestoneYears: 3, bookingCount: null, lastPaidOn: null, reason: null });
+    const full = bodyOf(await get('/suggestions')).due.find((r) => r.customerId === customer);
+    expect(full.bookingCount).toBe(3);
+    expect(full.lastPaidOn).not.toBeNull();
+  });
+
+  it('keeps supplier costs from a role without accounting.view', async () => {
+    const token = await tokenWith('gift-no-accounting', ['customers.gifts.view']);
+    const item = await createItem('Costs', 2);
+    const [movement] = bodyOf(await get(`/items/${item.id}/movements`, token)).movements;
+    expect(movement).toMatchObject({ kind: 'purchase', unitCostMinor: null, currency: null });
+    const [full] = bodyOf(await get(`/items/${item.id}/movements`)).movements;
+    expect(full.unitCostMinor).toBe(1500);
+  });
+
+  it('leaves gifts out of the timeline without the gift right or the flag', async () => {
+    const adminCustomers = buildRouteApp('/api/admin/customers', require('../../src/routes/adminCustomers'));
+    const read = (path, token) => request(adminCustomers).get(`/api/admin/customers${path}`).set(auth(token));
+    const token = await tokenWith('gift-customers-only', ['customers.view']);
+    const customer = await createCustomer();
+    const item = await createItem('Timeline', 1);
+    await post(`/customers/${customer}/gifts`, { giftItemId: item.id });
+
+    const types = (res) => bodyOf(res).entries.map((entry) => entry.type);
+    expect(types(await read(`/${customer}/activity`, superToken))).toContain('customer_gift_given');
+    expect(types(await read(`/${customer}/activity`, token))).not.toContain('customer_gift_given');
+
+    await setFlag('customerGifts', false);
+    expect(types(await read(`/${customer}/activity`, superToken))).not.toContain('customer_gift_given');
+    await setFlag('customerGifts', true);
   });
 });
 
@@ -274,17 +338,73 @@ describe('suggestions', () => {
 });
 
 describe('more than one admin', () => {
-  it('shows every admin the same list, whoever created the invoices', async () => {
+  it('shows every admin the same list, with figures only from invoices they can open', async () => {
     const customer = await dueCustomer();
     const row = (list) => list.find((r) => r.customerId === customer);
-    const asSuper = bodyOf(await get('/suggestions'));
-    const asAdmin = bodyOf(await get('/suggestions', adminToken));
-    expect(row(asSuper.due)).toBeDefined();
-    expect(row(asAdmin.due)).toEqual(row(asSuper.due));
+    const asSuper = row(bodyOf(await get('/suggestions')).due);
+    const asAdmin = row(bodyOf(await get('/suggestions', adminToken)).due);
+    expect(asSuper.bookingCount).toBe(3);
+    expect(asAdmin).toEqual({ ...asSuper, bookingCount: null, lastPaidOn: null, reason: null });
+
+    const own = await dueCustomer();
+    await db('invoices').where({ customer_account_id: own }).update({ created_by_admin_id: jwt.decode(adminToken).id });
+    const mine = bodyOf(await get('/suggestions', adminToken)).due.find((r) => r.customerId === own);
+    expect(mine.bookingCount).toBe(3);
+  });
+
+  it('refuses another admin\'s supplier invoice', async () => {
+    const item = await createItem('Foreign invoice');
+    const owner = await db('admin_users').first('id');
+    const [doc] = await db('inbound_documents').insert({
+      supplier_name: 'Foreign shop', currency: 'EUR', created_by_admin_id: owner.id,
+    }).returning('id');
+    await setFlag('incomingInvoices', true);
+    const res = await post(`/items/${item.id}/stock`, { quantity: 1, inboundDocumentId: doc?.id ?? doc }, adminToken);
+    expect(res.status).toBe(404);
+    expect(await stockOf(item.id)).toBe(0);
   });
 });
 
 describe('edges', () => {
+  it('closes only the current milestone', async () => {
+    const customer = await dueCustomer();
+    const item = await createItem('Current', 2);
+    for (const milestoneYears of [100, 5]) {
+      const declined = await post(`/customers/${customer}/declines`, { milestoneYears });
+      expect(declined.status).toBe(409);
+      expect(declined.body.code).toBe('GIFT_MILESTONE_NOT_CURRENT');
+      const given = await post(`/customers/${customer}/gifts`, { giftItemId: item.id, milestoneYears });
+      expect(given.body.code).toBe('GIFT_MILESTONE_NOT_CURRENT');
+    }
+    expect(await stockOf(item.id)).toBe(2);
+    const { due } = bodyOf(await get('/suggestions'));
+    expect(due.find((row) => row.customerId === customer).milestoneYears).toBe(3);
+  });
+
+  it('refuses a milestone for a customer who has not reached one', async () => {
+    const customer = await createCustomer();
+    await paidInvoice(customer, yearsAgo(1));
+    const res = await post(`/customers/${customer}/declines`, { milestoneYears: 3 });
+    expect(res.body.code).toBe('GIFT_MILESTONE_NOT_CURRENT');
+  });
+
+  it('reads a payment entered without a time as that day', async () => {
+    const customer = await createCustomer();
+    const paidOn = `${new Date().getUTCFullYear() - 4}-06-15`;
+    await paidInvoice(customer, `${paidOn}T00:00:00.000Z`);
+    const row = bodyOf(await get('/suggestions')).notQualified.find((r) => r.customerId === customer);
+    expect(row.lastPaidOn).toBe(paidOn);
+  });
+
+  it('stamps undo as a real timestamp', async () => {
+    const customer = await createCustomer();
+    const item = await createItem('Stamp', 1);
+    const { gifts } = bodyOf(await post(`/customers/${customer}/gifts`, { giftItemId: item.id }));
+    await post(`/${gifts[0].id}/undo`);
+    const row = await db('customer_gifts').where({ id: gifts[0].id }).first();
+    expect(Number.isNaN(new Date(row.undone_at).getTime())).toBe(false);
+  });
+
   it('does not bring back an earlier milestone once a later one is closed', async () => {
     const customer = await createCustomer();
     await paidInvoice(customer, yearsAgo(5, 10));
@@ -323,14 +443,18 @@ describe('edges', () => {
 describe('customer erasure', () => {
   it('clears gift notes and keeps the stock count', async () => {
     const item = await createItem('Erased', 3);
-    const customer = await createCustomer({ gift_start_date_override: '2020-01-01' });
+    const customer = await createCustomer({ no_gifts: true });
     await post(`/customers/${customer}/gifts`, { giftItemId: item.id, note: 'Loves Barolo' });
+    await request(app).patch(api(`/customers/${customer}`)).set(auth(superToken)).send({ startDateOverride: '2020-01-01' });
     await require('../../src/services/customerAccountsService').eraseCustomer(customer, null);
     const [row] = await db('customer_gifts').where({ customer_account_id: customer });
     expect(row.note).toBeNull();
     expect(await stockOf(item.id)).toBe(2);
     const account = await db('customer_accounts').where({ id: customer }).first();
     expect(account.gift_start_date_override).toBeNull();
+    expect(Boolean(account.no_gifts)).toBe(false);
+    const logged = await db('activity_logs').where({ activity_type: 'customer_gift_preferences_updated' });
+    expect(JSON.stringify(logged)).not.toContain('2020-01-01');
     expect((bodyOf(await get('/suggestions')).notQualified).find((r) => r.customerId === customer)).toBeUndefined();
     const refused = await post(`/customers/${customer}/gifts`, { giftItemId: item.id, note: 'after erasure' });
     expect(refused.status).toBe(409);

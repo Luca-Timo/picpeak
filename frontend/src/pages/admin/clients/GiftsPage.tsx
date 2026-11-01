@@ -42,6 +42,8 @@ function reasonText(t: TFunction, row: GiftSuggestion, rules: GiftRules | undefi
     : t('gifts.reason.noPayment', 'No payment yet');
 }
 
+const NOT_QUALIFIED_PAGE = 25;
+
 const SuggestionList: React.FC<{
   rows: GiftSuggestion[];
   rules?: GiftRules;
@@ -53,7 +55,7 @@ const SuggestionList: React.FC<{
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
   return (
-    <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
+    <ul className="divide-y divide-line">
       {rows.map((row) => (
         <li key={row.customerId} className="py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -61,7 +63,7 @@ const SuggestionList: React.FC<{
               <Link to={`/admin/clients/accounts/${row.customerId}`} className="hover:underline">{row.customerName}</Link>
               <Badge>{t('gifts.milestoneBadge', { count: row.milestoneYears, defaultValue_one: '{{count}} year', defaultValue_other: '{{count}} years' })}</Badge>
             </p>
-            <p className="text-xs text-neutral-600 dark:text-neutral-400">
+            <p className="text-xs text-soft">
               {format(row.milestoneDate)}
               {row.reason ? ` · ${reasonText(t, row, rules, row.lastPaidOn ? format(row.lastPaidOn) : '')}` : ''}
             </p>
@@ -98,12 +100,12 @@ const ItemHistory: React.FC<{ item: GiftItem | null; onClose: () => void }> = ({
       {!isError && !isFetching && movements.length === 0 && (
         <EmptyState size="inline" title={t('gifts.stock.historyEmpty', 'No stock changes yet')} />
       )}
-      <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
+      <ul className="divide-y divide-line">
         {movements.map((movement) => (
           <li key={movement.id} className="py-2 flex items-start justify-between gap-3 text-sm">
             <div className="min-w-0">
               <p className="text-heading">{kindLabel[movement.kind]}</p>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400">
+              <p className="text-xs text-soft">
                 {[
                   format(movement.occurredOn),
                   movement.unitCostMinor !== null
@@ -154,7 +156,11 @@ const RulesCard: React.FC<{ rules: GiftRules; canManage: boolean }> = ({ rules, 
   };
 
   const save = useMutationWithToast({
-    mutationFn: () => giftsService.updateRules({ ...draft, milestoneYears: parsedMilestones }),
+    // Only what changed, so a default nobody touched stays a default.
+    mutationFn: () => giftsService.updateRules({
+      ...Object.fromEntries(RULE_FIELDS.filter(({ key }) => draft[key] !== rules[key]).map(({ key }) => [key, draft[key]])),
+      ...(parsedMilestones.join() === rules.milestoneYears.join() ? {} : { milestoneYears: parsedMilestones }),
+    }),
     successMessage: t('gifts.rules.saved', 'Rules saved'),
     invalidateKeys: [['admin-gift-rules'], ['admin-gift-suggestions']],
   });
@@ -162,7 +168,7 @@ const RulesCard: React.FC<{ rules: GiftRules; canManage: boolean }> = ({ rules, 
   return (
     <Card padding="lg">
       <h2 className="text-lg font-semibold text-heading mb-1">{t('gifts.rules.title', 'Rules')}</h2>
-      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+      <p className="text-sm text-soft mb-4">
         {t('gifts.rules.hint', 'A customer also stays active if their last payment fits their usual gap between bookings.')}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -204,6 +210,7 @@ export const GiftsPage: React.FC = () => {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
   const canManage = hasPermission('customers.gifts.manage');
+  const canSeeCustomers = hasPermission('customers.view');
 
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [addingStock, setAddingStock] = useState<GiftItem | null>(null);
@@ -211,8 +218,13 @@ export const GiftsPage: React.FC = () => {
   const [history, setHistory] = useState<GiftItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [notQualifiedShown, setNotQualifiedShown] = useState(NOT_QUALIFIED_PAGE);
 
-  const suggestions = useQuery({ queryKey: ['admin-gift-suggestions'], queryFn: giftsService.listSuggestions });
+  const suggestions = useQuery({
+    queryKey: ['admin-gift-suggestions'],
+    queryFn: giftsService.listSuggestions,
+    enabled: canSeeCustomers,
+  });
   const items = useQuery({ queryKey: ['admin-gift-items', true], queryFn: () => giftsService.listItems(true) });
   const rules = useQuery({ queryKey: ['admin-gift-rules'], queryFn: giftsService.getRules });
 
@@ -254,6 +266,7 @@ export const GiftsPage: React.FC = () => {
         </Notice>
       )}
 
+      {canSeeCustomers && (
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-heading mb-2">{t('gifts.due.title', 'Gifts due')}</h2>
         {suggestions.isLoading && <Loading />}
@@ -270,21 +283,32 @@ export const GiftsPage: React.FC = () => {
           onDecline={(suggestion) => setDialog({ type: 'decline', suggestion })}
         />
       </Card>
+      )}
 
       {notQualified.length > 0 && (
         <Card padding="lg">
           <h2 className="text-lg font-semibold text-heading mb-1">{t('gifts.notQualified.title', "Didn't qualify")}</h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-2">
+          <p className="text-sm text-soft mb-2">
             {t('gifts.notQualified.hint', 'Past the grace period. You can still give a gift, and it is marked as an override.')}
           </p>
           <SuggestionList
-            rows={notQualified}
+            rows={notQualified.slice(0, notQualifiedShown)}
             rules={rules.data}
             canManage={canManage}
             giveLabel={t('gifts.notQualified.override', 'Gift anyway')}
             onGive={(suggestion) => setDialog({ type: 'give', suggestion, override: true })}
             onDecline={(suggestion) => setDialog({ type: 'decline', suggestion })}
           />
+          {notQualified.length > notQualifiedShown && (
+            <Button
+              className="mt-2"
+              size="sm"
+              variant="ghost"
+              onClick={() => setNotQualifiedShown(notQualifiedShown + NOT_QUALIFIED_PAGE)}
+            >
+              {t('gifts.notQualified.showMore', 'Show more ({{count}} left)', { count: notQualified.length - notQualifiedShown })}
+            </Button>
+          )}
         </Card>
       )}
 
@@ -301,7 +325,7 @@ export const GiftsPage: React.FC = () => {
         {items.data && items.data.length === 0 && (
           <EmptyState size="inline" title={t('gifts.items.empty', 'No gift items yet')} />
         )}
-        <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
+        <ul className="divide-y divide-line">
           {(items.data || []).map((item) => (
             <li key={item.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
@@ -309,7 +333,7 @@ export const GiftsPage: React.FC = () => {
                   {item.name}
                   {item.isArchived && <Badge>{t('gifts.items.archived', 'Archived')}</Badge>}
                 </p>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                <p className="text-xs text-soft">
                   {t('gifts.items.stock', '{{count}} in stock', { count: item.stock })}
                 </p>
               </div>

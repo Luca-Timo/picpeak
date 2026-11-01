@@ -278,8 +278,9 @@ const router = createBrowserRouter(
                 page hosts the newsletter consent control, so a
                 newsletter-only install (portal off) must still
                 be able to open a customer to record a phone
-                opt-out (#1264). */}
-            <Route element={<RequireFeature anyOf={['customerPortal', 'newsletters']} />}>
+                opt-out (#1264). Gifts link here too: undo, No
+                gifts and the start date live on this page. */}
+            <Route element={<RequireFeature anyOf={['customerPortal', 'newsletters', 'customerGifts']} />}>
               <Route path="accounts" element={<CustomerManagementPage />} />
               <Route path="accounts/:id" element={<CustomerDetailPage />} />
             </Route>

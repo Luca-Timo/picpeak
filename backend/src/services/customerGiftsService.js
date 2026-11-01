@@ -9,7 +9,8 @@
  *   - stock is always the sum of the movements, never a stored total;
  *   - gift data is admin-only and never reaches the customer portal;
  *   - who qualifies is read across all invoices, not the viewing admin's own,
- *     so every admin sees the same list. Only derived fields leave that read.
+ *     so every admin sees the same list. Booking counts and payment dates only
+ *     reach an admin who can open every invoice behind them.
  *
  * Activity is logged after commit: a global-db write inside a transaction
  * deadlocks on the single SQLite connection.
@@ -22,6 +23,7 @@ const { isUniqueViolation } = require('../utils/dbErrors');
 const { formatBoolean } = require('../utils/dbCompat');
 const { auditedUpdate } = require('./accountingHistory');
 const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
+const { ownedBy } = require('./expenseAccess');
 const businessProfileService = require('./businessProfileService');
 const rules = require('./customerGiftRules');
 
@@ -56,6 +58,12 @@ function toDateOnly(value) {
 }
 
 const today = () => toDateOnly(new Date());
+
+/** A payment entered without a time is stored as UTC midnight, the day before west of UTC. */
+function paidDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.getTime() % rules.DAY_MS === 0 ? date.toISOString().slice(0, 10) : toDateOnly(date);
+}
 
 // ---- rules ---------------------------------------------------------------
 
@@ -159,7 +167,7 @@ async function createItem({ name, description }, admin) {
 async function updateItem(id, fields, admin) {
   const existing = await db('gift_items').where({ id }).first();
   if (!existing) throw new NotFoundError('Gift item', id);
-  const updates = { updated_at: new Date() };
+  const updates = { updated_at: new Date().toISOString() };
   if (fields.name !== undefined) updates.name = fields.name;
   if (fields.description !== undefined) updates.description = fields.description || null;
   if (fields.isArchived !== undefined) updates.is_archived = formatBoolean(fields.isArchived);
@@ -181,14 +189,17 @@ function movementToApi(row) {
   };
 }
 
-async function listMovements(itemId) {
+async function listMovements(itemId, { showCosts = false } = {}) {
   const item = await db('gift_items').where({ id: itemId }).first();
   if (!item) throw new NotFoundError('Gift item', itemId);
   const rows = await db('gift_stock_movements')
     .where({ gift_item_id: itemId })
     .orderBy('occurred_on', 'desc')
     .orderBy('id', 'desc');
-  return rows.map(movementToApi);
+  // Supplier prices and invoices sit behind accounting, as linking one does.
+  return rows.map(movementToApi).map((movement) => (showCosts
+    ? movement
+    : { ...movement, unitCostMinor: null, currency: null, inboundDocumentId: null }));
 }
 
 /**
@@ -204,7 +215,9 @@ async function addStock(itemId, input, admin, { canReadInvoices }) {
       throw new AppError('Linking a supplier invoice needs access to incoming invoices', 403, 'GIFT_INVOICE_FORBIDDEN');
     }
     invoice = await db('inbound_documents').where({ id: inboundDocumentId })
-      .whereNotIn('status', UNUSABLE_INVOICE_STATUSES).first();
+      .whereNotIn('status', UNUSABLE_INVOICE_STATUSES)
+      .modify(ownedBy('inbound_documents'))
+      .first();
     if (!invoice) throw new NotFoundError('Supplier invoice', inboundDocumentId);
   }
   const fallbackCurrency = invoice?.currency || (await businessProfileService.getProfile())?.default_currency;
@@ -252,11 +265,13 @@ async function correctStock(itemId, { quantityDelta, reason, occurredOn }, admin
 // ---- who qualifies -------------------------------------------------------
 
 /** Paid invoices by customer. Storno rows and cancelled originals never count. */
+const paidInvoices = () => db('invoices')
+  .where({ status: 'paid', kind: 'invoice' })
+  .whereNull('cancels_invoice_id')
+  .select('id', 'customer_account_id', 'deal_uuid', 'paid_at', 'issue_date');
+
 async function paymentsByCustomer(customerIds) {
-  const query = db('invoices')
-    .where({ status: 'paid', kind: 'invoice' })
-    .whereNull('cancels_invoice_id')
-    .select('id', 'customer_account_id', 'deal_uuid', 'paid_at', 'issue_date');
+  const query = paidInvoices();
   if (customerIds) query.whereIn('customer_account_id', customerIds);
   const rows = await withTrustedCrmAccess('customer gift milestones', () => query);
   const out = new Map();
@@ -264,11 +279,20 @@ async function paymentsByCustomer(customerIds) {
     const list = out.get(row.customer_account_id) || [];
     list.push({
       key: row.deal_uuid || `invoice-${row.id}`,
-      paidOn: toDateOnly(row.paid_at || row.issue_date),
+      paidOn: row.paid_at ? paidDate(row.paid_at) : toDateOnly(row.issue_date),
     });
     out.set(row.customer_account_id, list);
   }
   return out;
+}
+
+/** How many paid invoices of each customer the viewing admin may open. */
+async function readableInvoiceCounts() {
+  const counts = new Map();
+  for (const row of await paidInvoices()) {
+    counts.set(row.customer_account_id, (counts.get(row.customer_account_id) || 0) + 1);
+  }
+  return counts;
 }
 
 function eligibleCustomers() {
@@ -278,23 +302,33 @@ function eligibleCustomers() {
     .select('id', 'display_name', 'company_name', 'email', 'gift_start_date_override');
 }
 
-function suggestionToApi(customer, evaluation) {
+function evaluateCustomer(customer, payments, giftRules, date) {
+  return rules.evaluate({
+    payments: payments.get(customer.id) || [],
+    startDateOverride: toDateOnly(customer.gift_start_date_override),
+    today: date,
+    rules: giftRules,
+  });
+}
+
+function suggestionToApi(customer, evaluation, showInvoiceFigures) {
   return {
     customerId: customer.id,
     customerName: customer.company_name || customer.display_name || customer.email,
     milestoneYears: evaluation.milestoneYears,
     milestoneDate: evaluation.milestoneDate,
-    bookingCount: evaluation.bookingCount,
-    lastPaidOn: evaluation.lastPaidOn,
-    reason: evaluation.reason || null,
+    bookingCount: showInvoiceFigures ? evaluation.bookingCount : null,
+    lastPaidOn: showInvoiceFigures ? evaluation.lastPaidOn : null,
+    reason: showInvoiceFigures ? evaluation.reason || null : null,
   };
 }
 
 /** The two lists on the Gifts page. A customer waiting out the grace period is on neither. */
 async function listSuggestions() {
-  const [customers, payments, closed, giftRules] = await Promise.all([
+  const [customers, payments, readable, closed, giftRules] = await Promise.all([
     eligibleCustomers(),
     paymentsByCustomer(),
+    readableInvoiceCounts(),
     db('customer_gifts').whereNull('undone_at').whereNotNull('milestone_years')
       .select('customer_account_id', 'milestone_years'),
     getRules(),
@@ -310,15 +344,12 @@ async function listSuggestions() {
   const notQualified = [];
   const date = today();
   for (const customer of customers) {
-    const evaluation = rules.evaluate({
-      payments: payments.get(customer.id) || [],
-      startDateOverride: toDateOnly(customer.gift_start_date_override),
-      today: date,
-      rules: giftRules,
-    });
+    const evaluation = evaluateCustomer(customer, payments, giftRules, date);
     if (evaluation.state !== 'due' && evaluation.state !== 'not_qualified') continue;
     if (evaluation.milestoneYears <= (highestClosed.get(customer.id) || 0)) continue;
-    (evaluation.state === 'due' ? due : notQualified).push(suggestionToApi(customer, evaluation));
+    const paid = payments.get(customer.id)?.length || 0;
+    const showFigures = paid > 0 && readable.get(customer.id) === paid;
+    (evaluation.state === 'due' ? due : notQualified).push(suggestionToApi(customer, evaluation, showFigures));
   }
   const byDate = (a, b) => a.milestoneDate.localeCompare(b.milestoneDate);
   return { due: due.sort(byDate), notQualified: notQualified.sort(byDate) };
@@ -343,8 +374,10 @@ function giftToApi(row) {
   };
 }
 
-async function customerOrThrow(customerId) {
-  const customer = await db('customer_accounts').where({ id: customerId }).first();
+async function customerOrThrow(customerId, conn = db) {
+  const query = conn('customer_accounts').where({ id: customerId });
+  if (conn.isTransaction && conn.client.config.client === 'pg') query.forUpdate();
+  const customer = await query.first();
   if (!customer) throw new NotFoundError('Customer', customerId);
   return customer;
 }
@@ -365,22 +398,31 @@ async function getCustomerGifts(customerId) {
 }
 
 async function updateCustomerPreferences(customerId, { noGifts, startDateOverride }, admin) {
-  await writableCustomerOrThrow(customerId);
   const updates = {};
   if (noGifts !== undefined) updates.no_gifts = formatBoolean(noGifts);
   if (startDateOverride !== undefined) updates.gift_start_date_override = startDateOverride || null;
-  if (Object.keys(updates).length > 0) {
-    await auditedUpdate(db, 'customer_accounts', { id: customerId }, updates, {
+  await db.transaction(async (trx) => {
+    await writableCustomerOrThrow(customerId, trx);
+    if (Object.keys(updates).length === 0) return;
+    await auditedUpdate(trx, 'customer_accounts', { id: customerId }, updates, {
       actor: admin.id, source: 'customer.gift_preferences',
     });
-    await logActivity('customer_gift_preferences_updated', { customerId, noGifts, startDateOverride }, null, adminActor(admin));
+  });
+  if (Object.keys(updates).length > 0) {
+    await logActivity('customer_gift_preferences_updated', {
+      customerId, noGifts, startDateChanged: startDateOverride !== undefined,
+    }, null, adminActor(admin));
   }
   return getCustomerGifts(customerId);
 }
 
-/** Erasure wiped this account's gift notes; nothing may write new ones. */
-async function writableCustomerOrThrow(customerId) {
-  const customer = await customerOrThrow(customerId);
+/**
+ * Erasure wiped this account's gift notes; nothing may write new ones. Inside a
+ * transaction this holds the row on PostgreSQL, so an erasure can't land between
+ * this check and the write.
+ */
+async function writableCustomerOrThrow(customerId, conn = db) {
+  const customer = await customerOrThrow(customerId, conn);
   if (String(customer.email).endsWith(ERASED_EMAIL_SUFFIX)) {
     throw new AppError('This customer was erased', 409, 'GIFT_CUSTOMER_ERASED');
   }
@@ -388,6 +430,24 @@ async function writableCustomerOrThrow(customerId) {
 }
 
 const milestoneTaken = () => new AppError('This milestone is already closed', 409, 'GIFT_MILESTONE_CLOSED');
+
+/** A closed milestone hides everything up to it, so only the customer's current one can be closed. */
+async function assertCurrentMilestone(customer, milestoneYears) {
+  const [payments, giftRules, highest] = await Promise.all([
+    paymentsByCustomer([customer.id]),
+    getRules(),
+    db('customer_gifts')
+      .where({ customer_account_id: customer.id })
+      .whereNull('undone_at')
+      .max({ years: 'milestone_years' })
+      .first(),
+  ]);
+  const evaluation = evaluateCustomer(customer, payments, giftRules, today());
+  if (evaluation.milestoneYears !== milestoneYears) {
+    throw new AppError('This is not the customer\'s current milestone', 409, 'GIFT_MILESTONE_NOT_CURRENT');
+  }
+  if (milestoneYears <= Number(highest?.years || 0)) throw milestoneTaken();
+}
 
 async function latestPurchaseCost(trx, itemId) {
   const row = await trx('gift_stock_movements')
@@ -408,10 +468,12 @@ async function giveGift(customerId, input, admin) {
   const {
     giftItemId, giftDate, note, milestoneYears, isOverride = false, reduceStock = true,
   } = input;
-  await writableCustomerOrThrow(customerId);
+  const customer = await writableCustomerOrThrow(customerId);
+  if (milestoneYears) await assertCurrentMilestone(customer, milestoneYears);
   let id;
   try {
     id = await db.transaction(async (trx) => {
+      await writableCustomerOrThrow(customerId, trx);
       const item = await lockItem(trx, giftItemId);
       if (item.is_archived) throw new AppError('This gift item is archived', 409, 'GIFT_ITEM_ARCHIVED');
       if (reduceStock && await stockOf(trx, giftItemId) < 1) {
@@ -459,18 +521,22 @@ async function giveGift(customerId, input, admin) {
 
 /** Closes one milestone. The next one still comes up; `no_gifts` is the way to stop them all. */
 async function declineMilestone(customerId, { milestoneYears, note }, admin) {
-  await writableCustomerOrThrow(customerId);
+  const customer = await writableCustomerOrThrow(customerId);
+  await assertCurrentMilestone(customer, milestoneYears);
   let id;
   try {
-    const [inserted] = await db('customer_gifts').insert({
-      customer_account_id: customerId,
-      status: 'declined',
-      milestone_years: milestoneYears,
-      note: note || null,
-      gift_date: today(),
-      created_by_admin_id: admin.id,
-    }).returning('id');
-    id = insertedId(inserted);
+    id = await db.transaction(async (trx) => {
+      await writableCustomerOrThrow(customerId, trx);
+      const [inserted] = await trx('customer_gifts').insert({
+        customer_account_id: customerId,
+        status: 'declined',
+        milestone_years: milestoneYears,
+        note: note || null,
+        gift_date: today(),
+        created_by_admin_id: admin.id,
+      }).returning('id');
+      return insertedId(inserted);
+    });
   } catch (err) {
     if (isUniqueViolation(err)) throw milestoneTaken();
     throw err;
@@ -479,7 +545,7 @@ async function declineMilestone(customerId, { milestoneYears, note }, admin) {
   return getCustomerGifts(customerId);
 }
 
-/** Undoes a gift or decline. A gift's stock comes back; the milestone reopens. */
+/** Undoes a gift or decline. A gift's stock comes back; the milestone reopens unless a later one is closed. */
 async function undo(giftId, admin) {
   const customerId = await db.transaction(async (trx) => {
     const query = trx('customer_gifts').where({ id: giftId });
@@ -488,7 +554,7 @@ async function undo(giftId, admin) {
     if (!gift) throw new NotFoundError('Gift', giftId);
     if (gift.undone_at) throw new AppError('This entry is already undone', 409, 'GIFT_ALREADY_UNDONE');
     await trx('customer_gifts').where({ id: giftId }).update({
-      undone_at: new Date(),
+      undone_at: new Date().toISOString(),
       undone_by_admin_id: admin.id,
     });
     const movement = await trx('gift_stock_movements').where({ customer_gift_id: giftId, kind: 'gift' }).first();
@@ -511,7 +577,7 @@ async function undo(giftId, admin) {
 /** Part of customer erasure. Called on the erasure's transaction. */
 async function forgetCustomer(trx, customerId, actor) {
   await trx('customer_gifts').where({ customer_account_id: customerId }).update({ note: null });
-  await auditedUpdate(trx, 'customer_accounts', { id: customerId }, { gift_start_date_override: null }, {
+  await auditedUpdate(trx, 'customer_accounts', { id: customerId }, { gift_start_date_override: null, no_gifts: formatBoolean(false) }, {
     actor, source: 'customer.erase',
   });
 }

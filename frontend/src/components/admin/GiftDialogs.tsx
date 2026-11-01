@@ -181,7 +181,7 @@ export const DeclineGiftModal: React.FC<DeclineModalProps> = ({
         </>
       )}
     >
-      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+      <p className="text-sm text-soft mb-4">
         {t('gifts.decline.hint', 'This closes the milestone. Stock stays the same, and the next milestone still comes up.')}
       </p>
       <label htmlFor="gift-decline-note" className={fieldLabel}>{t('gifts.decline.reason', 'Reason (optional)')}</label>
@@ -226,7 +226,9 @@ export const AddStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
     queryFn: () => accountingService.listInbound({ pageSize: 100 }),
     enabled: !!item && canPickInvoice,
   });
-  const documents: InboundDocument[] = invoices?.items || [];
+  // The backend refuses these two: the inbox set them aside.
+  const documents: InboundDocument[] = (invoices?.items || [])
+    .filter((doc) => doc.status !== 'declined' && doc.status !== 'duplicate');
   const picked = documents.find((doc) => doc.id === invoiceId);
 
   useEffect(() => {
@@ -366,7 +368,7 @@ export const AddStockModal: React.FC<StockModalProps> = ({ item, onClose }) => {
               )}
             </div>
             {picked?.netAmountMinor ? (
-              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+              <p className="text-xs text-soft mt-1">
                 {t('gifts.stock.invoiceHint', 'Net total {{amount}}. Cost per unit is a suggestion, because one invoice can cover other goods.', {
                   amount: formatMoneyMinor(picked.netAmountMinor, picked.currency || 'CHF'),
                 })}

@@ -11551,7 +11551,8 @@
     "notQualified": {
       "title": "Nicht qualifiziert",
       "hint": "Die Nachfrist ist abgelaufen. Sie können trotzdem etwas schenken, der Eintrag wird als Ausnahme markiert.",
-      "override": "Trotzdem schenken"
+      "override": "Trotzdem schenken",
+      "showMore": "Mehr anzeigen (noch {{count}})"
     },
     "reason": {
       "bookings": "{{have}} von {{need}} Buchungen",

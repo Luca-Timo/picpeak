@@ -141,5 +141,5 @@ function evaluate({ payments, startDateOverride = null, today, rules = DEFAULT_R
 }
 
 module.exports = {
-  DEFAULT_RULES, addDays, addMonths, addYears, toBookings, latestMilestone, evaluate,
+  DAY_MS, DEFAULT_RULES, addDays, addMonths, addYears, toBookings, latestMilestone, evaluate,
 };
