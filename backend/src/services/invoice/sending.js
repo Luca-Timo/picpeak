@@ -13,7 +13,7 @@ const pdfService = require('../pdfService');
 const emailProcessor = require('../emailProcessor');
 const { ensureInt, ensureNumber } = require('../../utils/numericHelpers');
 const { extendedLineColumns } = require('../../utils/lineItemTotals');
-const { computeDueDate, ensureCustomerCanBill, formatMajor, getHierarchyHelpers, nextInvoiceNumber, resolveNetDaysForRow, UNISSUED_INVOICE_STATUSES } = require('./helpers');
+const { computeDueDate, ensureCustomerCanBill, formatMajor, getHierarchyHelpers, nextInvoiceNumber, resolveNetDaysForRow, isInvoiceEditable } = require('./helpers');
 const { getInvoiceById } = require('./queries');
 const { createInvoice } = require('./create');
 const { buildInvoiceRenderContext } = require('./render');
@@ -308,7 +308,7 @@ async function createStorno(originalId, adminId, trx = db) {
   if (original.kind === 'storno') {
     throw new AppError('Cannot Storno a Storno', 409, 'IS_STORNO');
   }
-  if (UNISSUED_INVOICE_STATUSES.has(original.status)) {
+  if (isInvoiceEditable(original)) {
     throw new AppError(
       'This invoice has not been sent yet — Storno only applies to issued documents.',
       409,
@@ -716,7 +716,9 @@ async function releaseForDelivery(id, adminId) {
   if (toDateOnly(invoice.due_date) === assumedDue) {
     updates.due_date = computeDueDate(now, netDays).toISOString().slice(0, 10);
   }
-  await auditedUpdate(db, 'invoices', { id }, updates, { actor: adminId, source: 'invoice.releaseForDelivery' });
+  const released = await auditedUpdate(db, 'invoices', { id, status: 'pending_delivery' }, updates,
+    { actor: adminId, source: 'invoice.releaseForDelivery' });
+  if (!released) throw new AppError('Invoice is no longer awaiting delivery', 409, 'NOT_PENDING_DELIVERY');
   try {
     await logActivity('invoice_released_for_delivery', { invoiceId: id }, invoice.event_id || null, adminActivityActor(adminId));
   } catch (_) { /* non-fatal */ }
@@ -763,10 +765,11 @@ async function cancelInvoice(id, adminId) {
   }
 
   // Draft path: nothing was issued, soft cancel and we're done.
-  if (UNISSUED_INVOICE_STATUSES.has(invoice.status)) {
-    await auditedUpdate(db, 'invoices', { id }, {
+  if (isInvoiceEditable(invoice)) {
+    const cancelled = await auditedUpdate(db, 'invoices', { id, status: invoice.status }, {
       status: 'cancelled', updated_at: new Date(),
     }, { actor: adminId, source: 'invoice.cancel' });
+    if (!cancelled) throw new AppError('This invoice changed in the meantime. Reload it.', 409, 'INVOICE_STATUS_CHANGED');
     // Free any re-billed supplier invoices so the cost isn't stranded (#866 review).
     await releaseRebillsForCancelledInvoice(db, id, adminId);
     try {

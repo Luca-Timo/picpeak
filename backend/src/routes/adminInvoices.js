@@ -40,7 +40,7 @@ const { requireFeatureFlag, isFeatureEnabled } = require('../middleware/requireF
 const { db } = require('../database/db');
 const { canLinkCrmToEvent, ownsProject } = require('../middleware/ownership');
 const { AppError } = require('../utils/errors');
-const { ensureEventMatchesCustomer, UNISSUED_INVOICE_STATUSES, isInvoiceEditable } = require('../services/invoice/helpers');
+const { computeDueDate, ensureEventMatchesCustomer, isInvoiceEditable, resolveNetDaysForRow, UNISSUED_INVOICE_STATUSES } = require('../services/invoice/helpers');
 const { hasColumnCached } = require('../utils/schemaCache');
 const { toDateOnly } = require('../utils/dateOnly');
 
@@ -745,7 +745,7 @@ router.put(
     // ausgestellt"). Modifying it in place would break the audit
     // trail — the correct workflow is to cancel the original +
     // issue a new one. Only invoices that have not left the system
-    // remain editable: `scheduled`, and `pending_delivery`, which has
+    // remain editable: `scheduled`, and `pending_delivery`, which
     // is hidden from the customer and the books until "Mark delivered & send".
     if (!UNISSUED_INVOICE_STATUSES.has(existing.status)) {
       return res.status(409).json({
@@ -894,6 +894,17 @@ router.put(
         updates.payment_net_days_template_id = null;
         updates.payment_timing_template_id = null;
         updates.payment_term_snapshot = null;
+      }
+    }
+
+    // A delivery invoice's due date stays machine-set until someone changes
+    // it, so marking delivered can still re-anchor it. Keep it on the formula
+    // when the payment term moves underneath it.
+    if (existing.status === 'pending_delivery' && Object.prototype.hasOwnProperty.call(updates, 'payment_term_snapshot')
+        && (!payload.dueDate || toDateOnly(payload.dueDate) === toDateOnly(existing.due_date))) {
+      const dueAfter = (netDays) => computeDueDate(new Date(toDateOnly(existing.issue_date)), netDays).toISOString().slice(0, 10);
+      if (toDateOnly(existing.due_date) === dueAfter(await resolveNetDaysForRow(existing))) {
+        updates.due_date = dueAfter(await resolveNetDaysForRow({ ...existing, ...updates }));
       }
     }
 

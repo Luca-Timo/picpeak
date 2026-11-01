@@ -102,6 +102,11 @@ async function recordPayment(id, { amountMinor, paidAt, paymentMethod, reference
     if (invoice.status === 'cancelled') {
       throw new AppError('Cannot mark a cancelled invoice as paid', 409);
     }
+    // Not issued yet, and a paid invoice can no longer be marked delivered,
+    // so it would never reach the customer.
+    if (invoice.status === 'pending_delivery') {
+      throw new AppError('This invoice is awaiting delivery. Mark it delivered before recording a payment.', 409, 'INVOICE_AWAITING_DELIVERY');
+    }
     skontoAmountMinor = skontoFlag
       ? Math.max(0, ensureInt(invoice.total_amount_minor) - amount)
       : null;

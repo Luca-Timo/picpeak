@@ -262,9 +262,11 @@ function computeMonthlyCadenceDate(year, month /* 0-based */, cycleDay) {
 // anything else belongs to the audit trail and can't be silently mutated.
 const UNISSUED_INVOICE_STATUSES = new Set(['scheduled', 'pending_delivery']);
 
-// A recorded payment was made against the amounts as they stand.
+// Rows from before recordPayment refused `pending_delivery` can carry a
+// payment. Those are corrected through Storno, as they always were.
 function isInvoiceEditable(invoice) {
-  return UNISSUED_INVOICE_STATUSES.has(invoice.status) && !(Number(invoice.paid_amount_minor) > 0);
+  return invoice.status === 'scheduled'
+    || (invoice.status === 'pending_delivery' && !(Number(invoice.paid_amount_minor) > 0));
 }
 
 const VALID_INSTALLMENT_TRIGGERS = new Set([

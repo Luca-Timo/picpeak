@@ -167,13 +167,64 @@ test('marking delivered keeps a due date an admin set by hand', async () => {
   expect(toDateOnly(after.due_date)).toBe('2030-06-30');
 });
 
-test('a scheduled invoice with a payment on it stays locked too', async () => {
-  const invoiceId = await makeInvoice('scheduled');
+test('a delivery invoice takes no payment until it is marked delivered', async () => {
+  const invoiceService = require('../../src/services/invoiceService');
+  const invoiceId = await makeInvoice('pending_delivery');
+
+  await expect(invoiceService.markPaid(invoiceId, { amountMinor: 200000 }, adminId))
+    .rejects.toMatchObject({ code: 'INVOICE_AWAITING_DELIVERY' });
+  const after = await db('invoices').where({ id: invoiceId }).first();
+  expect(after.status).toBe('pending_delivery');
+  expect(Number(after.paid_amount_minor)).toBe(0);
+});
+
+test('an older delivery invoice with a payment on it still cancels through Storno', async () => {
+  const invoiceService = require('../../src/services/invoiceService');
+  const invoiceId = await makeInvoice('pending_delivery');
   await db('invoices').where({ id: invoiceId }).update({ paid_amount_minor: 50000 });
 
-  const saved = await request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`).set(auth).send({ skontoDisabled: true });
+  const result = await invoiceService.cancelInvoice(invoiceId, adminId);
+  expect(result.stornoId).toBeTruthy();
+});
+
+test('a save loses to a send that landed after the route read the invoice', async () => {
+  const history = require('../../src/services/accountingHistory');
+  const invoiceId = await makeInvoice('pending_delivery');
+  const lineBefore = await db('invoice_line_items').where({ invoice_id: invoiceId }).first();
+  const real = history.auditedUpdate;
+  const spy = jest.spyOn(history, 'auditedUpdate').mockImplementationOnce(async (conn, ...rest) => {
+    await conn('invoices').where({ id: invoiceId }).update({ status: 'sent' });
+    return real(conn, ...rest);
+  });
+
+  const saved = await request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`).set(auth).send({
+    eventName: 'Too late',
+    lineItems: [{ position: 1, quantity: 1, description: 'Too late', unitPriceMinor: 1, discountPercent: 0 }],
+  });
+  spy.mockRestore();
+
   expect(saved.status).toBe(409);
   expect(saved.body.code).toBe('INVOICE_LOCKED');
+  const lineAfter = await db('invoice_line_items').where({ invoice_id: invoiceId }).first();
+  expect(lineAfter.description).toBe(lineBefore.description);
+});
+
+test('a machine-set due date follows a changed payment term', async () => {
+  const invoiceId = await makeInvoice('pending_delivery');
+  await db('invoices').where({ id: invoiceId }).update({
+    issue_date: '2030-01-15',
+    due_date: '2030-02-14',
+    payment_term_snapshot: JSON.stringify({ net_days: 30 }),
+  });
+  const [templateId] = await db('payment_term_templates').insert({ name: 'Net 10', net_days: 10, description: 'Net 10', installments: '[]' }).returning('id');
+  const id = templateId?.id ?? templateId;
+
+  const saved = await request(invoiceApp).put(`/api/admin/invoices/${invoiceId}`).set(auth).send({
+    paymentTermTemplateId: id,
+  });
+  expect(saved.status).toBe(200);
+  const after = await db('invoices').where({ id: invoiceId }).first();
+  expect(toDateOnly(after.due_date)).toBe('2030-01-25');
 });
 
 test('a plan cannot be reshaped over a payment', async () => {

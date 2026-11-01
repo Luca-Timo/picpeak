@@ -140,7 +140,8 @@ export const BillDetailPage: React.FC = () => {
   const noMail = !!inv.customer?.noAdminEmails;
   // Not issued yet: the server still takes edits. Issued invoices never
   // change again (§ 14 UStG) — Storno and reissue instead.
-  const editable = canManage && inv.kind !== 'storno' && (inv.status === 'scheduled' || inv.status === 'pending_delivery') && !Number(inv.paidAmountMinor);
+  const unissued = inv.status === 'scheduled' || (inv.status === 'pending_delivery' && !Number(inv.paidAmountMinor));
+  const editable = canManage && inv.kind !== 'storno' && unissued;
   const dirty = editable && formState.dirty;
 
   const handlePreview = async () => {
@@ -223,13 +224,13 @@ export const BillDetailPage: React.FC = () => {
     // invoices trigger a Stornorechnung that's emailed to the
     // customer immediately. We surface that contract explicitly so
     // admins know it can't be undone.
-    const msg = inv.status === 'scheduled'
+    const msg = unissued
       ? t('bills.confirmCancelDraft', 'Cancel this draft invoice? No document goes out.')
       : noMail
         ? t('bills.confirmCancelIssuedNoMail', 'A Stornorechnung will be generated; this customer gets no email. This cannot be undone. Continue?')
         : t('bills.confirmCancelIssued',
           'A Stornorechnung will be generated and emailed to the customer immediately. This cannot be undone. Continue?');
-    if (!(await confirm({ message: msg, variant: 'danger', confirmLabel: inv.status === 'scheduled' ? t('bills.cancelDraft', 'Cancel draft') : t('bills.cancelWithStorno', 'Cancel with Storno') }))) return;
+    if (!(await confirm({ message: msg, variant: 'danger', confirmLabel: unissued ? t('bills.cancelDraft', 'Cancel draft') : t('bills.cancelWithStorno', 'Cancel with Storno') }))) return;
     try {
       const result = await billsService.cancel(inv.id);
       toast.success(result.stornoId
@@ -345,7 +346,7 @@ export const BillDetailPage: React.FC = () => {
   const customerName = inv.customer.companyName || inv.customer.displayName || inv.customer.email;
   const isIssued = ['sent', 'overdue', 'paid'].includes(inv.status);
   const canSend = canManage && ['scheduled', 'sent', 'overdue'].includes(inv.status) && !inv.isMonthlyDraft;
-  const canPay = canManage && inv.kind !== 'storno' && inv.status !== 'paid' && inv.status !== 'cancelled';
+  const canPay = canManage && inv.kind !== 'storno' && !['paid', 'cancelled', 'pending_delivery'].includes(inv.status);
   const openPay = () => {
     // Pre-fill the reference with the invoice number — that's what the
     // admin types 95% of the time.
@@ -373,7 +374,7 @@ export const BillDetailPage: React.FC = () => {
     ...(inv.kind !== 'storno' && ['sent', 'overdue', 'paid', 'cancelled'].includes(inv.status)
       ? [{ key: 'reissue', icon: <RefreshCw />, label: inv.status === 'cancelled' ? t('bills.reissue', 'Reissue') : t('bills.cancelAndReissue', 'Cancel & reissue'), danger: inv.status !== 'cancelled', onSelect: () => { void handleReissue(); } }] : []),
     ...(inv.kind !== 'storno' && inv.status !== 'cancelled'
-      ? [{ key: 'cancel', icon: <XCircle />, label: inv.status === 'scheduled' ? t('bills.cancelDraft', 'Cancel draft') : t('bills.cancelWithStorno', 'Cancel with Storno'), danger: true, onSelect: () => { void handleCancel(); } }] : []),
+      ? [{ key: 'cancel', icon: <XCircle />, label: unissued ? t('bills.cancelDraft', 'Cancel draft') : t('bills.cancelWithStorno', 'Cancel with Storno'), danger: true, onSelect: () => { void handleCancel(); } }] : []),
   ] : [];
 
   return (
